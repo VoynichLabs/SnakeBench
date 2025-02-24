@@ -66,7 +66,7 @@ The included instructions allow you to generate model pairs, simulate games, run
 
    ```bash
    cd backend
-   parallel --colsep ' ' --jobs 30 --progress python3 main.py --models {1} {2} :::: model_pairs.txt
+   parallel --colsep ' ' --jobs 30 --progress python3 main.py --models {1} {2} :::: model_lists/model_pairs.txt
    ```
 
 4. **Run Elo Tracker:**
