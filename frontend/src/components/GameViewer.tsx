@@ -94,22 +94,22 @@ export default function GameViewer({ gameData, isLarge = false }: GameViewerProp
   };
 
  
-  // Get the NEXT round's move history (for showing upcoming rationale)
-  const nextRound = rounds[currentRoundIndex + 1] || {};
-  const nextMoveHistory = nextRound.move_history || [];
+  // Get the CURRENT round's move history (instead of next round)
+  const currentRound = rounds[currentRoundIndex];
+  const currentMoveHistory = currentRound.move_history || [];
   // We want the last move in that history
-  const nextLastMove = nextMoveHistory[nextMoveHistory.length - 1] || {};
+  const lastMove = currentMoveHistory[currentMoveHistory.length - 1] || {};
 
   const modelOneId = '1';
   const modelTwoId = '2';
   const modelOneName = metadata.models[modelOneId];
   const modelTwoName = metadata.models[modelTwoId];
 
-  // Extract rationale/move for each model from the NEXT round
-  const modelOneRationale = nextLastMove[modelOneId]?.rationale || 'No future move available';
-  const modelTwoRationale = nextLastMove[modelTwoId]?.rationale || 'No future move available';
-  const modelOneChoice = nextLastMove[modelOneId]?.move || 'No future move available';
-  const modelTwoChoice = nextLastMove[modelTwoId]?.move || 'No future move available';
+  // Extract rationale/move for each model from the CURRENT round
+  const modelOneRationale = lastMove[modelOneId]?.rationale || 'No move available';
+  const modelTwoRationale = lastMove[modelTwoId]?.rationale || 'No move available';
+  const modelOneChoice = lastMove[modelOneId]?.move || 'No move available';
+  const modelTwoChoice = lastMove[modelTwoId]?.move || 'No move available';
 
   // Add helper function to get game outcome message
   const getGameOutcomeMessage = () => {

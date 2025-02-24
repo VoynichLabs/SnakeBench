@@ -396,6 +396,8 @@ class SnakeGame:
         # Store the moves of this round
         self.move_history.append(round_moves)
 
+        self.record_history()
+
         # The rest of your original code remains the same ...
         # 2) Compute new heads
         new_heads: Dict[str, Optional[Tuple[int,int]]] = {}
@@ -478,6 +480,7 @@ class SnakeGame:
 
                 print(f"Game Over: Snake(s) {snakes_died_this_round} died. "
                     f"Survivor(s) {surviving_snakes} win(s).")
+                self.round_number += 1
                 self.record_history()
                 return
 
@@ -486,6 +489,7 @@ class SnakeGame:
                 self.game_over = True
                 self.game_result = {sid: "tied" for sid in self.snakes}
                 print("Game Over: Both snakes died this round. It's a tie!")
+                self.round_number += 1
                 self.record_history()
                 return
 
@@ -513,8 +517,8 @@ class SnakeGame:
                     snake.positions.pop()
 
         # 5) End round, record state, check round limit
+        # self.record_history()
         self.round_number += 1
-        self.record_history()
 
         if self.round_number >= self.max_rounds:
             self.end_game("Reached max rounds.")
@@ -667,8 +671,7 @@ def main():
             player=LLMPlayer(str(i), model=model)
         )
 
-    # Record initial state and run the game
-    game.record_history()
+    # Run the game
     while not game.game_over:
         game.run_round()
 
