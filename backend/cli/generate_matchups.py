@@ -78,17 +78,21 @@ def main():
     parser.add_argument(
         '--input',
         type=str,
-        default='model_lists.txt',
+        default='model_lists/models_all.txt',
         help="Input file containing the list of models (default: model_lists.txt)."
     )
     parser.add_argument(
         '--output',
         type=str,
-        default='matchups.txt',
-        help="Output file to write matchups (default: matchups.txt)."
+        default='model_lists/matchups.txt',  # Updated default path
+        help="Output file to write matchups (default: model_lists/matchups.txt)."
     )
 
     args = parser.parse_args()
+
+    # Update output path after args are parsed if no explicit output was provided
+    if args.output == 'model_lists/matchups.txt' and args.mode == 'single':
+        args.output = f'model_lists/{args.model}_matchups.txt'
 
     models = read_models(args.input)
     if not models:
