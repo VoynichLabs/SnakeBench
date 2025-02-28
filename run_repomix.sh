@@ -1,0 +1,1 @@
+repomix --ignore "backend/completed_games,backend/model_lists,frontend/.next" -o llms.txt
