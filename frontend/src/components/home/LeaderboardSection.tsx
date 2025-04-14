@@ -41,19 +41,22 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         model,
         wins: stats.wins,
         losses: stats.losses,
+        ties: stats.ties,
         top_score: stats.top_score,
-        winRate: stats.wins + stats.losses > 0 
-          ? Number(((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1)) 
+        winRate: stats.wins + stats.losses + stats.ties > 0 
+          ? Number(((stats.wins / (stats.wins + stats.losses + stats.ties)) * 100).toFixed(1)) 
           : 0,
         elo: stats.elo,
       }))
-      .filter(item => item.wins + item.losses >= 20) // Only include models with at least 20 games
+      .filter(item => item.wins + item.losses + item.ties >= 1) // Only include models with at least 20 games
       .sort((a, b) => b.elo - a.elo) // Sort by ELO
       .map((item, index) => ({
         ...item,
         rank: index + 1,
       }))
-      .slice(0, 25); // Take top 10
+      .slice(0, 35); // Take top 10
+
+    console.log(transformedData);
     
     return transformedData;
   } catch (err) {
