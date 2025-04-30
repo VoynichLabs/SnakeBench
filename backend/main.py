@@ -172,10 +172,9 @@ class LLMPlayer(Player):
     def __init__(self, snake_id: str, player_config: Dict[str, Any]):
         super().__init__(snake_id)
         self.name = player_config['name']
-        self.model_name = player_config['model_name']
         self.config = player_config
         self.move_history = []
-        # Instantiate the correct provider based on the model name.
+        # Instantiate the correct provider based on the player_config.
         self.provider = create_llm_provider(player_config)
 
     def get_direction_from_response(self, response: str) -> Optional[str]:
@@ -188,14 +187,15 @@ class LLMPlayer(Player):
                     return move.upper()
         return None
 
-    def get_move(self, game_state: GameState) -> str:
+    def get_move(self, game_state: GameState) -> dict:
         """
         Construct the prompt, call the generic provider, and then parse the response.
+        Returns a dictionary containing the move and rationale.
         """
         prompt = self._construct_prompt(game_state)
 
         # Use the abstracted provider to get the response.
-        response_text = self.provider.get_response(self.model_name, prompt)
+        response_text = self.provider.get_response(prompt)
         direction = self.get_direction_from_response(response_text)
 
         if direction is None:

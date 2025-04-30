@@ -10,116 +10,182 @@ from ollama import ChatResponse
 class LLMProviderInterface:
     """
     A common interface for LLM calls.
+    Model name is stored during initialization.
     """
-    def get_response(self, model: str, prompt: str) -> str:
+    def get_response(self, prompt: str) -> str: # Removed model parameter
         raise NotImplementedError("Subclasses should implement this method.")
 
+    @staticmethod
+    def extract_api_kwargs(config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extracts fields not part of the standard internal configuration
+        into a dictionary suitable for passing as kwargs to the underlying API call.
+        """
+        api_kwargs = {}
+        # Fields used internally for setup, not passed to the API directly
+        known_fields = {'name', 'provider', 'pricing', 'kwargs', 'model_name', 'api_type'}
+
+        # Start with any explicitly defined 'kwargs' from the config
+        api_kwargs.update(config.get('kwargs', {}))
+
+        # Add any other top-level fields that aren't known internal fields
+        for field_name, value in config.items():
+            if field_name not in known_fields:
+                api_kwargs[field_name] = value
+
+        return api_kwargs
 
 class OpenAIProvider(LLMProviderInterface):
-    def __init__(self, api_key: str, api_type: Optional[str] = None):
+    def __init__(self, api_key: str, config: Dict[str, Any]):
         self.client = OpenAI(api_key=api_key)
-        self.api_type = api_type if api_type else 'completions'
-        
-    def get_response(self, model: str, prompt: str) -> str:
+        self.model_name = config['model_name'] # Store model name
+        # Store config values needed specifically by this provider
+        self.api_type = config.get('api_type', 'completions')
+        # Extract and store only the kwargs intended for the API call
+        self.api_kwargs = self.extract_api_kwargs(config)
+
+        print(f"Config: {config}")
+        print(f"OpenAIProvider initialized for model: {self.model_name} with api_type: {self.api_type}")
+        print(f"OpenAIProvider API kwargs: {self.api_kwargs}")
+
+
+    def get_response(self, prompt: str) -> str: # Removed model parameter
         if self.api_type == 'responses':
+            # Assuming 'responses' API takes different args, adjust if needed
+            # For now, let's pass the extracted kwargs here too.
             response = self.client.responses.create(
-                model=model,
+                model=self.model_name, # Use stored model name
                 input=prompt,
+                **self.api_kwargs,
             )
-            return response.output_text.strip()
-        else:
+            # Adjust response parsing based on the actual API structure
+            return response.output_text.strip() # Example, might need change
+        else: # Default to chat completions
             response = self.client.chat.completions.create(
-                model=model,
+                model=self.model_name, # Use stored model name
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=4096,
+                **self.api_kwargs,
             )
             return response.choices[0].message.content.strip()
 
 
 class AnthropicProvider(LLMProviderInterface):
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, config: Dict[str, Any]):
         self.client = anthropic.Anthropic(api_key=api_key)
-    
-    def get_response(self, model: str, prompt: str) -> str:
-        # According to Anthropic docs, this is one way to call the API.
+        self.model_name = config['model_name'] # Store model name
+        self.api_kwargs = self.extract_api_kwargs(config)
+        print(f"AnthropicProvider initialized for model: {self.model_name}")
+        print(f"AnthropicProvider API kwargs: {self.api_kwargs}")
+
+    def get_response(self, prompt: str) -> str: # Removed model parameter
         response = self.client.messages.create(
-            model=model,
-            max_tokens=4096,
+            model=self.model_name, # Use stored model name
             messages=[{"role": "user", "content": prompt}],
+            **self.api_kwargs,
         )
         return response.content[0].text.strip()
-    
+
 class GeminiProvider(LLMProviderInterface):
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, config: Dict[str, Any]):
         genai.configure(api_key=api_key)
-        
-    def get_response(self, model: str, prompt: str) -> str:
-        model = genai.GenerativeModel(model)
+        self.model_name = config['model_name'] # Store model name
+        self.api_kwargs = self.extract_api_kwargs(config)
+        print(f"GeminiProvider initialized for model: {self.model_name}")
+        print(f"GeminiProvider API kwargs: {self.api_kwargs}")
+
+    def get_response(self, prompt: str) -> str: # Removed model parameter
+        # Gemini requires kwargs inside generation_config
+        gen_config = genai.types.GenerationConfig(**self.api_kwargs)
+        model = genai.GenerativeModel(self.model_name) # Use stored model name
         response = model.generate_content(
             contents=prompt,
-            generation_config={
-                "max_output_tokens": 4096,
-            },
+            generation_config=gen_config,
             stream=False
         )
         return response.text.strip()
-    
+
 
 class TogetherProvider(LLMProviderInterface):
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, config: Dict[str, Any]):
         self.client = Together(api_key=api_key)
+        self.model_name = config['model_name'] # Store model name
+        self.api_kwargs = self.extract_api_kwargs(config)
+        print(f"TogetherProvider initialized for model: {self.model_name}")
+        print(f"TogetherProvider API kwargs: {self.api_kwargs}")
 
-    def get_response(self, model: str, prompt: str) -> str:
+    def get_response(self, prompt: str) -> str: # Removed model parameter
         response = self.client.chat.completions.create(
-            model=model,
+            model=self.model_name, # Use stored model name
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=20000,
+            **self.api_kwargs,
         )
         return response.choices[0].message.content.strip()
 
 class OllamaProvider(LLMProviderInterface):
-    def __init__(self, url: str = "http://localhost:11434"):
+    def __init__(self, url: str = "http://localhost:11434", config: Dict[str, Any] = None):
         self.url = url
+        # Ensure config is not None before extracting kwargs
+        self.api_kwargs = self.extract_api_kwargs(config) if config else {}
+        # Store model name, removing prefix if present
+        raw_model_name = config['model_name'] if config else 'unknown'
+        self.model_name = raw_model_name[len("ollama-"):] if raw_model_name.lower().startswith("ollama-") else raw_model_name
+        print(f"OllamaProvider initialized for model: {self.model_name}")
+        print(f"OllamaProvider API kwargs: {self.api_kwargs}")
 
-    def get_response(self, model: str, prompt: str) -> str:
-        model = model[len("ollama-"):] if model.lower().startswith("ollama-") else model
-        response: ChatResponse = chat(model=model, messages=[
-        {
-            'role': 'user',
-            'content': prompt,
-        },
-        ])
-        return response.message.content.strip()
+
+    def get_response(self, prompt: str) -> str: # Removed model parameter
+        # Pass options dictionary if present in kwargs, otherwise pass kwargs directly
+        options = self.api_kwargs.pop('options', None) if self.api_kwargs else None
+        if options:
+             response: ChatResponse = chat(model=self.model_name, messages=[ # Use stored model name
+                {
+                    'role': 'user',
+                    'content': prompt,
+                },
+            ], options=options, **self.api_kwargs)
+        else:
+             response: ChatResponse = chat(model=self.model_name, messages=[ # Use stored model name
+                {
+                    'role': 'user',
+                    'content': prompt,
+                },
+            ], **self.api_kwargs)
+
+        # Ensure response format is handled correctly (might vary based on ollama lib version)
+        if isinstance(response, dict) and 'message' in response and 'content' in response['message']:
+             return response['message']['content'].strip()
+        elif hasattr(response, 'message') and hasattr(response.message, 'content'):
+             return response.message.content.strip()
+        else:
+             print(f"Unexpected Ollama response format: {response}")
+             return "" # Or raise an error
+
 
 def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
     """
     Factory function for creating an LLM provider instance.
-    If any substring in the openai_substrings list is found in the model name (case-insensitive),
-    returns an instance of OpenAIProvider.
-    If any substring in the anthropic_substrings list is found, returns an instance of AnthropicProvider.
-    Otherwise, raises a ValueError.
+    Uses the 'provider' key in player_config to determine which class to instantiate.
     """
-    model_lower = player_config['model_name'].lower()
     provider = player_config['provider']
-    api_type = player_config.get('api_type', "")
 
     if provider == 'openai':
         if not os.getenv("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
-        return OpenAIProvider(api_key=os.getenv("OPENAI_API_KEY"), api_type=api_type)
+        return OpenAIProvider(api_key=os.getenv("OPENAI_API_KEY"), config=player_config)
     elif provider == 'anthropic':
         if not os.getenv("ANTHROPIC_API_KEY"):
             raise ValueError("ANTHROPIC_API_KEY is not set in the environment variables.")
-        return AnthropicProvider(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        return AnthropicProvider(api_key=os.getenv("ANTHROPIC_API_KEY"), config=player_config)
     elif provider == 'gemini':
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY is not set in the environment variables.")
-        return GeminiProvider(api_key=os.getenv("GOOGLE_API_KEY"))
+        return GeminiProvider(api_key=os.getenv("GOOGLE_API_KEY"), config=player_config)
     elif provider == 'ollama':
-        return OllamaProvider(url=os.getenv("OLLAMA_URL", "http://localhost:11434"))
+        # Make sure config is passed for Ollama as well
+        return OllamaProvider(url=os.getenv("OLLAMA_URL", "http://localhost:11434"), config=player_config)
     elif provider == 'together':
         if not os.getenv("TOGETHERAI_API_KEY"):
             raise ValueError("TOGETHERAI_API_KEY is not set in the environment variables.")
-        return TogetherProvider(api_key=os.getenv("TOGETHERAI_API_KEY"))
+        return TogetherProvider(api_key=os.getenv("TOGETHERAI_API_KEY"), config=player_config)
     else:
         raise ValueError(f"Unsupported provider: {provider}")
