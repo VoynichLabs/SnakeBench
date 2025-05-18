@@ -1,7 +1,8 @@
 import os
 from openai import OpenAI
 import anthropic
-import google.generativeai as genai  # Add this import
+from google import genai
+from google.genai import types
 from typing import Dict, Any, Optional
 from together import Together
 from ollama import chat
@@ -78,20 +79,18 @@ class AnthropicProvider(LLMProviderInterface):
         )
         return response.content[0].text.strip()
 
+
 class GeminiProvider(LLMProviderInterface):
     def __init__(self, api_key: str, config: Dict[str, Any]):
-        genai.configure(api_key=api_key)
-        self.model_name = config['model_name'] # Store model name
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = config['model_name']
         self.api_kwargs = self.extract_api_kwargs(config)
 
     def get_response(self, prompt: str) -> str: # Removed model parameter
-        # Gemini requires kwargs inside generation_config
-        gen_config = genai.types.GenerationConfig(**self.api_kwargs)
-        model = genai.GenerativeModel(self.model_name) # Use stored model name
-        response = model.generate_content(
+        response = self.client.models.generate_content(
+            model=self.model_name,
             contents=prompt,
-            generation_config=gen_config,
-            stream=False
+            config=types.GenerateContentConfig(**self.api_kwargs)
         )
         return response.text.strip()
 
@@ -163,7 +162,7 @@ def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
         if not os.getenv("ANTHROPIC_API_KEY"):
             raise ValueError("ANTHROPIC_API_KEY is not set in the environment variables.")
         return AnthropicProvider(api_key=os.getenv("ANTHROPIC_API_KEY"), config=player_config)
-    elif provider == 'gemini':
+    elif provider == 'google':
         if not os.getenv("GOOGLE_API_KEY"):
             raise ValueError("GOOGLE_API_KEY is not set in the environment variables.")
         return GeminiProvider(api_key=os.getenv("GOOGLE_API_KEY"), config=player_config)

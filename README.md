@@ -63,7 +63,7 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
     python3 run_batch.py --target-model "my-new-model" --num-simulations 5
 
     # With cost filtering: Only run against opponents cheaper than $1.00/million output tokens
-    python3 run_batch.py --target-model "my-new-model" --num-simulations 5 --max-output-cost-per-million 1.0
+    python3 run_batch.py --target-model gpt-4.1-2025-04-14 --num-simulations 5 --max-output-cost-per-million 10.0
 
     # Control parallelism: Limit to 8 concurrent simulations
     python3 run_batch.py --target-model "my-new-model" --num-simulations 5 --max-workers 8

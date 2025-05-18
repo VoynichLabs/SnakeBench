@@ -54,9 +54,7 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         ...item,
         rank: index + 1,
       }))
-      .slice(0, 35); // Take top 10
-
-    console.log(transformedData);
+      .slice(0, 100); // Take top 10
     
     return transformedData;
   } catch (err) {

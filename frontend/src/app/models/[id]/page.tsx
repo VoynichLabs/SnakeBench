@@ -55,7 +55,7 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
     );
   }
 
-  const games = [...(modelStats.games || [])].sort((a, b) => (b.opponent_elo || 0) - (a.opponent_elo || 0));
+  const games = [...(modelStats.games || [])].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
   
   // Calculate win rate percentage
   const totalGames = modelStats.wins + modelStats.losses + modelStats.ties;

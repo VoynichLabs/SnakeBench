@@ -34,50 +34,85 @@ export default function HeroSection() {
       size: number;
       color: string;
       direction: number;
-      speed: number;
+      speed: number; // Now represents frame delay for movement
       tail: { x: number; y: number }[];
       maxLength: number;
+      moveCounter: number; // Counter for implementing frame delay
 
-      constructor(x: number, y: number) {
-        this.x = x;
-        this.y = y;
+      constructor(initialCanvasWidth: number, initialCanvasHeight: number) {
         this.size = 12;
+        // Initialize position on the grid
+        this.x =
+          Math.floor(
+            Math.random() * Math.floor(initialCanvasWidth / this.size)
+          ) * this.size;
+        this.y =
+          Math.floor(
+            Math.random() * Math.floor(initialCanvasHeight / this.size)
+          ) * this.size;
+
         this.color = ["#4ade80", "#60a5fa", "#f97316", "#8b5cf6", "#000000"][
           Math.floor(Math.random() * 5)
         ];
         this.direction = Math.floor(Math.random() * 4); // 0: right, 1: down, 2: left, 3: up
-        this.speed = 1 + Math.random() * 1.5;
-        this.tail = [{ x, y }];
+        // Speed is now frames to wait before moving one grid unit.
+        // Lower number means faster perceived speed. e.g., 1-3 frames wait.
+        this.speed = Math.floor(Math.random() * 10) + 3;
+        this.moveCounter = 0;
+        this.tail = [{ x: this.x, y: this.y }]; // Tail starts at the quantized position
         this.maxLength = 30 + Math.floor(Math.random() * 15);
       }
 
       update(canvasWidth: number, canvasHeight: number) {
+        this.moveCounter++;
+        if (this.moveCounter < this.speed) {
+          return; // Wait for enough frames before moving
+        }
+        this.moveCounter = 0; // Reset counter
+
         // Change direction randomly
         if (Math.random() < 0.02) {
           this.direction = Math.floor(Math.random() * 4);
         }
 
-        // Move based on direction
+        // Move based on direction by one grid unit (this.size)
         switch (this.direction) {
           case 0:
-            this.x += this.speed;
+            this.x += this.size;
             break; // right
           case 1:
-            this.y += this.speed;
+            this.y += this.size;
             break; // down
           case 2:
-            this.x -= this.speed;
+            this.x -= this.size;
             break; // left
           case 3:
-            this.y -= this.speed;
+            this.y -= this.size;
             break; // up
         }
 
-        // Wrap around edges
-        if (this.x < 0) this.x = canvasWidth;
-        if (this.x > canvasWidth) this.x = 0;
-        if (this.y < 0) this.y = canvasHeight;
-        if (this.y > canvasHeight) this.y = 0;
+        // Wrap around edges, aligning to the grid
+        const numCols = Math.floor(canvasWidth / this.size);
+        const numRows = Math.floor(canvasHeight / this.size);
+
+        if (this.x < 0) {
+          this.x = (numCols - 1) * this.size;
+        } else if (this.x >= numCols * this.size) {
+          this.x = 0;
+        }
+
+        if (this.y < 0) {
+          this.y = (numRows - 1) * this.size;
+        } else if (this.y >= numRows * this.size) {
+          this.y = 0;
+        }
+        
+        // Ensure x and y are always on the grid, especially if canvas resizes
+        // and numCols/Rows leads to an off-grid calculation temporarily.
+        // This might be overly cautious if canvas resize is handled perfectly for grid alignment.
+        this.x = Math.round(this.x / this.size) * this.size;
+        this.y = Math.round(this.y / this.size) * this.size;
+
 
         // Add current position to tail
         this.tail.push({ x: this.x, y: this.y });
@@ -109,7 +144,7 @@ export default function HeroSection() {
     
     for (let i = 0; i < SNAKE_COUNT; i++) {
       snakes.push(
-        new Snake(Math.random() * canvas.width, Math.random() * canvas.height)
+        new Snake(canvas.width, canvas.height) // Pass canvas dimensions for grid initialization
       );
     }
 
