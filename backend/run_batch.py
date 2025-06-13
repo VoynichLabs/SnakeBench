@@ -79,6 +79,7 @@ def run_batch_simulations():
         return
         
     print(f"Found {len(opponent_configs)} valid opponents after filtering.")
+    print(f"Opponent configs: {[x['name'] for x in opponent_configs]}")
 
     # 4. Generate list of simulation tasks
     print(f"Generating simulation tasks ({args.num_simulations} runs per opponent)...")
