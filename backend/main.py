@@ -13,6 +13,20 @@ from utils.utils import load_model_configs
 from llm_providers import create_llm_provider
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Import data access functions for DB persistence
+try:
+    from data_access import (
+        insert_game,
+        insert_game_participants,
+        update_model_aggregates,
+        update_elo_ratings
+    )
+    DB_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Could not import data_access module: {e}")
+    print("Database persistence will be disabled.")
+    DB_AVAILABLE = False
+
 load_dotenv()
 
 # Directions
@@ -594,7 +608,7 @@ class SnakeGame:
             sid: self.clean_model_name(player.name if hasattr(player, "name") else player.__class__.__name__)
             for sid, player in self.players.items()
         }
-        
+
         # Build metadata for the game
         metadata = {
             "game_id": self.game_id,
@@ -614,17 +628,79 @@ class SnakeGame:
             "max_rounds": self.max_rounds,
             "actual_rounds": self.round_number
         }
-        
+
         data = {
             "metadata": metadata,
             "rounds": self.serialize_history(self.history)
         }
-        
+
         # Ensure the output directory exists
         os.makedirs('completed_games', exist_ok=True)
-        
+
         with open(f'completed_games/{filename}', "w") as f:
             json.dump(data, f, indent=2)
+
+    def persist_to_database(self):
+        """
+        Persist game results to the database and update model statistics.
+
+        This is called after save_history_to_json() to maintain the event-driven
+        approach described in Phase 2 of the migration plan.
+        """
+        if not DB_AVAILABLE:
+            print("Skipping database persistence (data_access module not available)")
+            return
+
+        try:
+            # 1. Insert game record
+            start_dt = datetime.fromtimestamp(self.start_time)
+            end_dt = datetime.fromtimestamp(time.time())
+            replay_path = f"completed_games/snake_game_{self.game_id}.json"
+            total_score = sum(self.scores.values())
+
+            insert_game(
+                game_id=self.game_id,
+                start_time=start_dt,
+                end_time=end_dt,
+                rounds=self.round_number,
+                replay_path=replay_path,
+                board_width=self.width,
+                board_height=self.height,
+                num_apples=self.num_apples,
+                total_score=total_score
+            )
+
+            # 2. Insert game participants
+            participants = []
+            for snake_id, player in self.players.items():
+                model_name = self.clean_model_name(
+                    player.name if hasattr(player, "name") else player.__class__.__name__
+                )
+                snake = self.snakes[snake_id]
+
+                participant = {
+                    'model_name': model_name,
+                    'player_slot': int(snake_id),
+                    'score': self.scores.get(snake_id, 0),
+                    'result': self.game_result.get(snake_id, 'tied'),
+                    'death_round': snake.death_round,
+                    'death_reason': snake.death_reason
+                }
+                participants.append(participant)
+
+            insert_game_participants(self.game_id, participants)
+
+            # 3. Update model aggregates (wins, losses, ties, apples_eaten, games_played)
+            update_model_aggregates(self.game_id)
+
+            # 4. Update ELO ratings using pairwise comparisons (same as elo_tracker.py)
+            update_elo_ratings(self.game_id)
+
+            print(f"Successfully persisted game {self.game_id} to database")
+
+        except Exception as e:
+            print(f"Error persisting game {self.game_id} to database: {e}")
+            # Don't raise - we want the game to complete even if DB persistence fails
     
     def print_board(self):
         """
@@ -698,6 +774,9 @@ def run_simulation(model_config_1: Dict, model_config_2: Dict, game_params: argp
     print("\nFinal Scores:", game.scores)
     print(f"Game history (ID: {game.game_id}):")
     game.save_history_to_json()
+
+    # Persist to database (Phase 2: Event-driven ELO and aggregates)
+    game.persist_to_database()
 
     # Return the results summary
     return {
