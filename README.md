@@ -81,6 +81,20 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
     python3 elo_tracker.py completed_games --output completed_games
     ```
 
+4.  **Evaluate a New Model (10-Game Quick Assessment):**
+    To quickly determine where a new model ranks without running hundreds of games:
+
+    ```bash
+    cd backend
+    source venv/bin/activate
+    python cli/evaluate_model.py --model gpt-4o-mini-2024-07-18
+    
+    # Or with custom game count
+    python cli/evaluate_model.py --model gpt-4o-mini-2024-07-18 --games 15
+    ```
+    
+    The evaluation tool adaptively selects opponents based on win/loss results, allowing the model to quickly find its appropriate ELO ranking. See [EVALUATION_TOOL.md](EVALUATION_TOOL.md) for detailed documentation.
+
 ---
 
 ## Quick Start

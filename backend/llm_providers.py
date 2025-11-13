@@ -1,4 +1,6 @@
 import os
+import json
+from json.decoder import JSONDecodeError
 from openai import OpenAI
 import anthropic
 from google import genai
@@ -62,6 +64,77 @@ class OpenAIProvider(LLMProviderInterface):
                 messages=[{"role": "user", "content": prompt}],
                 **self.api_kwargs,
             )
+            return response.choices[0].message.content.strip()
+
+
+class OpenRouterProvider(LLMProviderInterface):
+    def __init__(self, api_key: str, config: Dict[str, Any]):
+        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.model_name = config['model_name']
+        self.api_type = config.get('api_type', 'completions')
+        self.api_kwargs = self.extract_api_kwargs(config)
+
+        explicit_headers = self.api_kwargs.pop('extra_headers', None)
+        env_headers = {}
+        referer = os.getenv("OPENROUTER_SITE_URL")
+        title = os.getenv("OPENROUTER_SITE_NAME")
+        if referer:
+            env_headers["HTTP-Referer"] = referer
+        if title:
+            env_headers["X-Title"] = title
+        if explicit_headers:
+            env_headers.update(explicit_headers)
+        self.extra_headers = env_headers or None
+
+    def get_response(self, prompt: str) -> str:
+        request_kwargs = dict(self.api_kwargs)
+        if self.extra_headers:
+            request_kwargs['extra_headers'] = self.extra_headers
+
+        if self.api_type == 'responses':
+            response = self.client.responses.create(
+                model=self.model_name,
+                input=prompt,
+                **request_kwargs,
+            )
+            if isinstance(response, str):
+                try:
+                    response = json.loads(response)
+                except json.JSONDecodeError:
+                    preview = response[:200].replace('\n', ' ')
+                    raise ValueError(f"OpenRouter returned unexpected text payload: {preview}...")
+
+            output = getattr(response, "output", None)
+            if output is None and isinstance(response, dict):
+                output = response.get("output")
+            if not output:
+                raise ValueError(f"OpenRouter response missing output field: {response}")
+
+            message = output[0]
+            content = getattr(message, "content", None)
+            if content is None and isinstance(message, dict):
+                content = message.get("content")
+            if not content:
+                raise ValueError(f"OpenRouter response missing content block: {message}")
+
+            block = content[0]
+            text = getattr(block, "text", None)
+            if text is None and isinstance(block, dict):
+                text = block.get("text", "")
+            return str(text or "").strip()
+        else:
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    **request_kwargs,
+                )
+            except JSONDecodeError as exc:
+                raise ValueError(
+                    "OpenRouter chat completion returned a non-JSON payload. "
+                    "This usually means the model slug is invalid or the request was redirected to an HTML error page."
+                ) from exc
             return response.choices[0].message.content.strip()
 
 
@@ -158,6 +231,10 @@ def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
         if not os.getenv("OPENAI_API_KEY"):
             raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
         return OpenAIProvider(api_key=os.getenv("OPENAI_API_KEY"), config=player_config)
+    elif provider == 'openrouter':
+        if not os.getenv("OPENROUTER_API_KEY"):
+            raise ValueError("OPENROUTER_API_KEY is not set in the environment variables.")
+        return OpenRouterProvider(api_key=os.getenv("OPENROUTER_API_KEY"), config=player_config)
     elif provider == 'anthropic':
         if not os.getenv("ANTHROPIC_API_KEY"):
             raise ValueError("ANTHROPIC_API_KEY is not set in the environment variables.")

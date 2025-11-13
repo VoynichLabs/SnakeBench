@@ -194,8 +194,24 @@ class LLMPlayer(Player):
         """
         prompt = self._construct_prompt(game_state)
 
-        # Use the abstracted provider to get the response.
-        response_text = self.provider.get_response(prompt)
+        try:
+            # Use the abstracted provider to get the response.
+            response_text = self.provider.get_response(prompt)
+        except Exception as exc:  # noqa: BLE001 - ensure the game continues
+            print(
+                f"Provider error for player {self.snake_id} ({self.name}): {exc}. "
+                "Falling back to a random move."
+            )
+            direction = random.choice(list(VALID_MOVES))
+            move_data = {
+                "direction": direction,
+                "rationale": (
+                    f"Provider error: {exc}. Generated random move {direction} to continue the game."
+                ),
+            }
+            self.move_history.append({self.snake_id: move_data})
+            return move_data
+
         direction = self.get_direction_from_response(response_text)
 
         if direction is None:
