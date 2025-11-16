@@ -9,6 +9,7 @@ interface Game {
   opponent_elo: number;
   end_time: string;
   result: string;
+  cost?: number;
   death_info?: {
     reason: string;
     round: number;
@@ -21,18 +22,22 @@ interface ModelStats {
   ties: number;
   apples_eaten: number;
   elo: number;
+  total_cost?: number;
   games: Game[];
 }
 
 export default async function ModelDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   // Await the params object
-  const { id: modelId } = await params;
-  
-  // Fetch the full stats
-  const response = await fetch(`${process.env.FLASK_URL}/api/stats?model=${modelId}`, { next: { revalidate: 300 } });
+  const { id: encodedModelId } = await params;
+
+  // Decode the URL-encoded model ID
+  const modelId = decodeURIComponent(encodedModelId);
+
+  // Fetch the full stats (encode it again for the URL)
+  const response = await fetch(`${process.env.FLASK_URL}/api/stats?model=${encodeURIComponent(modelId)}`, { next: { revalidate: 300 } });
   const stats = await response.json();
 
-  // Use the awaited modelId
+  // Use the decoded modelId to look up in the response
   const modelStats: ModelStats = stats['aggregatedData'][modelId];
 
   if (!modelStats) {
@@ -57,9 +62,10 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
 
   const games = [...(modelStats.games || [])].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
   
-  // Calculate win rate percentage
+  // Calculate win rate percentage (excludes ties from denominator)
+  const decidedGames = modelStats.wins + modelStats.losses;
   const totalGames = modelStats.wins + modelStats.losses + modelStats.ties;
-  const winRate = totalGames > 0 ? ((modelStats.wins / totalGames) * 100).toFixed(1) : "0.0";
+  const winRate = decidedGames > 0 ? ((modelStats.wins / decidedGames) * 100).toFixed(1) : "0.0";
 
   return (
     <div className="bg-white">
@@ -79,7 +85,7 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
 
       {/* Model Stats Section */}
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
@@ -90,7 +96,7 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
               </dd>
             </div>
           </div>
-          
+
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
@@ -101,7 +107,7 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
               </dd>
             </div>
           </div>
-          
+
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
@@ -112,7 +118,7 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
               </dd>
             </div>
           </div>
-          
+
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
@@ -120,6 +126,17 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
               </dt>
               <dd className="mt-1 text-3xl font-semibold text-gray-900">
                 {modelStats.apples_eaten}
+              </dd>
+            </div>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <dt className="text-sm font-medium text-gray-500 truncate">
+                Total Cost
+              </dt>
+              <dd className="mt-1 text-3xl font-semibold text-gray-900">
+                ${(modelStats.total_cost || 0).toFixed(4)}
               </dd>
             </div>
           </div>
@@ -153,6 +170,9 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Score
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Cost
                       </th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
@@ -215,6 +235,9 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {game.my_score} - {game.opponent_score}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${(game.cost || 0).toFixed(4)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <Link href={`/match/${game.game_id}`} className="text-indigo-600 hover:text-indigo-900">

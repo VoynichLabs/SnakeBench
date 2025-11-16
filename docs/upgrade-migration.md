@@ -13,7 +13,7 @@ This document evaluates the proposed architecture against the current repo and n
 - Proposal recap: Add a models table and sync with OpenRouter to auto-discover models; store rich metadata and test statuses.
 - My approach (edits):
   - Keep YAML as a bootstrap/override source of truth for a short period. Use it to seed the initial DB and for any manual overrides (e.g., pricing deltas, custom kwargs) while the sync matures.
-  - Introduce a `models` table with these fields at minimum: `id`, `name` (internal alias used across code), `provider`, `model_slug` (API slug, e.g., `openai/gpt-5-mini`), `pricing_input_per_m`, `pricing_output_per_m`, `max_completion_tokens`, `metadata_json`, `elo_rating`, `wins`, `losses`, `ties`, `apples_eaten`, `games_played`, `test_status` (untested/testing/ranked/retired), `is_active`, `discovered_at`, `last_played_at`.
+  - Introduce a `models` table with these fields at minimum: `id`, `name` (internal alias used across code), `provider`, `model_slug` (API slug, e.g., `openai/gpt-5-mini`), `pricing_input`, `pricing_output`, `max_completion_tokens`, `metadata_json`, `elo_rating`, `wins`, `losses`, `ties`, `apples_eaten`, `games_played`, `test_status` (untested/testing/ranked/retired), `is_active`, `discovered_at`, `last_played_at`.
   - Add a `sync_openrouter` task that imports models and updates pricing/context length. Respect allow/deny flags in DB (do not auto-activate everything).
   - Rationale: preserves your current workflows while enabling automatic discovery and richer metadata.
 
@@ -52,7 +52,7 @@ This document evaluates the proposed architecture against the current repo and n
 - `models`
   - Keys: `id` (PK), `name` (unique), `provider`, `model_slug` (unique), `is_active` (bool), `test_status` (enum), `discovered_at`, `last_played_at`.
   - Aggregates: `elo_rating` (float, default 1500), `wins`, `losses`, `ties`, `apples_eaten`, `games_played`.
-  - Pricing/meta: `pricing_input_per_m`, `pricing_output_per_m`, `max_completion_tokens`, `metadata_json`.
+  - Pricing/meta: `pricing_input`, `pricing_output`, `max_completion_tokens`, `metadata_json`.
 - `games`
   - Keys: `id` (PK, UUID), `start_time`, `end_time`, `rounds`, `replay_path`, `board_width`, `board_height`, `num_apples`, `total_score`, `created_at`.
 - `game_participants`

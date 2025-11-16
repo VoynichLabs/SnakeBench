@@ -13,7 +13,7 @@ from datetime import datetime
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import get_connection
+from database_postgres import get_connection
 
 # ELO parameters (matching elo_tracker.py)
 K = 32
@@ -74,7 +74,7 @@ def update_elo_ratings(game_id: str) -> None:
                 m.name
             FROM game_participants gp
             JOIN models m ON gp.model_id = m.id
-            WHERE gp.game_id = ?
+            WHERE gp.game_id = %s
             ORDER BY gp.player_slot
         """, (game_id,))
 
@@ -86,10 +86,10 @@ def update_elo_ratings(game_id: str) -> None:
 
         # Build lists for easier iteration
         n = len(participants)
-        model_ids = [p[0] for p in participants]
-        results = [p[1] for p in participants]
-        ratings = {p[0]: p[2] for p in participants}
-        names = {p[0]: p[3] for p in participants}
+        model_ids = [p['model_id'] for p in participants]
+        results = [p['result'] for p in participants]
+        ratings = {p['model_id']: p['elo_rating'] for p in participants}
+        names = {p['model_id']: p['name'] for p in participants}
 
         # Accumulate actual and expected scores for each model (pairwise)
         score_sum = {mid: 0 for mid in model_ids}
@@ -125,9 +125,9 @@ def update_elo_ratings(game_id: str) -> None:
 
             cursor.execute("""
                 UPDATE models
-                SET elo_rating = ?,
+                SET elo_rating = %s,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (new_rating, mid))
 
             print(f"Updated ELO for {names[mid]}: {ratings[mid]:.2f} -> {new_rating:.2f} (delta: {delta:+.2f})")
@@ -163,12 +163,16 @@ def update_model_aggregates(game_id: str) -> None:
                 m.name
             FROM game_participants gp
             JOIN models m ON gp.model_id = m.id
-            WHERE gp.game_id = ?
+            WHERE gp.game_id = %s
         """, (game_id,))
 
         participants = cursor.fetchall()
 
-        for model_id, result, score, name in participants:
+        for participant in participants:
+            model_id = participant['model_id']
+            result = participant['result']
+            score = participant['score']
+            name = participant['name']
             # Update win/loss/tie counts
             win_delta = 1 if result == 'won' else 0
             loss_delta = 1 if result == 'lost' else 0
@@ -176,14 +180,14 @@ def update_model_aggregates(game_id: str) -> None:
 
             cursor.execute("""
                 UPDATE models
-                SET wins = wins + ?,
-                    losses = losses + ?,
-                    ties = ties + ?,
-                    apples_eaten = apples_eaten + ?,
+                SET wins = wins + %s,
+                    losses = losses + %s,
+                    ties = ties + %s,
+                    apples_eaten = apples_eaten + %s,
                     games_played = games_played + 1,
-                    last_played_at = ?,
+                    last_played_at = %s,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (
                 win_delta,
                 loss_delta,

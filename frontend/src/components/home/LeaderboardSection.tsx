@@ -6,6 +6,7 @@ type LeaderboardItem = {
   winRate: number;
   elo: number;
   top_score: number;
+  total_cost: number;
 };
 
 type StatsData = {
@@ -20,6 +21,7 @@ type StatsData = {
       first_game_time: string;
       last_game_time: string;
       top_score: number;
+      total_cost: number;
     };
   };
 };
@@ -27,13 +29,23 @@ type StatsData = {
 // Function to fetch and transform leaderboard data
 async function getLeaderboardData(): Promise<LeaderboardItem[]> {
   try {
-    const response = await fetch(`${process.env.FLASK_URL}/api/stats?simple=true`);
-    
+    const url = `${process.env.FLASK_URL}/api/stats?simple=true`;
+    console.log('[LeaderboardSection] Fetching from:', url);
+
+    const response = await fetch(url);
+    console.log('[LeaderboardSection] Response status:', response.status);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[LeaderboardSection] Error response:', errorText);
       throw new Error('Failed to fetch leaderboard data');
     }
-    
+
     const data: StatsData = await response.json();
+    console.log('[LeaderboardSection] Received data:', {
+      totalGames: data.totalGames,
+      modelCount: Object.keys(data.aggregatedData || {}).length
+    });
     
     // Transform the API data into our leaderboard format
     const transformedData = Object.entries(data.aggregatedData)
@@ -43,23 +55,28 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         losses: stats.losses,
         ties: stats.ties,
         top_score: stats.top_score,
-        winRate: stats.wins + stats.losses + stats.ties > 0 
-          ? Number(((stats.wins / (stats.wins + stats.losses + stats.ties)) * 100).toFixed(1)) 
+        total_cost: stats.total_cost,
+        winRate: stats.wins + stats.losses > 0
+          ? Number(((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1))
           : 0,
         elo: stats.elo,
       }))
-      .filter(item => item.wins + item.losses + item.ties >= 1) // Only include models with at least 20 games
+      .filter(item => item.wins + item.losses + item.ties >= 1) // Show all models
       .sort((a, b) => b.elo - a.elo) // Sort by ELO
       .map((item, index) => ({
         ...item,
         rank: index + 1,
       }))
       .slice(0, 100); // Take top 10
-    
+
+    console.log('[LeaderboardSection] Transformed data:', {
+      itemCount: transformedData.length,
+      firstItem: transformedData[0]
+    });
     return transformedData;
   } catch (err) {
-    console.error('Error fetching leaderboard data:', err);
-    return [];
+    console.error('[LeaderboardSection] Error fetching leaderboard data:', err);
+    throw err; // Re-throw to see error in UI
   }
 }
 
@@ -134,6 +151,12 @@ export default async function LeaderboardSection() {
                       >
                         ELO
                       </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                      >
+                        Cost
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -161,6 +184,11 @@ export default async function LeaderboardSection() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">
                             {Math.round(item.elo)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-mono text-sm text-gray-900">
+                            ${(item.total_cost || 0).toFixed(4)}
                           </div>
                         </td>
                       </tr>

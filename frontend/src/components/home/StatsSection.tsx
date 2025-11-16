@@ -11,6 +11,7 @@ type StatsData = {
       first_game_time: string;
       last_game_time: string;
       top_score: number;
+      total_cost: number;
     };
   };
 };
@@ -45,14 +46,19 @@ export default async function StatsSection() {
   
   // Count active models (models with at least one game)
   const activeModels = Object.keys(statsData.aggregatedData || {}).length;
-  
+
   // Calculate maximum apples that were gained per game
   const maxApplesPerGame = totalMatches > 0 ? Math.max(...Object.values(statsData.aggregatedData || {}).map(model => Number(model.top_score || 0))) : 0;
+
+  // Calculate total cost across all models
+  const totalCost = Object.values(statsData.aggregatedData || {}).reduce((sum: number, model) => {
+    return sum + (Number(model.total_cost) || 0);
+  }, 0);
 
   return (
     <>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3 mb-12">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-12">
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
             <dt className="text-sm font-mono text-gray-500 truncate">Total Snake Matches</dt>
@@ -67,8 +73,14 @@ export default async function StatsSection() {
         </div>
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="px-4 py-5 sm:p-6">
-            <dt className="text-sm font-mono text-gray-500 truncate">Top Score</dt>
+            <dt className="text-sm font-mono text-gray-500 truncate">Top Apples Eaten</dt>
             <dd className="mt-1 text-3xl font-press-start text-gray-900">{maxApplesPerGame}</dd>
+          </div>
+        </div>
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <dt className="text-sm font-mono text-gray-500 truncate">Total Testing Cost</dt>
+            <dd className="mt-1 text-3xl font-press-start text-gray-900">${totalCost.toFixed(2)}</dd>
           </div>
         </div>
       </div>

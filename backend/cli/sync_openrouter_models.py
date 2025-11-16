@@ -21,7 +21,7 @@ from datetime import datetime
 # Add parent directory to path to import database modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from database import get_connection
+from database_postgres import get_connection
 from data_access import enqueue_model
 
 
@@ -91,8 +91,8 @@ def normalize_model_data(openrouter_model: Dict[str, Any]) -> Dict[str, Any]:
         completion_price = float(completion_price)
 
     # Convert to per-million if needed (OpenRouter uses per-token)
-    pricing_input_per_m = prompt_price * 1_000_000 if prompt_price else None
-    pricing_output_per_m = completion_price * 1_000_000 if completion_price else None
+    pricing_input = prompt_price * 1_000_000 if prompt_price else None
+    pricing_output = completion_price * 1_000_000 if completion_price else None
 
     # Extract other fields
     model_id = openrouter_model.get('id', '')
@@ -121,16 +121,16 @@ def normalize_model_data(openrouter_model: Dict[str, Any]) -> Dict[str, Any]:
         'name': name,
         'provider': provider,
         'model_slug': model_id,
-        'pricing_input_per_m': pricing_input_per_m,
-        'pricing_output_per_m': pricing_output_per_m,
+        'pricing_input': pricing_input,
+        'pricing_output': pricing_output,
         'max_completion_tokens': max_completion_tokens,
         'metadata_json': json.dumps(metadata)
     }
 
 
 def estimate_game_cost(
-    pricing_input_per_m: Optional[float],
-    pricing_output_per_m: Optional[float],
+    pricing_input: Optional[float],
+    pricing_output: Optional[float],
     estimated_input_tokens: int = 1000,
     estimated_output_tokens: int = 500
 ) -> float:
@@ -138,19 +138,19 @@ def estimate_game_cost(
     Estimate the cost of running one game with this model.
 
     Args:
-        pricing_input_per_m: Input pricing per million tokens
-        pricing_output_per_m: Output pricing per million tokens
+        pricing_input: Input pricing per million tokens
+        pricing_output: Output pricing per million tokens
         estimated_input_tokens: Conservative estimate of input tokens per game
         estimated_output_tokens: Conservative estimate of output tokens per game
 
     Returns:
         Estimated cost in dollars, or float('inf') if pricing unavailable
     """
-    if pricing_input_per_m is None or pricing_output_per_m is None:
+    if pricing_input is None or pricing_output is None:
         return float('inf')  # Can't estimate without pricing
 
-    input_cost = (estimated_input_tokens / 1_000_000) * pricing_input_per_m
-    output_cost = (estimated_output_tokens / 1_000_000) * pricing_output_per_m
+    input_cost = (estimated_input_tokens / 1_000_000) * pricing_input
+    output_cost = (estimated_output_tokens / 1_000_000) * pricing_output
 
     return input_cost + output_cost
 
@@ -165,6 +165,11 @@ def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
     Returns:
         Model ID if successful, None otherwise
     """
+    # Skip Auto Router entirely
+    if model_data.get('name') == 'Auto Router':
+        print(f"  ⊘ Skipped: Auto Router (excluded from sync)")
+        return None
+
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -173,33 +178,33 @@ def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
         cursor.execute("""
             SELECT id, is_active, test_status, games_played
             FROM models
-            WHERE model_slug = ?
+            WHERE model_slug = %s
         """, (model_data['model_slug'],))
 
         existing = cursor.fetchone()
 
         if existing:
-            model_id = existing[0]
-            is_active = existing[1]
-            test_status = existing[2]
-            games_played = existing[3]
+            model_id = existing['id']
+            is_active = existing['is_active']
+            test_status = existing['test_status']
+            games_played = existing['games_played']
 
             # Update pricing and metadata only, preserve status and stats
             cursor.execute("""
                 UPDATE models
-                SET name = ?,
-                    provider = ?,
-                    pricing_input_per_m = ?,
-                    pricing_output_per_m = ?,
-                    max_completion_tokens = ?,
-                    metadata_json = ?,
+                SET name = %s,
+                    provider = %s,
+                    pricing_input = %s,
+                    pricing_output = %s,
+                    max_completion_tokens = %s,
+                    metadata_json = %s,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE id = ?
+                WHERE id = %s
             """, (
                 model_data['name'],
                 model_data['provider'],
-                model_data['pricing_input_per_m'],
-                model_data['pricing_output_per_m'],
+                model_data['pricing_input'],
+                model_data['pricing_output'],
                 model_data['max_completion_tokens'],
                 model_data['metadata_json'],
                 model_id
@@ -211,24 +216,26 @@ def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
             cursor.execute("""
                 INSERT INTO models (
                     name, provider, model_slug,
-                    pricing_input_per_m, pricing_output_per_m,
+                    pricing_input, pricing_output,
                     max_completion_tokens, metadata_json,
                     is_active, test_status,
                     discovered_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'untested', ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, 'untested', %s)
+                RETURNING id
             """, (
                 model_data['name'],
                 model_data['provider'],
                 model_data['model_slug'],
-                model_data['pricing_input_per_m'],
-                model_data['pricing_output_per_m'],
+                model_data['pricing_input'],
+                model_data['pricing_output'],
                 model_data['max_completion_tokens'],
                 model_data['metadata_json'],
                 datetime.now().isoformat()
             ))
 
-            model_id = cursor.lastrowid
+            result = cursor.fetchone()
+            model_id = result['id'] if result else None
             print(f"  + Added: {model_data['name']} (new, untested)")
 
         conn.commit()
@@ -299,9 +306,9 @@ def sync_models(
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT test_status, pricing_input_per_m, pricing_output_per_m
+                SELECT test_status, pricing_input, pricing_output
                 FROM models
-                WHERE id = ?
+                WHERE id = %s
             """, (model_id,))
 
             row = cursor.fetchone()

@@ -5,7 +5,6 @@ These functions provide the database layer for the Flask API endpoints,
 replacing direct JSON file reads with database queries.
 """
 
-import sqlite3
 from typing import List, Dict, Any, Optional
 import sys
 import os
@@ -13,7 +12,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import get_connection
+from database_postgres import get_connection
 
 
 def get_all_models(active_only: bool = False) -> List[Dict[str, Any]]:
@@ -44,16 +43,25 @@ def get_all_models(active_only: bool = False) -> List[Dict[str, Any]]:
                 ties,
                 apples_eaten,
                 games_played,
-                pricing_input_per_m,
-                pricing_output_per_m,
+                pricing_input,
+                pricing_output,
                 max_completion_tokens,
                 last_played_at,
                 discovered_at
             FROM models
         """
 
+        # Build WHERE clause
+        where_conditions = []
+
+        # Always exclude Auto Router
+        where_conditions.append("name != 'Auto Router'")
+
         if active_only:
-            query += " WHERE is_active = 1"
+            where_conditions.append("is_active = TRUE")
+
+        if where_conditions:
+            query += " WHERE " + " AND ".join(where_conditions)
 
         query += " ORDER BY elo_rating DESC"
 
@@ -63,23 +71,23 @@ def get_all_models(active_only: bool = False) -> List[Dict[str, Any]]:
         models = []
         for row in rows:
             models.append({
-                'id': row[0],
-                'name': row[1],
-                'provider': row[2],
-                'model_slug': row[3],
-                'is_active': bool(row[4]),
-                'test_status': row[5],
-                'elo_rating': row[6],
-                'wins': row[7],
-                'losses': row[8],
-                'ties': row[9],
-                'apples_eaten': row[10],
-                'games_played': row[11],
-                'pricing_input_per_m': row[12],
-                'pricing_output_per_m': row[13],
-                'max_completion_tokens': row[14],
-                'last_played_at': row[15],
-                'discovered_at': row[16]
+                'id': row['id'],
+                'name': row['name'],
+                'provider': row['provider'],
+                'model_slug': row['model_slug'],
+                'is_active': row['is_active'],
+                'test_status': row['test_status'],
+                'elo_rating': row['elo_rating'],
+                'wins': row['wins'],
+                'losses': row['losses'],
+                'ties': row['ties'],
+                'apples_eaten': row['apples_eaten'],
+                'games_played': row['games_played'],
+                'pricing_input': row['pricing_input'],
+                'pricing_output': row['pricing_output'],
+                'max_completion_tokens': row['max_completion_tokens'],
+                'last_played_at': row['last_played_at'],
+                'discovered_at': row['discovered_at']
             })
 
         return models
@@ -116,13 +124,14 @@ def get_model_by_name(model_name: str) -> Optional[Dict[str, Any]]:
                 ties,
                 apples_eaten,
                 games_played,
-                pricing_input_per_m,
-                pricing_output_per_m,
+                pricing_input,
+                pricing_output,
                 max_completion_tokens,
                 last_played_at,
                 discovered_at
             FROM models
-            WHERE name = ?
+            WHERE name = %s
+                AND name != 'Auto Router'
         """, (model_name,))
 
         row = cursor.fetchone()
@@ -131,23 +140,23 @@ def get_model_by_name(model_name: str) -> Optional[Dict[str, Any]]:
             return None
 
         return {
-            'id': row[0],
-            'name': row[1],
-            'provider': row[2],
-            'model_slug': row[3],
-            'is_active': bool(row[4]),
-            'test_status': row[5],
-            'elo_rating': row[6],
-            'wins': row[7],
-            'losses': row[8],
-            'ties': row[9],
-            'apples_eaten': row[10],
-            'games_played': row[11],
-            'pricing_input_per_m': row[12],
-            'pricing_output_per_m': row[13],
-            'max_completion_tokens': row[14],
-            'last_played_at': row[15],
-            'discovered_at': row[16]
+            'id': row['id'],
+            'name': row['name'],
+            'provider': row['provider'],
+            'model_slug': row['model_slug'],
+            'is_active': row['is_active'],
+            'test_status': row['test_status'],
+            'elo_rating': row['elo_rating'],
+            'wins': row['wins'],
+            'losses': row['losses'],
+            'ties': row['ties'],
+            'apples_eaten': row['apples_eaten'],
+            'games_played': row['games_played'],
+            'pricing_input': row['pricing_input'],
+            'pricing_output': row['pricing_output'],
+            'max_completion_tokens': row['max_completion_tokens'],
+            'last_played_at': row['last_played_at'],
+            'discovered_at': row['discovered_at']
         }
 
     finally:
@@ -198,22 +207,22 @@ def get_games(
                 g.created_at
             FROM games g
             ORDER BY {order_clause}
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
         """, (limit, offset))
 
         games = []
         for row in cursor.fetchall():
             game = {
-                'id': row[0],
-                'start_time': row[1],
-                'end_time': row[2],
-                'rounds': row[3],
-                'replay_path': row[4],
-                'board_width': row[5],
-                'board_height': row[6],
-                'num_apples': row[7],
-                'total_score': row[8],
-                'created_at': row[9],
+                'id': row['id'],
+                'start_time': str(row['start_time']) if row['start_time'] else None,
+                'end_time': str(row['end_time']) if row['end_time'] else None,
+                'rounds': row['rounds'],
+                'replay_path': row['replay_path'],
+                'board_width': row['board_width'],
+                'board_height': row['board_height'],
+                'num_apples': row['num_apples'],
+                'total_score': row['total_score'],
+                'created_at': str(row['created_at']) if row['created_at'] else None,
                 'participants': []
             }
 
@@ -229,19 +238,19 @@ def get_games(
                     gp.death_reason
                 FROM game_participants gp
                 JOIN models m ON gp.model_id = m.id
-                WHERE gp.game_id = ?
+                WHERE gp.game_id = %s
                 ORDER BY gp.player_slot
             """, (game['id'],))
 
             for participant_row in cursor.fetchall():
                 game['participants'].append({
-                    'model_name': participant_row[0],
-                    'provider': participant_row[1],
-                    'player_slot': participant_row[2],
-                    'score': participant_row[3],
-                    'result': participant_row[4],
-                    'death_round': participant_row[5],
-                    'death_reason': participant_row[6]
+                    'model_name': participant_row['name'],
+                    'provider': participant_row['provider'],
+                    'player_slot': participant_row['player_slot'],
+                    'score': participant_row['score'],
+                    'result': participant_row['result'],
+                    'death_round': participant_row['death_round'],
+                    'death_reason': participant_row['death_reason']
                 })
 
             games.append(game)
@@ -279,7 +288,7 @@ def get_game_by_id(game_id: str) -> Optional[Dict[str, Any]]:
                 total_score,
                 created_at
             FROM games
-            WHERE id = ?
+            WHERE id = %s
         """, (game_id,))
 
         row = cursor.fetchone()
@@ -288,16 +297,16 @@ def get_game_by_id(game_id: str) -> Optional[Dict[str, Any]]:
             return None
 
         game = {
-            'id': row[0],
-            'start_time': row[1],
-            'end_time': row[2],
-            'rounds': row[3],
-            'replay_path': row[4],
-            'board_width': row[5],
-            'board_height': row[6],
-            'num_apples': row[7],
-            'total_score': row[8],
-            'created_at': row[9],
+            'id': row['id'],
+            'start_time': str(row['start_time']) if row['start_time'] else None,
+            'end_time': str(row['end_time']) if row['end_time'] else None,
+            'rounds': row['rounds'],
+            'replay_path': row['replay_path'],
+            'board_width': row['board_width'],
+            'board_height': row['board_height'],
+            'num_apples': row['num_apples'],
+            'total_score': row['total_score'],
+            'created_at': str(row['created_at']) if row['created_at'] else None,
             'participants': []
         }
 
@@ -313,19 +322,19 @@ def get_game_by_id(game_id: str) -> Optional[Dict[str, Any]]:
                 gp.death_reason
             FROM game_participants gp
             JOIN models m ON gp.model_id = m.id
-            WHERE gp.game_id = ?
+            WHERE gp.game_id = %s
             ORDER BY gp.player_slot
         """, (game_id,))
 
         for participant_row in cursor.fetchall():
             game['participants'].append({
-                'model_name': participant_row[0],
-                'provider': participant_row[1],
-                'player_slot': participant_row[2],
-                'score': participant_row[3],
-                'result': participant_row[4],
-                'death_round': participant_row[5],
-                'death_reason': participant_row[6]
+                'model_name': participant_row['name'],
+                'provider': participant_row['provider'],
+                'player_slot': participant_row['player_slot'],
+                'score': participant_row['score'],
+                'result': participant_row['result'],
+                'death_round': participant_row['death_round'],
+                'death_reason': participant_row['death_reason']
             })
 
         return game
@@ -345,9 +354,9 @@ def get_total_games_count() -> int:
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT COUNT(*) FROM games")
-        count = cursor.fetchone()[0]
-        return count
+        cursor.execute("SELECT COUNT(*) as count FROM games")
+        result = cursor.fetchone()
+        return result['count'] if result else 0
 
     finally:
         conn.close()

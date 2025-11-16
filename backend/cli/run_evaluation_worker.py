@@ -24,13 +24,18 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from main import run_simulation
-from database import get_connection
+from database_postgres import get_connection
+from llm_providers import create_llm_provider
 from data_access import (
     get_next_queued_model,
     update_queue_status,
     decrement_attempts,
     get_queue_stats
 )
+
+# Add parent services directory to path for webhook service
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'services'))
+from webhook_service import send_evaluation_complete_webhook
 
 
 def get_model_config_from_db(model_id: int) -> Optional[Dict[str, Any]]:
@@ -53,9 +58,11 @@ def get_model_config_from_db(model_id: int) -> Optional[Dict[str, Any]]:
                 provider,
                 model_slug,
                 max_completion_tokens,
-                metadata_json
+                metadata_json,
+                pricing_input,
+                pricing_output
             FROM models
-            WHERE id = ?
+            WHERE id = %s
         """, (model_id,))
 
         row = cursor.fetchone()
@@ -63,23 +70,42 @@ def get_model_config_from_db(model_id: int) -> Optional[Dict[str, Any]]:
         if not row:
             return None
 
-        name, provider, model_slug, max_tokens, metadata_json = row
+        name = row['name']
+        provider = row['provider']
+        model_slug = row['model_slug']
+        max_tokens = row['max_completion_tokens']
+        metadata_json = row['metadata_json']
+        pricing_input = row['pricing_input']
+        pricing_output = row['pricing_output']
 
         # Parse metadata if available
         metadata = {}
         if metadata_json:
-            try:
-                metadata = json.loads(metadata_json)
-            except json.JSONDecodeError:
-                pass
+            # PostgreSQL JSONB returns dict directly, SQLite returns string
+            if isinstance(metadata_json, str):
+                try:
+                    metadata = json.loads(metadata_json)
+                except json.JSONDecodeError:
+                    pass
+            elif isinstance(metadata_json, dict):
+                metadata = metadata_json
 
         # Build config dictionary
+        # Cap max_tokens at 3000 to prevent requesting excessive output tokens
+        # (NULL defaults to 500, large values are capped at 3000)
         config = {
             'name': name,
             'provider': provider,
-            'model': model_slug,
-            'max_tokens': max_tokens or 500,
+            'model_name': model_slug,
+            'max_tokens': min(max_tokens or 500, 5000),
         }
+
+        # Add pricing information if available
+        if pricing_input is not None and pricing_output is not None:
+            config['pricing'] = {
+                'input': pricing_input,
+                'output': pricing_output
+            }
 
         # Add any additional kwargs from metadata
         if 'kwargs' in metadata:
@@ -108,11 +134,11 @@ def get_current_elo(model_id: int) -> float:
         cursor.execute("""
             SELECT elo_rating
             FROM models
-            WHERE id = ?
+            WHERE id = %s
         """, (model_id,))
 
         row = cursor.fetchone()
-        return row[0] if row else 1500.0
+        return row['elo_rating'] if row else 1500.0
 
     finally:
         conn.close()
@@ -136,7 +162,7 @@ def get_median_elo() -> float:
             ORDER BY elo_rating DESC
         """)
 
-        elos = [row[0] for row in cursor.fetchall()]
+        elos = [row['elo_rating'] for row in cursor.fetchall()]
 
         if not elos:
             return 1500.0
@@ -165,11 +191,11 @@ def get_ranked_models() -> List[Tuple[int, str, float]]:
         cursor.execute("""
             SELECT id, name, elo_rating
             FROM models
-            WHERE test_status = 'ranked' AND is_active = 1
+            WHERE test_status = 'ranked' AND is_active = TRUE
             ORDER BY elo_rating DESC
         """)
 
-        return [(row[0], row[1], row[2]) for row in cursor.fetchall()]
+        return [(row['id'], row['name'], row['elo_rating']) for row in cursor.fetchall()]
 
     finally:
         conn.close()
@@ -309,6 +335,20 @@ def evaluate_queued_model(
         update_queue_status(queue_id, 'failed', 'Could not load model configuration')
         return False
 
+    # Perform health check to verify model is available on OpenRouter
+    print(f"Checking if model is available on OpenRouter...")
+    try:
+        provider = create_llm_provider(test_model_config)
+        if not provider.health_check():
+            print(f"✗ Model {model_name} not found on OpenRouter (404)")
+            update_queue_status(queue_id, 'failed', 'Model not found on OpenRouter (404)')
+            return False
+        print(f"✓ Model is available")
+    except Exception as e:
+        print(f"✗ Health check failed: {e}")
+        update_queue_status(queue_id, 'failed', f'Health check failed: {str(e)[:200]}')
+        return False
+
     # Track game results
     played_opponents = set()
     current_elo = get_current_elo(model_id)
@@ -389,24 +429,44 @@ def evaluate_queued_model(
             traceback.print_exc()
             # Continue with next game
 
-    # Mark model as ranked and optionally activate it
+    # Mark model as ranked and activate it
+    print(f"Marking model {model_name} (ID: {model_id}) as ranked and active...")
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
         cursor.execute("""
             UPDATE models
-            SET test_status = 'ranked'
-            WHERE id = ?
+            SET test_status = 'ranked', is_active = TRUE
+            WHERE id = %s
         """, (model_id,))
 
+        affected_rows = cursor.rowcount
         conn.commit()
+        print(f"✓ Updated model status (affected rows: {affected_rows})")
 
+    except Exception as e:
+        print(f"✗ Error updating model status: {e}")
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
     # Mark queue entry as done
     update_queue_status(queue_id, 'done')
+
+    # Get total cost for this model's evaluation
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COALESCE(SUM(gp.cost), 0) as total_cost
+        FROM game_participants gp
+        JOIN models m ON gp.model_id = m.id
+        WHERE m.id = %s
+    """, (model_id,))
+    result = cursor.fetchone()
+    evaluation_cost = result['total_cost'] if result else 0.0
+    conn.close()
 
     # Print summary
     print(f"\n{'=' * 70}")
@@ -414,8 +474,20 @@ def evaluate_queued_model(
     print(f"{'=' * 70}")
     print(f"Games: {attempts_remaining} | Wins: {wins} | Losses: {losses} | Ties: {ties}")
     print(f"Final ELO: {current_elo:.2f}")
+    print(f"Total Cost: ${evaluation_cost:.4f}")
     print(f"Status: Ranked")
     print(f"{'=' * 70}\n")
+
+    # Send webhook notification
+    send_evaluation_complete_webhook(
+        model_name=model_name,
+        final_elo=current_elo,
+        games_played=attempts_remaining,
+        wins=wins,
+        losses=losses,
+        ties=ties,
+        total_cost=evaluation_cost
+    )
 
     return True
 

@@ -23,7 +23,7 @@ Created three core tables with proper indexes:
 #### Models Table
 - Primary fields: `id`, `name` (unique), `provider`, `model_slug`
 - ELO and aggregates: `elo_rating`, `wins`, `losses`, `ties`, `apples_eaten`, `games_played`
-- Pricing metadata: `pricing_input_per_m`, `pricing_output_per_m`, `max_completion_tokens`
+- Pricing metadata: `pricing_input`, `pricing_output`, `max_completion_tokens`
 - Status tracking: `is_active`, `test_status`, timestamps
 - Indexes on: `elo_rating`, `is_active`/`test_status`
 

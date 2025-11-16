@@ -10,7 +10,7 @@ import sqlite3
 from pathlib import Path
 import yaml
 
-from database import get_connection, get_database_path
+from database_postgres import get_connection, get_database_path
 
 
 def load_yaml_models():
@@ -67,21 +67,21 @@ def seed_models():
             metadata_json = json.dumps(metadata) if metadata else None
 
             # Check if model already exists
-            cursor.execute("SELECT id FROM models WHERE name = ?", (name,))
+            cursor.execute("SELECT id FROM models WHERE name = %s", (name,))
             existing = cursor.fetchone()
 
             if existing:
                 # Update existing model
                 cursor.execute("""
                     UPDATE models
-                    SET provider = ?,
-                        model_slug = ?,
-                        pricing_input_per_m = ?,
-                        pricing_output_per_m = ?,
-                        max_completion_tokens = ?,
-                        metadata_json = ?,
+                    SET provider = %s,
+                        model_slug = %s,
+                        pricing_input = %s,
+                        pricing_output = %s,
+                        max_completion_tokens = %s,
+                        metadata_json = %s,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE name = ?
+                    WHERE name = %s
                 """, (
                     provider,
                     model_name,
@@ -99,9 +99,9 @@ def seed_models():
                     INSERT INTO models (
                         name, provider, model_slug,
                         is_active, test_status,
-                        pricing_input_per_m, pricing_output_per_m,
+                        pricing_input, pricing_output,
                         max_completion_tokens, metadata_json
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     name,
                     provider,

@@ -2,7 +2,7 @@
 Game persistence functions for inserting game data into the database.
 """
 
-import sqlite3
+import psycopg2
 from datetime import datetime
 from typing import Dict, Any, List
 import sys
@@ -11,7 +11,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database import get_connection
+from database_postgres import get_connection
 
 
 def insert_game(
@@ -23,7 +23,8 @@ def insert_game(
     board_width: int,
     board_height: int,
     num_apples: int,
-    total_score: int
+    total_score: int,
+    total_cost: float = 0.0
 ) -> None:
     """
     Insert a game record into the games table.
@@ -38,6 +39,7 @@ def insert_game(
         board_height: Height of the game board
         num_apples: Number of apples in the game
         total_score: Combined score of all players
+        total_cost: Total cost of LLM API calls for this game
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -46,8 +48,8 @@ def insert_game(
         cursor.execute("""
             INSERT INTO games (
                 id, start_time, end_time, rounds, replay_path,
-                board_width, board_height, num_apples, total_score
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                board_width, board_height, num_apples, total_score, total_cost
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             game_id,
             start_time.isoformat() if isinstance(start_time, datetime) else start_time,
@@ -57,13 +59,14 @@ def insert_game(
             board_width,
             board_height,
             num_apples,
-            total_score
+            total_score,
+            total_cost
         ))
 
         conn.commit()
-        print(f"Inserted game {game_id} into database")
+        print(f"Inserted game {game_id} into database (cost: ${total_cost:.6f})")
 
-    except sqlite3.IntegrityError as e:
+    except psycopg2.IntegrityError as e:
         print(f"Game {game_id} already exists in database: {e}")
         conn.rollback()
     except Exception as e:
@@ -90,6 +93,7 @@ def insert_game_participants(
             - result: Game result ('won', 'lost', 'tied')
             - death_round: Round number when player died (optional)
             - death_reason: Reason for death (optional)
+            - cost: Total cost for this player (optional)
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -98,7 +102,7 @@ def insert_game_participants(
         for participant in participants:
             # Get model_id from model name
             cursor.execute(
-                "SELECT id FROM models WHERE name = ?",
+                "SELECT id FROM models WHERE name = %s",
                 (participant['model_name'],)
             )
             row = cursor.fetchone()
@@ -107,14 +111,14 @@ def insert_game_participants(
                 print(f"Warning: Model '{participant['model_name']}' not found in database. Skipping participant.")
                 continue
 
-            model_id = row[0]
+            model_id = row['id']
 
             # Insert participant record
             cursor.execute("""
                 INSERT INTO game_participants (
                     game_id, model_id, player_slot, score, result,
-                    death_round, death_reason
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    death_round, death_reason, cost
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 game_id,
                 model_id,
@@ -122,7 +126,8 @@ def insert_game_participants(
                 participant['score'],
                 participant['result'],
                 participant.get('death_round'),
-                participant.get('death_reason')
+                participant.get('death_reason'),
+                participant.get('cost', 0.0)
             ))
 
         conn.commit()

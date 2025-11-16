@@ -78,8 +78,8 @@ def init_database() -> None:
                 games_played INTEGER DEFAULT 0,
 
                 -- Pricing and metadata
-                pricing_input_per_m REAL,
-                pricing_output_per_m REAL,
+                pricing_input REAL,
+                pricing_output REAL,
                 max_completion_tokens INTEGER,
                 metadata_json TEXT,
 
@@ -103,6 +103,7 @@ def init_database() -> None:
                 board_height INTEGER,
                 num_apples INTEGER,
                 total_score INTEGER,
+                total_cost REAL DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -118,6 +119,7 @@ def init_database() -> None:
                 result TEXT CHECK(result IN ('won', 'lost', 'tied')),
                 death_round INTEGER,
                 death_reason TEXT,
+                cost REAL DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
                 FOREIGN KEY (game_id) REFERENCES games(id),

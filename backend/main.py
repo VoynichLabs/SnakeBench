@@ -204,13 +204,16 @@ class LLMPlayer(Player):
     def get_move(self, game_state: GameState) -> dict:
         """
         Construct the prompt, call the generic provider, and then parse the response.
-        Returns a dictionary containing the move and rationale.
+        Returns a dictionary containing the move, rationale, tokens, and cost.
         """
         prompt = self._construct_prompt(game_state)
 
         try:
             # Use the abstracted provider to get the response.
-            response_text = self.provider.get_response(prompt)
+            response_data = self.provider.get_response(prompt)
+            response_text = response_data["text"]
+            input_tokens = response_data.get("input_tokens", 0)
+            output_tokens = response_data.get("output_tokens", 0)
         except Exception as exc:  # noqa: BLE001 - ensure the game continues
             print(
                 f"Provider error for player {self.snake_id} ({self.name}): {exc}. "
@@ -222,6 +225,9 @@ class LLMPlayer(Player):
                 "rationale": (
                     f"Provider error: {exc}. Generated random move {direction} to continue the game."
                 ),
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost": 0.0
             }
             self.move_history.append({self.snake_id: move_data})
             return move_data
@@ -229,13 +235,25 @@ class LLMPlayer(Player):
         direction = self.get_direction_from_response(response_text)
 
         if direction is None:
-            print(f"Player {self.snake_id} returned an invalid direction. Choosing a random move.")
+            response_preview = response_text[-50:] if len(response_text) > 50 else response_text
+            print(f"Player {self.snake_id} returned an invalid direction. Last 50 chars: '{response_preview}'. Choosing a random move.")
             direction = random.choice(list(VALID_MOVES))
             response_text += f"\n\nThis is a random move: {direction}"
 
+        # Calculate cost based on pricing from config
+        pricing = self.config.get('pricing', {})
+        input_price_per_m = pricing.get('input', 0)
+        output_price_per_m = pricing.get('output', 0)
+
+        # Calculate cost (price is per million tokens)
+        cost = (input_tokens * input_price_per_m / 1_000_000) + (output_tokens * output_price_per_m / 1_000_000)
+
         move_data = {
             "direction": direction,
-            "rationale": response_text
+            "rationale": response_text,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost": cost
         }
 
         self.move_history.append({self.snake_id: move_data})
@@ -244,18 +262,38 @@ class LLMPlayer(Player):
     def _construct_prompt(self, game_state: GameState) -> str:
         # Summarize the multiple apples
         apples_str = ", ".join(str(a) for a in game_state.apples)
+
+        # Get your snake's position with explicit head/body labels
+        your_pos = game_state.snake_positions[self.snake_id]
+        your_head = your_pos[0]
+        your_body = your_pos[1:] if len(your_pos) > 1 else []
+
+        # Format enemy snake positions with explicit head/body labels
+        enemy_positions = []
+        for sid, pos in game_state.snake_positions.items():
+            if sid != self.snake_id:
+                enemy_head = pos[0]
+                enemy_body = pos[1:] if len(pos) > 1 else []
+                enemy_positions.append(f"* Snake #{sid} - Head: {enemy_head}, Body: {enemy_body if enemy_body else 'none'}")
+
         prompt = (
             f"You are controlling a snake in a multi-apple Snake game. "
             f"The board size is {game_state.width}x{game_state.height}. Normal X,Y coordinates are used. Coordinates range from (0,0) at bottom left to ({game_state.width-1},{game_state.height-1}) at top right.\n"
             f"Apples at: {apples_str}\n\n"
-            f"Your snake ID: {self.snake_id} which is currently positioned at {game_state.snake_positions[self.snake_id][0]} with body at {game_state.snake_positions[self.snake_id][1:]}\n\n"
-            f"Enemy snakes positions:\n" + 
-            "\n".join([f"* Snake #{sid} is at position {pos[0]} with body at {pos[1:]}" for sid, pos in game_state.snake_positions.items() if sid != self.snake_id]) + "\n\n"
+            f"Your snake (ID: {self.snake_id}):\n"
+            f"  - Head: {your_head}\n"
+            f"  - Body: {your_body if your_body else 'none'}\n\n"
+            f"Enemy snakes:\n" +
+            "\n".join(enemy_positions) + "\n\n"
             f"Board state:\n"
             f"{game_state.print_board()}\n\n"
             f"--Your last move information:--\n\n"
-            f"Direction: {self.move_history[-1][self.snake_id]['direction'] if self.move_history else 'None'}\n"
-            f"Rationale: {self.move_history[-1][self.snake_id]['rationale'] if self.move_history else 'None'}\n\n"
+            f"**START LAST MOVE PICK**\n"
+            f"{self.move_history[-1][self.snake_id]['direction'] if self.move_history else 'None'}\n"
+            f"**END LAST MOVE PICK**\n\n"
+            f"**START LAST RATIONALE**\n"
+            f"{self.move_history[-1][self.snake_id]['rationale'] if self.move_history else 'None'}\n"
+            f"**END LAST RATIONALE**\n\n"
             f"--End of your last move information.--\n\n"
             "Rules:\n"
             "1) If you move onto an apple, you grow and gain 1 point.\n"
@@ -267,7 +305,7 @@ class LLMPlayer(Player):
             "You may also state a strategy you want to tell yourself next turn.\n"
             "End your response with your decided next move: UP, DOWN, LEFT, or RIGHT.\n"
         )
-        print(f"----------Prompt:\n\n {prompt}\n\n------------")
+        # print(f"----------Prompt:\n\n {prompt}\n\n------------")
         return prompt
 
 class SnakeGame:
@@ -291,7 +329,7 @@ class SnakeGame:
         self.max_rounds = max_rounds
         self.game_over = False
         self.start_time = time.time()
-        self.game_result = None 
+        self.game_result = None
 
         if game_id is None:
             self.game_id = str(uuid.uuid4())
@@ -301,7 +339,7 @@ class SnakeGame:
 
         # Store how many apples we want to keep on the board at all times
         self.num_apples = num_apples
-        
+
         # We store multiple apples as a set of (x, y) or a list.
         # Here, let's keep them as a list to preserve GameState JSON-friendliness.
         self.apples: List[Tuple[int,int]] = []
@@ -309,6 +347,10 @@ class SnakeGame:
         # For replay or for the LLM context
         self.move_history: List[Dict[str, str]] = []
         self.history: List[GameState] = []
+
+        # Cost tracking
+        self.total_cost: float = 0.0
+        self.player_costs: Dict[str, float] = {}
 
         # Place initial apples
         for _ in range(self.num_apples):
@@ -318,13 +360,17 @@ class SnakeGame:
     def add_snake(self, snake_id: str, player: Player):
         if snake_id in self.snakes:
             raise ValueError(f"Snake with id {snake_id} already exists.")
-        
+
         positions = self._random_free_cell()
 
         self.snakes[snake_id] = Snake([positions])
         self.players[snake_id] = player
         self.scores[snake_id] = 0
-        print(f"Added snake '{snake_id}' ({player.model_name if hasattr(player, 'model_name') else player.__class__.__name__}) at {positions}.")
+        self.player_costs[snake_id] = 0.0
+
+        # Get the player name - LLMPlayer has 'name', others might have 'model_name' or just class name
+        player_name = getattr(player, 'name', None) or getattr(player, 'model_name', None) or player.__class__.__name__
+        print(f"Added snake '{snake_id}' ({player_name}) at {positions}.")
 
     def set_apples(self, apple_positions: List[Tuple[int,int]]):
         """
@@ -378,12 +424,12 @@ class SnakeGame:
         """
         Gathers each snake's move in parallel using threads.
         game: the SnakeGame instance
-        Returns a dictionary: { snake_id: { "move": ..., "rationale": ... }, ... }
+        Returns a dictionary: { snake_id: { "move": ..., "rationale": ..., "input_tokens": ..., "output_tokens": ..., "cost": ... }, ... }
         """
         round_moves = {}
         # Take one snapshot of the state to pass to each player
         state_snapshot = game.get_current_state()
-        
+
         # We'll limit max_workers to the number of alive snakes (or just len of all snakes).
         # If you have many snakes, you can set a higher or lower limit based on preference.
         alive_snakes = [sid for sid, s in game.snakes.items() if s.alive]
@@ -394,16 +440,21 @@ class SnakeGame:
             for snake_id in alive_snakes:
                 player = game.players[snake_id]
                 futures[executor.submit(player.get_move, state_snapshot)] = snake_id
-            
+
             # Collect results as they complete
             for future in as_completed(futures):
                 snake_id = futures[future]
+                player = game.players[snake_id]
+                player_name = getattr(player, 'name', None) or getattr(player, 'model_name', None) or player.__class__.__name__
                 move_data = future.result()  # This is the dict returned by LLMPlayer.get_move
                 round_moves[snake_id] = {
                     "move": move_data["direction"],
-                    "rationale": move_data["rationale"]
+                    "rationale": move_data["rationale"],
+                    "input_tokens": move_data.get("input_tokens", 0),
+                    "output_tokens": move_data.get("output_tokens", 0),
+                    "cost": move_data.get("cost", 0.0)
                 }
-                print(f"Player {snake_id} chose move: {move_data['direction']}")
+                print(f"Player {snake_id} ({player_name}) chose move: {move_data['direction']} (cost: ${move_data.get('cost', 0.0):.6f})")
 
         return round_moves
 
@@ -425,6 +476,13 @@ class SnakeGame:
 
         # --- PARALLEL GATHER OF MOVES ---
         round_moves = self.gather_moves_in_parallel(self)
+
+        # Accumulate costs for this round
+        for snake_id, move_data in round_moves.items():
+            cost = move_data.get("cost", 0.0)
+            self.player_costs[snake_id] += cost
+            self.total_cost += cost
+
         # Store the moves of this round
         self.move_history.append(round_moves)
 
@@ -592,11 +650,8 @@ class SnakeGame:
         return output
     
     def clean_model_name(self, model_name: str) -> str:
-        # Check if the model name contains a provider prefix (e.g., "mistral/")
-        if '/' in model_name:
-            # Return everything after the last '/'
-            return model_name.split('/')[-1]
-        # If no provider prefix, return the original name
+        # Don't strip the prefix - the database stores the full name
+        # This function is kept for backwards compatibility but no longer modifies names
         return model_name
 
 
@@ -626,7 +681,9 @@ class SnakeGame:
             if not snake.alive  # you could record info for dead snakes only
         },
             "max_rounds": self.max_rounds,
-            "actual_rounds": self.round_number
+            "actual_rounds": self.round_number,
+            "total_cost": self.total_cost,
+            "player_costs": self.player_costs
         }
 
         data = {
@@ -634,9 +691,21 @@ class SnakeGame:
             "rounds": self.serialize_history(self.history)
         }
 
-        # Ensure the output directory exists
-        os.makedirs('completed_games', exist_ok=True)
+        # Upload to Supabase Storage
+        try:
+            from services.supabase_storage import upload_replay
+            result = upload_replay(self.game_id, data)
+            self.replay_storage_path = result['storage_path']
+            self.replay_public_url = result['public_url']
+            print(f"✓ Uploaded replay to Supabase: {self.replay_storage_path}")
+        except Exception as e:
+            print(f"✗ Failed to upload replay to Supabase: {e}")
+            # Fall back to storing local path if upload fails
+            self.replay_storage_path = f"completed_games/{filename}"
+            self.replay_public_url = None
 
+        # Also write locally for debugging/backup (optional)
+        os.makedirs('completed_games', exist_ok=True)
         with open(f'completed_games/{filename}', "w") as f:
             json.dump(data, f, indent=2)
 
@@ -655,7 +724,9 @@ class SnakeGame:
             # 1. Insert game record
             start_dt = datetime.fromtimestamp(self.start_time)
             end_dt = datetime.fromtimestamp(time.time())
-            replay_path = f"completed_games/snake_game_{self.game_id}.json"
+
+            # Use Supabase storage path if available, fall back to local path
+            replay_path = getattr(self, 'replay_storage_path', f"completed_games/snake_game_{self.game_id}.json")
             total_score = sum(self.scores.values())
 
             insert_game(
@@ -667,7 +738,8 @@ class SnakeGame:
                 board_width=self.width,
                 board_height=self.height,
                 num_apples=self.num_apples,
-                total_score=total_score
+                total_score=total_score,
+                total_cost=self.total_cost
             )
 
             # 2. Insert game participants
@@ -684,7 +756,8 @@ class SnakeGame:
                     'score': self.scores.get(snake_id, 0),
                     'result': self.game_result.get(snake_id, 'tied'),
                     'death_round': snake.death_round,
-                    'death_reason': snake.death_reason
+                    'death_reason': snake.death_reason,
+                    'cost': self.player_costs.get(snake_id, 0.0)
                 }
                 participants.append(participant)
 

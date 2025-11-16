@@ -57,7 +57,12 @@ export default async function MatchPage(props: PageProps) {
   const params = await props.params;
   const { id } = params;
 
-  const gamesResponse = await fetch(`${process.env.FLASK_URL}/api/matches/${id}`, { next: { revalidate: 300 } }); // revalidate every 5 minutes
+  // Fetch replay directly from Supabase Storage
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const bucket = 'matches';
+  const replayUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${id}/replay.json`;
+
+  const gamesResponse = await fetch(replayUrl, { next: { revalidate: 300 } }); // revalidate every 5 minutes
 
   // If not found or error
   if (!gamesResponse.ok) {
