@@ -91,13 +91,12 @@ def get_model_config_from_db(model_id: int) -> Optional[Dict[str, Any]]:
                 metadata = metadata_json
 
         # Build config dictionary
-        # Cap max_tokens at 3000 to prevent requesting excessive output tokens
-        # (NULL defaults to 500, large values are capped at 3000)
+        # Use model's max_completion_tokens if available, otherwise default to 500
         config = {
             'name': name,
             'provider': provider,
             'model_name': model_slug,
-            'max_tokens': min(max_tokens or 500, 5000),
+            'max_tokens': max_tokens or 500,
         }
 
         # Add pricing information if available
