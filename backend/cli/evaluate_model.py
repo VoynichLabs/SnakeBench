@@ -114,6 +114,31 @@ def get_current_test_model_elo(test_model: str, rankings: List[Tuple[str, float]
     return None
 
 
+def calculate_jump_percentage(game_num: int, total_games: int = 10) -> float:
+    """
+    Calculate what percentage of the rankings to jump based on game number.
+
+    Early games have high variance (exploration), later games refine position (exploitation).
+    Uses percentages so it scales appropriately whether there are 20 or 100 models.
+    Designed so that 5 consecutive wins lead to facing #1 by game 6.
+
+    Args:
+        game_num: Current game number (1-indexed)
+        total_games: Total number of evaluation games
+
+    Returns:
+        Percentage of rankings to jump (0.0 to 1.0)
+    """
+    if game_num <= 2:
+        return 0.10  # Early exploration - jump ~10% of rankings
+    elif game_num <= 5:
+        return 0.15  # Medium exploration - jump ~15% of rankings
+    elif game_num <= 7:
+        return 0.10  # Narrowing in - jump ~10% of rankings
+    else:
+        return 0.05  # Fine-tuning - jump ~5% of rankings
+
+
 def select_next_opponent(
     test_model: str,
     current_elo: float,
@@ -122,21 +147,24 @@ def select_next_opponent(
     played_opponents: set,
     available_models: set,
     model_configs: Dict,
+    game_num: int = 1,
     max_attempts: int = 5,
     skip_api_test: bool = False
 ) -> Tuple[str, float]:
     """
     Select the next opponent based on current ELO and last game result.
     Tests the selected model to ensure it can respond before returning.
-    
-    Strategy:
-    - First game: Find model closest to current ELO
-    - After win: Find next higher ELO opponent
-    - After loss: Find next lower ELO opponent
-    - After tie: Find similar ELO opponent
+
+    Strategy uses variance decay:
+    - Early games (1-3): Make large jumps (7 positions) to quickly find skill level
+    - Mid games (4-6): Make medium jumps (4 positions) to narrow in
+    - Late games (7-10): Make small jumps (1 position) to fine-tune exact ELO
+    - First game or tie: Find model closest to current ELO
+    - After win: Find higher ELO opponent (with jump size)
+    - After loss: Find lower ELO opponent (with jump size)
     - Prefer opponents not yet played
     - Test each candidate to ensure it works
-    
+
     Args:
         test_model: Name of the model being evaluated
         current_elo: Current ELO of the test model
@@ -145,8 +173,9 @@ def select_next_opponent(
         played_opponents: Set of model names already played against
         available_models: Set of model names that have valid configurations
         model_configs: Dictionary of all model configurations
+        game_num: Current game number (1-indexed) for variance decay
         max_attempts: Maximum number of models to test before giving up
-        
+
     Returns:
         Tuple of (opponent_name, opponent_elo)
     """
@@ -159,10 +188,13 @@ def select_next_opponent(
     # Separate into played and unplayed opponents
     unplayed = [(m, e) for m, e in available_opponents if m not in played_opponents]
     played = [(m, e) for m, e in available_opponents if m in played_opponents]
-    
+
     # Prefer unplayed opponents, but fall back to played if necessary
     candidates = unplayed if unplayed else played
-    
+
+    # Calculate jump percentage based on game number (variance decay strategy)
+    jump_percentage = calculate_jump_percentage(game_num)
+
     # Try multiple candidates until we find one that works
     for attempt in range(max_attempts):
         if last_result is None or last_result == 'tied':
@@ -172,26 +204,32 @@ def select_next_opponent(
             if attempt >= len(sorted_candidates):
                 break
             selected = sorted_candidates[attempt]
-        
+
         elif last_result == 'won':
-            # Won: find next higher ELO opponent
+            # Won: find higher ELO opponent with variance-based jump
             higher_elo = sorted([(m, e) for m, e in candidates if e > current_elo], key=lambda x: x[1])
             if not higher_elo:
                 # Already at top, use highest available
                 higher_elo = sorted(candidates, key=lambda x: x[1], reverse=True)
             if attempt >= len(higher_elo):
                 break
-            selected = higher_elo[attempt]
-        
+            # Jump ahead by percentage of available higher-ranked opponents, plus retry offset
+            jump_positions = max(1, int(len(higher_elo) * jump_percentage))
+            jump_index = min(jump_positions - 1 + attempt, len(higher_elo) - 1)
+            selected = higher_elo[jump_index]
+
         else:  # last_result == 'lost'
-            # Lost: find next lower ELO opponent
+            # Lost: find lower ELO opponent with variance-based jump
             lower_elo = sorted([(m, e) for m, e in candidates if e < current_elo], key=lambda x: x[1], reverse=True)
             if not lower_elo:
                 # Already at bottom, use lowest available
                 lower_elo = sorted(candidates, key=lambda x: x[1])
             if attempt >= len(lower_elo):
                 break
-            selected = lower_elo[attempt]
+            # Jump down by percentage of available lower-ranked opponents, plus retry offset
+            jump_positions = max(1, int(len(lower_elo) * jump_percentage))
+            jump_index = min(jump_positions - 1 + attempt, len(lower_elo) - 1)
+            selected = lower_elo[jump_index]
         
         opponent_name, opponent_elo = selected
         
@@ -319,9 +357,9 @@ def evaluate_model(
         print(f"Game {game_num}/{num_games}")
         print('=' * 70)
         
-        # Select opponent (with pre-flight testing)
+        # Select opponent (with pre-flight testing and variance decay)
         opponent_name, opponent_elo = select_next_opponent(
-            model_name, current_elo, rankings, last_result, played_opponents, available_models, model_configs
+            model_name, current_elo, rankings, last_result, played_opponents, available_models, model_configs, game_num
         )
         opponent_config = model_configs[opponent_name]
         

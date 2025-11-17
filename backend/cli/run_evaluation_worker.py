@@ -201,19 +201,48 @@ def get_ranked_models() -> List[Tuple[int, str, float]]:
         conn.close()
 
 
+def calculate_jump_percentage(game_num: int, total_games: int = 10) -> float:
+    """
+    Calculate what percentage of the rankings to jump based on game number.
+
+    Early games have high variance (exploration), later games refine position (exploitation).
+    Uses percentages so it scales appropriately whether there are 20 or 100 models.
+    Designed so that 5 consecutive wins lead to facing #1 by game 6.
+
+    Args:
+        game_num: Current game number (1-indexed)
+        total_games: Total number of evaluation games
+
+    Returns:
+        Percentage of rankings to jump (0.0 to 1.0)
+    """
+    if game_num <= 2:
+        return 0.10  # Early exploration - jump ~10% of rankings
+    elif game_num <= 5:
+        return 0.15  # Medium exploration - jump ~15% of rankings
+    elif game_num <= 7:
+        return 0.10  # Narrowing in - jump ~10% of rankings
+    else:
+        return 0.05  # Fine-tuning - jump ~5% of rankings
+
+
 def select_next_opponent(
     test_model_id: int,
     current_elo: float,
     last_result: Optional[str],
-    played_opponents: set
+    played_opponents: set,
+    game_num: int = 1
 ) -> Optional[Tuple[int, str, float]]:
     """
     Select the next opponent based on current ELO and last game result.
 
-    Strategy matches evaluate_model.py:
+    Strategy uses variance decay:
+    - Early games (1-3): Make large jumps (7 positions) to quickly find skill level
+    - Mid games (4-6): Make medium jumps (4 positions) to narrow in
+    - Late games (7-10): Make small jumps (1 position) to fine-tune exact ELO
     - First game or tie: Find model closest to current ELO
-    - After win: Find next higher ELO opponent
-    - After loss: Find next lower ELO opponent
+    - After win: Find higher ELO opponent (with jump size)
+    - After loss: Find lower ELO opponent (with jump size)
     - Prefer opponents not yet played
 
     Args:
@@ -221,6 +250,7 @@ def select_next_opponent(
         current_elo: Current ELO of the test model
         last_result: 'won', 'lost', 'tied', or None for first game
         played_opponents: Set of model IDs already played against
+        game_num: Current game number (1-indexed) for variance decay
 
     Returns:
         Tuple of (opponent_id, opponent_name, opponent_elo) or None if no opponents
@@ -244,26 +274,35 @@ def select_next_opponent(
     # Prefer unplayed opponents, but fall back to played if necessary
     pool = unplayed if unplayed else played
 
+    # Calculate jump percentage based on game number (variance decay strategy)
+    jump_percentage = calculate_jump_percentage(game_num)
+
     if last_result is None or last_result == 'tied':
         # First game or tie: find closest ELO match
         sorted_pool = sorted(pool, key=lambda x: abs(x[2] - current_elo))
         return sorted_pool[0] if sorted_pool else None
 
     elif last_result == 'won':
-        # Won: find next higher ELO opponent
+        # Won: find higher ELO opponent with variance-based jump
         higher_elo = sorted([(mid, name, elo) for mid, name, elo in pool if elo > current_elo],
                            key=lambda x: x[2])
         if higher_elo:
-            return higher_elo[0]
+            # Jump ahead by percentage of available higher-ranked opponents
+            jump_positions = max(1, int(len(higher_elo) * jump_percentage))
+            jump_index = min(jump_positions - 1, len(higher_elo) - 1)
+            return higher_elo[jump_index]
         # Already at top, use highest available
         return sorted(pool, key=lambda x: x[2], reverse=True)[0]
 
     else:  # last_result == 'lost'
-        # Lost: find next lower ELO opponent
+        # Lost: find lower ELO opponent with variance-based jump
         lower_elo = sorted([(mid, name, elo) for mid, name, elo in pool if elo < current_elo],
                           key=lambda x: x[2], reverse=True)
         if lower_elo:
-            return lower_elo[0]
+            # Jump down by percentage of available lower-ranked opponents
+            jump_positions = max(1, int(len(lower_elo) * jump_percentage))
+            jump_index = min(jump_positions - 1, len(lower_elo) - 1)
+            return lower_elo[jump_index]
         # Already at bottom, use lowest available
         return sorted(pool, key=lambda x: x[2])[0]
 
@@ -367,8 +406,8 @@ def evaluate_queued_model(
     for game_num in range(1, attempts_remaining + 1):
         print(f"\n--- Game {game_num}/{attempts_remaining} ---")
 
-        # Select opponent
-        opponent_info = select_next_opponent(model_id, current_elo, last_result, played_opponents)
+        # Select opponent (with variance decay based on game number)
+        opponent_info = select_next_opponent(model_id, current_elo, last_result, played_opponents, game_num)
 
         if not opponent_info:
             print("✗ No suitable opponents available")
