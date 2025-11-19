@@ -192,15 +192,12 @@ export default function LiveGamesPage() {
                               Round {currentRound}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {Object.entries(scores).map(([id, score], idx) => {
-                                const modelName = models[id] || `P${id}`;
-                                return (
-                                  <span key={id}>
-                                    {score}
-                                    {idx < Object.keys(scores).length - 1 && ' - '}
-                                  </span>
-                                );
-                              })}
+                              {Object.entries(scores).map(([id, score], idx) => (
+                                <span key={id}>
+                                  {score}
+                                  {idx < Object.keys(scores).length - 1 && ' - '}
+                                </span>
+                              ))}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                               <Link
