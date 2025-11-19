@@ -13,24 +13,24 @@ export default function Navbar() {
               </Link>
             </div>
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <a
+              <Link
                 href="/live-games"
                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-mono"
               >
                 🔴 Live Games
-              </a>
-              <a
+              </Link>
+              <Link
                 href={`/match/${process.env.NEXT_PUBLIC_TOP_MATCH_ID}`}
                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-mono"
               >
                 Top Match
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/about"
                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-mono"
               >
                 About
-              </a>
+              </Link>
             </div>
           </div>
         </div>
