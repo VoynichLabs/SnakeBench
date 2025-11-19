@@ -154,7 +154,7 @@ export default function LiveGamesPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-900">
-                              {Object.entries(models).map(([id, modelName], idx) => (
+                              {Object.entries(models).map(([id, modelName]) => (
                                 <div key={id}>
                                   {modelName}
                                 </div>
