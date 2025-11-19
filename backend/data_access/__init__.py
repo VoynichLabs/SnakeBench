@@ -10,6 +10,7 @@ from .model_updates import update_model_aggregates, update_elo_ratings
 from .evaluation_queue import (
     enqueue_model,
     get_next_queued_model,
+    get_queued_model_by_id,
     update_queue_status,
     decrement_attempts,
     get_queue_stats,
@@ -23,6 +24,7 @@ __all__ = [
     'update_elo_ratings',
     'enqueue_model',
     'get_next_queued_model',
+    'get_queued_model_by_id',
     'update_queue_status',
     'decrement_attempts',
     'get_queue_stats',

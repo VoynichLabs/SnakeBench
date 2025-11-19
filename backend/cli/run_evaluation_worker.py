@@ -10,6 +10,7 @@ worker is fully database-driven and integrates with the sync/queue system.
 
 Usage:
     python backend/cli/run_evaluation_worker.py [--continuous] [--interval 60]
+    python backend/cli/run_evaluation_worker.py --model "model-name"
 """
 
 import os
@@ -30,12 +31,54 @@ from data_access import (
     get_next_queued_model,
     update_queue_status,
     decrement_attempts,
-    get_queue_stats
+    get_queue_stats,
+    enqueue_model,
+    get_queued_model_by_id
 )
 
 # Add parent services directory to path for webhook service
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'services'))
 from webhook_service import send_evaluation_complete_webhook
+
+
+def queue_model_by_name(model_name: str, attempts: int = 10) -> Optional[int]:
+    """
+    Lookup a model by name and queue it for evaluation.
+
+    Args:
+        model_name: Name of the model to queue
+        attempts: Number of evaluation games to run (default: 10)
+
+    Returns:
+        Model ID if found and queued, None if not found
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT id, name
+            FROM models
+            WHERE name = %s
+        """, (model_name,))
+
+        row = cursor.fetchone()
+
+        if not row:
+            print(f"✗ Model '{model_name}' not found in database")
+            return None
+
+        model_id = row['id']
+        print(f"✓ Found model: {row['name']} (ID: {model_id})")
+
+        # Queue the model
+        enqueue_model(model_id=model_id, attempts=attempts)
+        print(f"✓ Queued model for {attempts} evaluation games")
+
+        return model_id
+
+    finally:
+        conn.close()
 
 
 def get_model_config_from_db(model_id: int) -> Optional[Dict[str, Any]]:
@@ -91,12 +134,20 @@ def get_model_config_from_db(model_id: int) -> Optional[Dict[str, Any]]:
                 metadata = metadata_json
 
         # Build config dictionary
-        # Use model's max_completion_tokens if available, otherwise default to 500
+        # Cap max_tokens to reasonable value to leave room for input tokens
+        # Use model's max_completion_tokens if available, but cap at 16000
+        # to ensure there's room for the game state in the prompt
+        if max_tokens:
+            # Use the smaller of: model's max or 16000
+            capped_max_tokens = min(max_tokens, 16000)
+        else:
+            capped_max_tokens = 500
+
         config = {
             'name': name,
             'provider': provider,
             'model_name': model_slug,
-            'max_tokens': max_tokens or 500,
+            'max_tokens': capped_max_tokens,
         }
 
         # Add pricing information if available
@@ -533,7 +584,8 @@ def evaluate_queued_model(
 def run_worker(
     continuous: bool = False,
     interval: int = 60,
-    game_params: Optional[argparse.Namespace] = None
+    game_params: Optional[argparse.Namespace] = None,
+    target_model_id: Optional[int] = None
 ):
     """
     Main worker loop to process evaluation queue.
@@ -542,6 +594,7 @@ def run_worker(
         continuous: If True, keep running and check for new jobs
         interval: Seconds to wait between checks in continuous mode
         game_params: Game parameters (width, height, rounds, apples)
+        target_model_id: If specified, only process this specific model (one-off mode)
     """
     if game_params is None:
         game_params = argparse.Namespace(
@@ -562,30 +615,37 @@ def run_worker(
     processed = 0
 
     while True:
-        # Check queue stats
-        stats = get_queue_stats()
-        queued_count = stats.get('queued', 0)
-
-        if queued_count == 0:
-            if processed > 0:
-                print(f"\n✓ Processed {processed} model(s), queue is now empty")
-
-            if not continuous:
-                print("No more models in queue, exiting...")
+        # If target_model_id is specified, only process that model
+        if target_model_id is not None:
+            queue_entry = get_queued_model_by_id(target_model_id)
+            if queue_entry is None:
+                print(f"✗ Model ID {target_model_id} not found in queue or not ready for evaluation")
                 break
-            else:
-                print(f"Queue empty, waiting {interval}s for new jobs...")
+        else:
+            # Check queue stats
+            stats = get_queue_stats()
+            queued_count = stats.get('queued', 0)
+
+            if queued_count == 0:
+                if processed > 0:
+                    print(f"\n✓ Processed {processed} model(s), queue is now empty")
+
+                if not continuous:
+                    print("No more models in queue, exiting...")
+                    break
+                else:
+                    print(f"Queue empty, waiting {interval}s for new jobs...")
+                    time.sleep(interval)
+                    continue
+
+            # Get next model
+            queue_entry = get_next_queued_model()
+
+            if queue_entry is None:
+                if not continuous:
+                    break
                 time.sleep(interval)
                 continue
-
-        # Get next model
-        queue_entry = get_next_queued_model()
-
-        if queue_entry is None:
-            if not continuous:
-                break
-            time.sleep(interval)
-            continue
 
         # Evaluate the model
         try:
@@ -604,6 +664,10 @@ def run_worker(
                 str(e)[:500]  # Truncate error message
             )
 
+        # If we're targeting a specific model, exit after processing it
+        if target_model_id is not None:
+            break
+
         if not continuous:
             break
 
@@ -615,6 +679,11 @@ def run_worker(
 def main():
     parser = argparse.ArgumentParser(
         description="Evaluation worker to process queued models"
+    )
+    parser.add_argument(
+        '--model',
+        type=str,
+        help="Queue and evaluate a specific model by name (one-off evaluation)"
     )
     parser.add_argument(
         '--continuous',
@@ -661,10 +730,27 @@ def main():
         num_apples=args.num_apples
     )
 
+    # If --model is specified, queue that specific model and run single evaluation
+    target_model_id = None
+    if args.model:
+        print(f"One-off evaluation mode for model: {args.model}")
+        target_model_id = queue_model_by_name(args.model)
+        if target_model_id is None:
+            print("\nAvailable models:")
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM models ORDER BY name LIMIT 20")
+            for row in cursor.fetchall():
+                print(f"  - {row['name']}")
+            conn.close()
+            sys.exit(1)
+        print()
+
     run_worker(
         continuous=args.continuous,
         interval=args.interval,
-        game_params=game_params
+        game_params=game_params,
+        target_model_id=target_model_id
     )
 
 

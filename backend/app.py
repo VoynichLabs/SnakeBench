@@ -358,6 +358,93 @@ def get_game_by_id_endpoint(match_id):
         logging.error(f"Error reading match data for match id {match_id}: {error}")
         return jsonify({"error": "Failed to load match data"}), 500
 
+
+@app.route("/api/matches/<match_id>/video", methods=["POST"])
+def generate_video_endpoint(match_id):
+    """
+    Generate a video for a specific match and upload to Supabase Storage.
+
+    This endpoint:
+    1. Downloads replay data from Supabase
+    2. Generates MP4 video
+    3. Uploads to Supabase at {match_id}/replay.mp4
+    4. Returns the public URL
+
+    Returns:
+    - 200: Video generated and uploaded successfully
+    - 404: Match not found
+    - 500: Error during generation/upload
+    """
+    try:
+        logging.info(f"Video generation requested for match {match_id}")
+
+        # Import video generator
+        from services.video_generator import SnakeVideoGenerator
+
+        # Create generator and process
+        generator = SnakeVideoGenerator()
+        result = generator.generate_and_upload(match_id)
+
+        logging.info(f"Video generated successfully for match {match_id}")
+
+        return jsonify({
+            "success": True,
+            "video_url": result['public_url'],
+            "storage_path": result['storage_path'],
+            "match_id": match_id
+        }), 200
+
+    except ValueError as e:
+        # Replay not found
+        logging.error(f"Replay not found for match {match_id}: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Match '{match_id}' not found or replay unavailable"
+        }), 404
+
+    except Exception as error:
+        logging.error(f"Error generating video for match {match_id}: {error}")
+        import traceback
+        logging.error(traceback.format_exc())
+        return jsonify({
+            "success": False,
+            "error": "Failed to generate video"
+        }), 500
+
+
+@app.route("/api/matches/<match_id>/video", methods=["GET"])
+def check_video_status_endpoint(match_id):
+    """
+    Check if a video exists for a specific match.
+
+    Returns:
+    - exists: boolean indicating if video exists
+    - video_url: public URL if video exists
+    """
+    try:
+        from services.video_generator import get_video_public_url
+
+        video_url = get_video_public_url(match_id)
+
+        # Try to check if video actually exists by making a HEAD request
+        import requests
+        response = requests.head(video_url, timeout=5)
+        exists = response.status_code == 200
+
+        return jsonify({
+            "exists": exists,
+            "video_url": video_url if exists else None,
+            "match_id": match_id
+        }), 200
+
+    except Exception as error:
+        logging.error(f"Error checking video status for match {match_id}: {error}")
+        return jsonify({
+            "exists": False,
+            "video_url": None,
+            "match_id": match_id
+        }), 200  # Return 200 with exists=false instead of error
+
 if __name__ == "__main__":
     # Run the Flask app in debug mode.
     app.run(debug=os.getenv("FLASK_DEBUG"))

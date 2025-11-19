@@ -9,8 +9,15 @@ Supabase Storage, organized by game ID for easy future expansion
 import os
 import json
 import logging
+import sys
 from typing import Dict, Any, Optional
-from supabase_client import get_supabase_client
+
+# Add backend directory to path for imports
+backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if backend_path not in sys.path:
+    sys.path.insert(0, backend_path)
+
+from services.supabase_client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 

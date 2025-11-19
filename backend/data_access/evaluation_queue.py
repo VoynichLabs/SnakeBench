@@ -115,6 +115,64 @@ def get_next_queued_model() -> Optional[Dict[str, Any]]:
         conn.close()
 
 
+def get_queued_model_by_id(model_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Get a specific model from the queue by model ID.
+
+    Args:
+        model_id: ID of the model to retrieve from queue
+
+    Returns:
+        Dictionary with model info and queue entry, or None if not in queue
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT
+                eq.id as queue_id,
+                eq.model_id,
+                eq.attempts_remaining,
+                m.name,
+                m.provider,
+                m.model_slug,
+                m.elo_rating,
+                m.pricing_input,
+                m.pricing_output,
+                m.max_completion_tokens,
+                m.metadata_json
+            FROM evaluation_queue eq
+            JOIN models m ON eq.model_id = m.id
+            WHERE eq.model_id = %s
+                AND eq.status = 'queued'
+                AND m.pricing_input > 0
+            LIMIT 1
+        """, (model_id,))
+
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return {
+            'queue_id': row['queue_id'],
+            'model_id': row['model_id'],
+            'attempts_remaining': row['attempts_remaining'],
+            'name': row['name'],
+            'provider': row['provider'],
+            'model_slug': row['model_slug'],
+            'elo_rating': row['elo_rating'],
+            'pricing_input': row['pricing_input'],
+            'pricing_output': row['pricing_output'],
+            'max_completion_tokens': row['max_completion_tokens'],
+            'metadata_json': row['metadata_json']
+        }
+
+    finally:
+        conn.close()
+
+
 def update_queue_status(
     queue_id: int,
     status: str,
