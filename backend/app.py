@@ -31,6 +31,7 @@ else:
     allowed_origins = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://snakebench.com",
     ]
 
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
