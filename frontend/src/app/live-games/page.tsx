@@ -26,6 +26,7 @@ export default function LiveGamesPage() {
   const [liveGames, setLiveGames] = useState<LiveGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Fetch live games
   const fetchLiveGames = async () => {
@@ -46,6 +47,25 @@ export default function LiveGamesPage() {
     }
   };
 
+  // Helper function to format duration
+  const formatDuration = (startTime: string) => {
+    const start = new Date(startTime);
+    const diffMs = currentTime.getTime() - start.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+
+    const hours = Math.floor(diffSecs / 3600);
+    const minutes = Math.floor((diffSecs % 3600) / 60);
+    const seconds = diffSecs % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+
   // Poll for live games every 2 seconds
   useEffect(() => {
     fetchLiveGames();
@@ -53,6 +73,15 @@ export default function LiveGamesPage() {
     const interval = setInterval(() => {
       fetchLiveGames();
     }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Update current time every second for duration counter
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
 
     return () => clearInterval(interval);
   }, []);
@@ -121,16 +150,13 @@ export default function LiveGamesPage() {
                           Models
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Start Time
+                          Play Time
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Current Round
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Board Size
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Scores
+                          Score
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
@@ -139,11 +165,10 @@ export default function LiveGamesPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {liveGames.map((game) => {
-                        const startTimeUTC = new Date(game.start_time).toISOString().replace('T', ' ').replace('Z', '').substring(0, 16);
-
                         const currentRound = game.current_state?.round_number || 0;
                         const scores = game.current_state?.scores || {};
                         const models = game.models || {};
+                        const playDuration = formatDuration(game.start_time);
 
                         return (
                           <tr key={game.id} className="hover:bg-gray-50">
@@ -156,26 +181,23 @@ export default function LiveGamesPage() {
                             <td className="px-6 py-4 text-sm text-gray-900">
                               {Object.entries(models).map(([id, modelName]) => (
                                 <div key={id}>
-                                  {modelName}
+                                  {modelName.slice(0, 25)}
                                 </div>
                               ))}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {startTimeUTC} UTC
+                              {playDuration}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                               Round {currentRound}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {game.board_width}x{game.board_height}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {Object.entries(scores).map(([id, score], idx) => {
                                 const modelName = models[id] || `P${id}`;
                                 return (
                                   <span key={id}>
-                                    {modelName}: {score}
-                                    {idx < Object.keys(scores).length - 1 && ' | '}
+                                    {score}
+                                    {idx < Object.keys(scores).length - 1 && ' - '}
                                   </span>
                                 );
                               })}

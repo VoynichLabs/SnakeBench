@@ -1,0 +1,99 @@
+"""
+Celery tasks for game execution.
+
+This module defines distributed tasks that can be executed by Celery workers.
+Each task wraps existing game logic from main.py.
+"""
+import argparse
+from typing import Dict, Any
+from celery import Task
+from celery.utils.log import get_task_logger
+
+from celery_app import app
+from main import run_simulation
+
+logger = get_task_logger(__name__)
+
+
+class GameTask(Task):
+    """
+    Base task with retry logic and error handling.
+    """
+    autoretry_for = (Exception,)  # Retry on any exception
+    retry_kwargs = {'max_retries': 3, 'countdown': 5}  # Retry up to 3 times, wait 5s between
+    retry_backoff = True  # Exponential backoff (5s, 10s, 20s)
+    retry_jitter = True  # Add randomness to prevent thundering herd
+
+
+@app.task(base=GameTask, bind=True, name='backend.tasks.run_game_task')
+def run_game_task(
+    self,
+    model_config_1: Dict[str, Any],
+    model_config_2: Dict[str, Any],
+    game_params: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Execute a single snake game between two models.
+
+    This task wraps main.py's run_simulation() function to make it executable
+    by Celery workers. The game result is automatically persisted to the database
+    by the existing event-driven system in main.py.
+
+    Args:
+        model_config_1: Configuration dictionary for player 1 (from database)
+        model_config_2: Configuration dictionary for player 2 (from database)
+        game_params: Game parameters (width, height, max_rounds, num_apples)
+
+    Returns:
+        Dictionary with game results:
+        {
+            'game_id': str,
+            'final_scores': Dict[str, int],
+            'game_result': Dict[str, str],  # 'won', 'lost', or 'tied' for each player
+            'task_id': str  # Celery task ID for tracking
+        }
+
+    Raises:
+        Exception: If game execution fails after retries
+    """
+    logger.info(
+        f"Starting game {self.request.id}: "
+        f"{model_config_1['name']} vs {model_config_2['name']}"
+    )
+
+    # Convert game_params dict to argparse.Namespace (expected by run_simulation)
+    params = argparse.Namespace(**game_params)
+
+    try:
+        # Run the simulation using existing logic
+        # This automatically handles database persistence
+        result = run_simulation(model_config_1, model_config_2, params)
+
+        # Add task ID for tracking
+        result['task_id'] = self.request.id
+
+        logger.info(
+            f"Game {result['game_id']} complete: "
+            f"Score {result['final_scores']['0']}-{result['final_scores']['1']}, "
+            f"Result: {result['game_result']}"
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(
+            f"Game execution failed (attempt {self.request.retries + 1}/3): {e}",
+            exc_info=True
+        )
+        raise  # Re-raise to trigger retry logic
+
+
+@app.task(name='backend.tasks.health_check')
+def health_check() -> Dict[str, str]:
+    """
+    Simple health check task for monitoring worker status.
+
+    Returns:
+        Dict with status message
+    """
+    return {'status': 'healthy', 'message': 'Worker is operational'}

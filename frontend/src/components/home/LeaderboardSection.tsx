@@ -67,7 +67,7 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         ...item,
         rank: index + 1,
       }))
-      .slice(0, 100); // Take top 10
+      .slice(0, 1000); // Take top 10
 
     console.log('[LeaderboardSection] Transformed data:', {
       itemCount: transformedData.length,
