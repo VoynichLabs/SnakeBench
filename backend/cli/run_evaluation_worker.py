@@ -36,6 +36,17 @@ from data_access import (
     get_queued_model_by_id
 )
 
+# Import binary search placement system
+from placement_system import (
+    init_placement_state,
+    select_next_opponent as placement_select_opponent,
+    update_placement_interval,
+    get_opponent_rank_index,
+    finalize_placement,
+    save_placement_state,
+    load_placement_state
+)
+
 # Add parent services directory to path for webhook service
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'services'))
 from webhook_service import send_evaluation_complete_webhook
@@ -438,26 +449,23 @@ def evaluate_queued_model(
         update_queue_status(queue_id, 'failed', f'Health check failed: {str(e)[:200]}')
         return False
 
+    # Initialize binary search placement state
+    placement_state = init_placement_state(model_id, max_games=attempts_remaining)
+    print(f"Starting placement: searching ranks 0-{placement_state.high}")
+
     # Track game results
-    played_opponents = set()
-    current_elo = get_current_elo(model_id)
-    last_result = None
     wins = 0
     losses = 0
     ties = 0
+    current_elo = get_current_elo(model_id)
 
-    # If this is a fresh model, start at median ELO
-    if current_elo == 1500.0:
-        median = get_median_elo()
-        print(f"Starting ELO: {median:.2f} (median)")
-        current_elo = median
-
-    # Run evaluation games
+    # Run evaluation games using binary search placement
     for game_num in range(1, attempts_remaining + 1):
         print(f"\n--- Game {game_num}/{attempts_remaining} ---")
+        print(f"Current search interval: ranks {placement_state.low}-{placement_state.high}")
 
-        # Select opponent (with variance decay based on game number)
-        opponent_info = select_next_opponent(model_id, current_elo, last_result, played_opponents, game_num)
+        # Select opponent using binary search strategy
+        opponent_info = placement_select_opponent(placement_state)
 
         if not opponent_info:
             print("✗ No suitable opponents available")
@@ -465,9 +473,12 @@ def evaluate_queued_model(
             return False
 
         opponent_id, opponent_name, opponent_elo = opponent_info
-        played_opponents.add(opponent_id)
+        placement_state.opponents_played.add(opponent_id)
 
-        print(f"{model_name} (ELO: {current_elo:.2f}) vs {opponent_name} (ELO: {opponent_elo:.2f})")
+        # Get opponent's current rank index for interval updates
+        opponent_rank_index = get_opponent_rank_index(opponent_id)
+
+        print(f"{model_name} vs {opponent_name} (Rank #{opponent_rank_index}, ELO: {opponent_elo:.2f})")
 
         # Get opponent config
         opponent_config = get_model_config_from_db(opponent_id)
@@ -492,13 +503,13 @@ def evaluate_queued_model(
             # Update win/loss/tie counts
             if test_result == 'won':
                 wins += 1
-                last_result = 'won'
             elif test_result == 'lost':
                 losses += 1
-                last_result = 'lost'
             else:
                 ties += 1
-                last_result = 'tied'
+
+            # Update placement interval based on result
+            update_placement_interval(placement_state, opponent_rank_index, test_result)
 
             # Get updated ELO (database was updated by main.py)
             new_elo = get_current_elo(model_id)
@@ -506,8 +517,16 @@ def evaluate_queued_model(
 
             print(f"Result: {test_result.upper()} | Score: {test_score}-{opponent_score}")
             print(f"ELO: {current_elo:.2f} → {new_elo:.2f} ({elo_change:+.2f})")
+            print(f"New search interval: ranks {placement_state.low}-{placement_state.high}")
+
+            # Check if interval has collapsed to a single position
+            if placement_state.low == placement_state.high:
+                print(f"✓ Placement converged to rank #{placement_state.low}")
 
             current_elo = new_elo
+
+            # Save placement state
+            save_placement_state(placement_state)
 
             # Decrement attempts
             decrement_attempts(queue_id)
@@ -517,6 +536,16 @@ def evaluate_queued_model(
             import traceback
             traceback.print_exc()
             # Continue with next game
+
+    # Determine final placement
+    final_rank_index = finalize_placement(placement_state)
+    print(f"\n{'=' * 70}")
+    print(f"Placement Complete!")
+    print(f"{'=' * 70}")
+    print(f"Final rank position: #{final_rank_index}")
+    print(f"Placement interval: ranks {placement_state.low}-{placement_state.high}")
+    print(f"Games played: {placement_state.games_played}")
+    print(f"{'=' * 70}\n")
 
     # Mark model as ranked and activate it
     print(f"Marking model {model_name} (ID: {model_id}) as ranked and active...")
