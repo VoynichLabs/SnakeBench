@@ -3,6 +3,7 @@ import json
 import random
 import logging
 from flask import Flask, jsonify, request, redirect
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 # Import database query functions
@@ -19,6 +20,20 @@ load_dotenv()
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
+
+# Enable CORS for API routes so the Next.js frontend (different origin) can call Flask
+# Allowed origins can be configured via CORS_ALLOWED_ORIGINS env var (comma-separated)
+allowed_origins_env = os.getenv("CORS_ALLOWED_ORIGINS")
+if allowed_origins_env:
+    allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+else:
+    # sensible defaults for local dev
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
 
 # New DB-backed endpoints for Phase 3
@@ -444,6 +459,53 @@ def check_video_status_endpoint(match_id):
             "video_url": None,
             "match_id": match_id
         }), 200  # Return 200 with exists=false instead of error
+
+
+@app.route("/api/games/live", methods=["GET"])
+def get_live_games_endpoint():
+    """
+    Get all games currently in progress.
+
+    Returns:
+    - List of live games with their current state
+    """
+    try:
+        from data_access.live_game import get_live_games
+
+        live_games = get_live_games()
+
+        return jsonify({
+            "games": live_games,
+            "count": len(live_games)
+        }), 200
+
+    except Exception as error:
+        logging.error(f"Error fetching live games: {error}")
+        return jsonify({"error": "Failed to load live games"}), 500
+
+
+@app.route("/api/games/<game_id>/live", methods=["GET"])
+def get_game_state_endpoint(game_id):
+    """
+    Get the current state of a specific game (live or completed).
+
+    Returns:
+    - Game info and current state snapshot
+    """
+    try:
+        from data_access.live_game import get_game_state
+
+        game_state = get_game_state(game_id)
+
+        if game_state is None:
+            return jsonify({"error": f"Game '{game_id}' not found"}), 404
+
+        return jsonify(game_state), 200
+
+    except Exception as error:
+        logging.error(f"Error fetching game state for {game_id}: {error}")
+        return jsonify({"error": "Failed to load game state"}), 500
+
 
 if __name__ == "__main__":
     # Run the Flask app in debug mode.

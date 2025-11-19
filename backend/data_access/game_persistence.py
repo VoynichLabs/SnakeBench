@@ -113,12 +113,19 @@ def insert_game_participants(
 
             model_id = row['id']
 
-            # Insert participant record
+            # Insert or update participant record (handles live games that already have placeholder records)
             cursor.execute("""
                 INSERT INTO game_participants (
                     game_id, model_id, player_slot, score, result,
                     death_round, death_reason, cost
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (game_id, player_slot)
+                DO UPDATE SET
+                    score = EXCLUDED.score,
+                    result = EXCLUDED.result,
+                    death_round = EXCLUDED.death_round,
+                    death_reason = EXCLUDED.death_reason,
+                    cost = EXCLUDED.cost
             """, (
                 game_id,
                 model_id,

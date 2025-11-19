@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from main import run_simulation
-from utils.utils import load_model_configs
+from data_access.api_queries import get_model_by_name, get_all_models
 from llm_providers import create_llm_provider
 
 
@@ -305,17 +305,21 @@ def evaluate_model(
     print(f"Starting {num_games}-Game Evaluation for: {model_name}")
     print("=" * 70)
     
-    # Load model configurations
-    model_configs = load_model_configs()
-    available_models = set(model_configs.keys())
-    
-    if model_name not in model_configs:
-        print(f"Error: Model '{model_name}' not found in model_list.yaml")
-        print(f"Available models: {', '.join(sorted(model_configs.keys()))}")
+    # Load model configuration from database
+    test_model_config = get_model_by_name(model_name)
+
+    if test_model_config is None:
+        print(f"Error: Model '{model_name}' not found in database")
+        all_models = get_all_models()
+        available_model_names = [m['name'] for m in all_models]
+        print(f"Available models: {', '.join(sorted(available_model_names))}")
         sys.exit(1)
-    
-    test_model_config = model_configs[model_name]
-    
+
+    # Load all models to create available_models set and model_configs dict
+    all_models = get_all_models()
+    available_models = {m['name'] for m in all_models}
+    model_configs = {m['name']: m for m in all_models}
+
     # Create game parameters object
     game_params = argparse.Namespace(
         width=width,

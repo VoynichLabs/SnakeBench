@@ -4,8 +4,8 @@ import os
 import json
 from typing import Dict, List, Any, Tuple # Added Tuple
 
-# Assuming utils.py is in the same directory or accessible via PYTHONPATH
-from utils.utils import load_model_configs 
+# Import data access functions for loading models from Supabase
+from data_access.api_queries import get_model_by_name, get_all_models 
 # Assuming main.py is in the same directory or accessible via PYTHONPATH
 from main import run_simulation, LLMPlayer # Import LLMPlayer for type hinting if needed later
 
@@ -39,40 +39,39 @@ def run_batch_simulations():
 
     args = parser.parse_args()
 
-    # 1. Load all model configurations
-    print("Loading model configurations...")
-    all_model_configs = load_model_configs()
-    print(f"Loaded {len(all_model_configs)} model configurations.")
+    # 1. Load all model configurations from Supabase
+    print("Loading model configurations from database...")
+    all_models_list = get_all_models(active_only=True)
+    print(f"Loaded {len(all_models_list)} model configurations.")
 
     # 2. Find the target model configuration
-    if args.target_model not in all_model_configs:
-        raise ValueError(f"Target model '{args.target_model}' not found in model configurations.")
-    target_config = all_model_configs[args.target_model]
+    target_config = get_model_by_name(args.target_model)
+    if target_config is None:
+        raise ValueError(f"Target model '{args.target_model}' not found in database.")
     print(f"Found target model: {args.target_model}")
 
     # 3. Filter opponent models
     print("Filtering opponent models...")
     opponent_configs: List[Dict[str, Any]] = []
-    for model_name, config in all_model_configs.items():
-        if model_name == args.target_model:
+    for model in all_models_list:
+        if model['name'] == args.target_model:
             continue # Don't play against self
 
-        # Check if pricing info exists and has the required key
-        pricing_info = config.get("pricing")
-        if not isinstance(pricing_info, dict) or "output" not in pricing_info:
-            print(f" - Skipping opponent {model_name}: Missing 'pricing.output'.")
+        # Check if pricing info exists
+        if model.get("pricing_output") is None:
+            print(f" - Skipping opponent {model['name']}: Missing pricing_output.")
             continue
 
-        output_cost = pricing_info["output"]
+        output_cost = model["pricing_output"]
 
         # Check against cost threshold if provided
         if args.max_output_cost_per_million is not None and output_cost > args.max_output_cost_per_million:
-            print(f" - Skipping opponent {model_name}: Output cost ({output_cost:.2f}) exceeds threshold ({args.max_output_cost_per_million:.2f}).")
+            print(f" - Skipping opponent {model['name']}: Output cost ({output_cost:.2f}) exceeds threshold ({args.max_output_cost_per_million:.2f}).")
             continue
-            
+
         # If checks pass, add to valid opponents
-        print(f" + Including opponent: {model_name} (Output Cost: {output_cost:.2f})")
-        opponent_configs.append(config)
+        print(f" + Including opponent: {model['name']} (Output Cost: {output_cost:.2f})")
+        opponent_configs.append(model)
         
     if not opponent_configs:
         print("No valid opponents found after filtering. Exiting.")

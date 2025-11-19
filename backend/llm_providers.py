@@ -27,7 +27,15 @@ class LLMProviderInterface:
         """
         api_kwargs = {}
         # Fields used internally for setup, not passed to the API directly
-        known_fields = {'name', 'provider', 'pricing', 'kwargs', 'model_name', 'api_type'}
+        # Includes both legacy YAML fields and database fields from Supabase
+        known_fields = {
+            'name', 'provider', 'pricing', 'kwargs', 'model_name', 'api_type',
+            # Database fields from Supabase models table
+            'id', 'model_slug', 'is_active', 'test_status', 'elo_rating',
+            'wins', 'losses', 'ties', 'apples_eaten', 'games_played',
+            'pricing_input', 'pricing_output', 'max_completion_tokens',
+            'last_played_at', 'discovered_at'
+        }
 
         # Start with any explicitly defined 'kwargs' from the config
         api_kwargs.update(config.get('kwargs', {}))

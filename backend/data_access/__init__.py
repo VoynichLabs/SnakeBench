@@ -16,6 +16,14 @@ from .evaluation_queue import (
     get_queue_stats,
     remove_from_queue
 )
+from .live_game import (
+    insert_initial_game,
+    insert_initial_participants,
+    update_game_state,
+    complete_game,
+    get_live_games,
+    get_game_state
+)
 
 __all__ = [
     'insert_game',
@@ -29,4 +37,10 @@ __all__ = [
     'decrement_attempts',
     'get_queue_stats',
     'remove_from_queue',
+    'insert_initial_game',
+    'insert_initial_participants',
+    'update_game_state',
+    'complete_game',
+    'get_live_games',
+    'get_game_state',
 ]

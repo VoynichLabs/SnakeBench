@@ -95,15 +95,17 @@ def init_database() -> None:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id TEXT PRIMARY KEY,
+                status TEXT DEFAULT 'in_progress' CHECK(status IN ('queued', 'in_progress', 'completed', 'failed')),
                 start_time TIMESTAMP,
                 end_time TIMESTAMP,
                 rounds INTEGER,
-                replay_path TEXT NOT NULL,
+                replay_path TEXT,
                 board_width INTEGER,
                 board_height INTEGER,
                 num_apples INTEGER,
                 total_score INTEGER,
                 total_cost REAL DEFAULT 0.0,
+                current_state TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -152,6 +154,7 @@ def init_database() -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_models_active ON models(is_active, test_status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_games_start_time ON games(start_time DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_games_end_time ON games(end_time DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_games_status ON games(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_participants_model ON game_participants(model_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_participants_game ON game_participants(game_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluation_queue_status ON evaluation_queue(status, queued_at)")

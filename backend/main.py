@@ -9,7 +9,7 @@ from openai import OpenAI
 import json
 import uuid
 import argparse
-from utils.utils import load_model_configs
+from data_access.api_queries import get_model_by_name
 from llm_providers import create_llm_provider
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -20,6 +20,12 @@ try:
         insert_game_participants,
         update_model_aggregates,
         update_elo_ratings
+    )
+    from data_access.live_game import (
+        insert_initial_game,
+        insert_initial_participants,
+        update_game_state,
+        complete_game
     )
     DB_AVAILABLE = True
 except ImportError as e:
@@ -357,6 +363,20 @@ class SnakeGame:
             cell = self._random_free_cell()
             self.apples.append(cell)
 
+        # Insert initial game record to database for live tracking
+        if DB_AVAILABLE:
+            try:
+                insert_initial_game(
+                    game_id=self.game_id,
+                    start_time=datetime.utcfromtimestamp(self.start_time),
+                    board_width=self.width,
+                    board_height=self.height,
+                    num_apples=self.num_apples,
+                    status='in_progress'
+                )
+            except Exception as e:
+                print(f"Warning: Could not insert initial game record: {e}")
+
     def add_snake(self, snake_id: str, player: Player):
         if snake_id in self.snakes:
             raise ValueError(f"Snake with id {snake_id} already exists.")
@@ -621,6 +641,27 @@ class SnakeGame:
             self.end_game("All but one snake are dead.")
 
         print(f"Finished round {self.round_number}. Alive: {alive_snakes}, Scores: {self.scores}")
+
+        # Update live game state in database
+        if DB_AVAILABLE:
+            try:
+                current_state = self.get_current_state()
+                state_dict = {
+                    'round_number': current_state.round_number,
+                    'snake_positions': current_state.snake_positions,
+                    'alive': current_state.alive,
+                    'scores': current_state.scores,
+                    'apples': current_state.apples,
+                    'board_state': current_state.print_board()
+                }
+                update_game_state(
+                    game_id=self.game_id,
+                    current_state=state_dict,
+                    rounds=self.round_number
+                )
+            except Exception as e:
+                print(f"Warning: Could not update game state: {e}")
+
         time.sleep(0.3)
 
     def serialize_history(self, history):
@@ -667,8 +708,8 @@ class SnakeGame:
         # Build metadata for the game
         metadata = {
             "game_id": self.game_id,
-            "start_time": datetime.fromtimestamp(self.start_time).isoformat(),
-            "end_time": datetime.fromtimestamp(time.time()).isoformat(),
+            "start_time": datetime.utcfromtimestamp(self.start_time).isoformat(),
+            "end_time": datetime.utcfromtimestamp(time.time()).isoformat(),
             "models": model_names,
             "game_result": self.game_result,
             "final_scores": self.scores,
@@ -721,23 +762,18 @@ class SnakeGame:
             return
 
         try:
-            # 1. Insert game record
-            start_dt = datetime.fromtimestamp(self.start_time)
-            end_dt = datetime.fromtimestamp(time.time())
+            # 1. Complete game record (mark as completed and update final stats)
+            end_dt = datetime.utcfromtimestamp(time.time())
 
             # Use Supabase storage path if available, fall back to local path
             replay_path = getattr(self, 'replay_storage_path', f"completed_games/snake_game_{self.game_id}.json")
             total_score = sum(self.scores.values())
 
-            insert_game(
+            complete_game(
                 game_id=self.game_id,
-                start_time=start_dt,
                 end_time=end_dt,
                 rounds=self.round_number,
                 replay_path=replay_path,
-                board_width=self.width,
-                board_height=self.height,
-                num_apples=self.num_apples,
                 total_score=total_score,
                 total_cost=self.total_cost
             )
@@ -839,6 +875,19 @@ def run_simulation(model_config_1: Dict, model_config_2: Dict, game_params: argp
             player=LLMPlayer(str(i), player_config=player_config)
         )
 
+    # Insert initial participants for live game tracking
+    if DB_AVAILABLE:
+        try:
+            participants = []
+            for i, player_config in enumerate(player_configs):
+                participants.append({
+                    'model_name': player_config['name'],
+                    'player_slot': i
+                })
+            insert_initial_participants(game.game_id, participants)
+        except Exception as e:
+            print(f"Warning: Could not insert initial participants: {e}")
+
     # Run the game loop
     while not game.game_over:
         game.run_round()
@@ -882,15 +931,15 @@ def main():
 
     if len(args.models) != 2: # Ensure exactly two models for single run
         raise ValueError("Exactly two models must be provided for a single game run.")
-    
-    model_configs = load_model_configs()
-    
-    # Get the specific configurations for the requested models
-    try:
-        config1 = model_configs[args.models[0]]
-        config2 = model_configs[args.models[1]]
-    except KeyError as e:
-        raise ValueError(f"Model '{e}' not found in model_list.yaml") from e
+
+    # Get the specific configurations for the requested models from Supabase
+    config1 = get_model_by_name(args.models[0])
+    config2 = get_model_by_name(args.models[1])
+
+    if config1 is None:
+        raise ValueError(f"Model '{args.models[0]}' not found in database")
+    if config2 is None:
+        raise ValueError(f"Model '{args.models[1]}' not found in database")
 
     # Call the simulation function (Logic moved here)
     result = run_simulation(config1, config2, args) # This line will be uncommented in the next step

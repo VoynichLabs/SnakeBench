@@ -75,6 +75,7 @@ def get_all_models(active_only: bool = False) -> List[Dict[str, Any]]:
                 'name': row['name'],
                 'provider': row['provider'],
                 'model_slug': row['model_slug'],
+                'model_name': row['model_slug'],  # LLM provider expects 'model_name' field
                 'is_active': row['is_active'],
                 'test_status': row['test_status'],
                 'elo_rating': row['elo_rating'],
@@ -144,6 +145,7 @@ def get_model_by_name(model_name: str) -> Optional[Dict[str, Any]]:
             'name': row['name'],
             'provider': row['provider'],
             'model_slug': row['model_slug'],
+            'model_name': row['model_slug'],  # LLM provider expects 'model_name' field
             'is_active': row['is_active'],
             'test_status': row['test_status'],
             'elo_rating': row['elo_rating'],
