@@ -578,13 +578,13 @@ if __name__ == "__main__":
   - Verify existing scripts still work:
     ```bash
     # Test single game
-    python backend/main.py --models gpt-4o-mini-2024-07-18 claude-3-haiku-20240307
+    python backend/main.py --models "xAI: Grok Code Fast 1" "OpenAI: GPT-5 Nano"
 
     # Test evaluation
-    python backend/cli/evaluate_model.py --model gpt-4o-mini-2024-07-18 --games 3
+    python backend/cli/evaluate_model.py --model "xAI: Grok Code Fast 1" --games 3
 
     # Test worker
-    python backend/cli/run_evaluation_worker.py --model gpt-4o-mini-2024-07-18
+    python backend/cli/run_evaluation_worker.py --model "xAI: Grok Code Fast 1"
     ```
   - All should work without errors
 

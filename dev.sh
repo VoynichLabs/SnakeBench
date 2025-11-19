@@ -32,8 +32,9 @@ tmux split-window -h -t $SESSION_NAME:dev
 tmux send-keys -t $SESSION_NAME:dev "cd frontend && npm run dev" C-m
 
 # Split the right pane horizontally to add Celery worker at bottom
-tmux split-window -v -t $SESSION_NAME:dev.1
-tmux send-keys -t $SESSION_NAME:dev "cd backend && source venv/bin/activate && python3.11 -m celery -A celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=10" C-m
+# COMMENTED OUT: Using Railway worker instead of local worker
+# tmux split-window -v -t $SESSION_NAME:dev.1
+# tmux send-keys -t $SESSION_NAME:dev "cd backend && source venv/bin/activate && python3.11 -m celery -A celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=10" C-m
 
 # Select the left pane (backend) by default
 tmux select-pane -t $SESSION_NAME:dev.0
