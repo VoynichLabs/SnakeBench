@@ -3,8 +3,7 @@
 Mass-parallel game dispatcher using Celery task queue.
 
 This CLI submits multiple game tasks to the Celery queue for parallel execution
-by worker processes. Unlike the standalone evaluate_model.py, this dispatcher
-does not execute games directly - it orchestrates them.
+by worker processes. It only orchestrates; actual game execution happens inside workers.
 
 Usage:
     # Dispatch 50 games between two models
@@ -203,8 +202,8 @@ def main():
     # Dispatch mode arguments
     parser.add_argument('--model_a', type=str, help="Name of first model")
     parser.add_argument('--model_b', type=str, help="Name of second model")
-    parser.add_argument('--count', type=int, default=10,
-                       help="Number of games to dispatch (default: 10)")
+    parser.add_argument('--count', type=int, default=1,
+                       help="Number of games to dispatch (default: 1)")
     parser.add_argument('--monitor', type=str, nargs='?', const=True,
                        help="Monitor task execution (optionally provide batch ID)")
 

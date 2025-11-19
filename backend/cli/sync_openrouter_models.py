@@ -7,7 +7,7 @@ upserts it into the models table. New models are added with is_active=false
 by default and require evaluation before being activated.
 
 Usage:
-    python backend/cli/sync_openrouter_models.py [--api-key <key>] [--auto-queue]
+    python backend/cli/sync_openrouter_models.py [--api-key <key>]
 """
 
 import os
@@ -22,12 +22,6 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from database_postgres import get_connection
-from data_access import enqueue_model
-
-
-# Cost control parameters (in dollars)
-DEFAULT_MAX_COST_PER_GAME = 0.50  # Maximum estimated cost per game
-DEFAULT_TOTAL_BUDGET = 10.0  # Maximum total budget for auto-queueing
 
 
 def fetch_openrouter_models(api_key: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -128,33 +122,6 @@ def normalize_model_data(openrouter_model: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def estimate_game_cost(
-    pricing_input: Optional[float],
-    pricing_output: Optional[float],
-    estimated_input_tokens: int = 1000,
-    estimated_output_tokens: int = 500
-) -> float:
-    """
-    Estimate the cost of running one game with this model.
-
-    Args:
-        pricing_input: Input pricing per million tokens
-        pricing_output: Output pricing per million tokens
-        estimated_input_tokens: Conservative estimate of input tokens per game
-        estimated_output_tokens: Conservative estimate of output tokens per game
-
-    Returns:
-        Estimated cost in dollars, or float('inf') if pricing unavailable
-    """
-    if pricing_input is None or pricing_output is None:
-        return float('inf')  # Can't estimate without pricing
-
-    input_cost = (estimated_input_tokens / 1_000_000) * pricing_input
-    output_cost = (estimated_output_tokens / 1_000_000) * pricing_output
-
-    return input_cost + output_cost
-
-
 def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
     """
     Insert or update a model in the database.
@@ -250,20 +217,12 @@ def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
         conn.close()
 
 
-def sync_models(
-    api_key: Optional[str] = None,
-    auto_queue: bool = False,
-    max_cost_per_game: float = DEFAULT_MAX_COST_PER_GAME,
-    total_budget: float = DEFAULT_TOTAL_BUDGET
-) -> Dict[str, int]:
+def sync_models(api_key: Optional[str] = None) -> Dict[str, int]:
     """
     Main sync function to pull OpenRouter catalog and upsert models.
 
     Args:
         api_key: OpenRouter API key
-        auto_queue: If True, automatically queue untested models within budget
-        max_cost_per_game: Maximum cost per game for auto-queueing
-        total_budget: Total budget for auto-queueing new models
 
     Returns:
         Dictionary with sync statistics
@@ -284,11 +243,8 @@ def sync_models(
         'total': len(openrouter_models),
         'added': 0,
         'updated': 0,
-        'skipped': 0,
-        'queued': 0
+        'skipped': 0
     }
-
-    models_to_queue = []
 
     print(f"\nProcessing {stats['total']} models...")
 
@@ -306,7 +262,7 @@ def sync_models(
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT test_status, pricing_input, pricing_output
+                SELECT test_status
                 FROM models
                 WHERE id = %s
             """, (model_id,))
@@ -319,46 +275,12 @@ def sync_models(
 
                 if test_status == 'untested':
                     stats['added'] += 1
-
-                    if auto_queue:
-                        # Estimate cost and add to queue candidates
-                        cost = estimate_game_cost(row[1], row[2])
-
-                        if cost <= max_cost_per_game:
-                            models_to_queue.append({
-                                'id': model_id,
-                                'name': normalized['name'],
-                                'cost': cost
-                            })
                 else:
                     stats['updated'] += 1
 
         except Exception as e:
             print(f"  ✗ Error processing model: {e}")
             stats['skipped'] += 1
-
-    # Auto-queue untested models within budget
-    if auto_queue and models_to_queue:
-        print(f"\n{'=' * 70}")
-        print(f"Auto-queueing untested models (budget: ${total_budget:.2f})")
-        print(f"{'=' * 70}")
-
-        # Sort by cost (cheapest first)
-        models_to_queue.sort(key=lambda x: x['cost'])
-
-        running_cost = 0.0
-
-        for model_info in models_to_queue:
-            estimated_total_cost = model_info['cost'] * 10  # 10 games
-
-            if running_cost + estimated_total_cost > total_budget:
-                print(f"  ⊘ Budget limit reached, {len(models_to_queue) - stats['queued']} models not queued")
-                break
-
-            if enqueue_model(model_info['id']):
-                stats['queued'] += 1
-                running_cost += estimated_total_cost
-                print(f"  ✓ Queued: {model_info['name']} (est. ${estimated_total_cost:.3f} for 10 games)")
 
     # Print summary
     print(f"\n{'=' * 70}")
@@ -368,9 +290,6 @@ def sync_models(
     print(f"New models added: {stats['added']}")
     print(f"Existing models updated: {stats['updated']}")
     print(f"Models skipped: {stats['skipped']}")
-
-    if auto_queue:
-        print(f"Models queued for evaluation: {stats['queued']}")
 
     print(f"{'=' * 70}\n")
 
@@ -386,23 +305,6 @@ def main():
         type=str,
         help="OpenRouter API key (or set OPENROUTER_API_KEY env var)"
     )
-    parser.add_argument(
-        '--auto-queue',
-        action='store_true',
-        help="Automatically queue untested models for evaluation within budget"
-    )
-    parser.add_argument(
-        '--max-cost-per-game',
-        type=float,
-        default=DEFAULT_MAX_COST_PER_GAME,
-        help=f"Maximum cost per game for auto-queueing (default: ${DEFAULT_MAX_COST_PER_GAME})"
-    )
-    parser.add_argument(
-        '--budget',
-        type=float,
-        default=DEFAULT_TOTAL_BUDGET,
-        help=f"Total budget for auto-queueing new models (default: ${DEFAULT_TOTAL_BUDGET})"
-    )
 
     args = parser.parse_args()
 
@@ -414,12 +316,7 @@ def main():
         print("Set OPENROUTER_API_KEY environment variable or use --api-key flag.")
 
     # Run sync
-    sync_models(
-        api_key=api_key,
-        auto_queue=args.auto_queue,
-        max_cost_per_game=args.max_cost_per_game,
-        total_budget=args.budget
-    )
+    sync_models(api_key=api_key)
 
 
 if __name__ == "__main__":

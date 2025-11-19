@@ -40,7 +40,6 @@ def reset_database(confirm: bool = False) -> bool:
         print("  • models")
         print("  • games")
         print("  • game_participants")
-        print("  • evaluation_queue")
         print("\nThe schema structure will be preserved.")
         print("=" * 70)
 
@@ -60,7 +59,7 @@ def reset_database(confirm: bool = False) -> bool:
         cursor.execute("PRAGMA foreign_keys = OFF")
 
         # Delete data from tables in correct order (respect foreign keys)
-        tables = ['evaluation_queue', 'game_participants', 'games', 'models']
+        tables = ['game_participants', 'games', 'models']
 
         for table in tables:
             cursor.execute(f"DELETE FROM {table}")
@@ -80,8 +79,8 @@ def reset_database(confirm: bool = False) -> bool:
         print("✅ Database reset complete!")
         print("=" * 70)
         print("\nNext steps:")
-        print("  1. Run: python backend/cli/sync_openrouter_models.py --auto-queue")
-        print("  2. Run: python backend/cli/run_evaluation_worker.py --continuous")
+        print("  1. Run: python backend/cli/sync_openrouter_models.py")
+        print("  2. Start Celery workers and dispatch games via dispatch_games.py")
         print("=" * 70 + "\n")
 
         return True

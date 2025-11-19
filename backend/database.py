@@ -130,25 +130,6 @@ def init_database() -> None:
             )
         """)
 
-        # Create evaluation_queue table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS evaluation_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                model_id INTEGER NOT NULL,
-                status TEXT DEFAULT 'queued' CHECK(status IN ('queued', 'running', 'done', 'failed')),
-                attempts_remaining INTEGER DEFAULT 10,
-                error_message TEXT,
-                queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                started_at TIMESTAMP,
-                completed_at TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
-                FOREIGN KEY (model_id) REFERENCES models(id),
-                UNIQUE(model_id)
-            )
-        """)
-
         # Create indexes for performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_models_elo ON models(elo_rating DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_models_active ON models(is_active, test_status)")
@@ -157,7 +138,6 @@ def init_database() -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_games_status ON games(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_participants_model ON game_participants(model_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_participants_game ON game_participants(game_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_evaluation_queue_status ON evaluation_queue(status, queued_at)")
 
         conn.commit()
         print("Database schema initialized successfully")

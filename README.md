@@ -6,7 +6,7 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
 
 ## Project Overview
 
-### Backend: Game Simulation (`backend/main.py` & `backend/run_batch.py`)
+### Backend: Game Simulation (`backend/main.py` & Celery workers)
 
 - **Snake & Game Mechanics:**
   - **Snake Representation:** Each snake is represented as a deque of board positions. The game handles moving the snake's head, updating the tail, and managing growth when an apple is eaten.
@@ -17,11 +17,7 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
   - **LLMPlayer Class:** For each snake, if controlled by an LLM, the game constructs a detailed prompt of the board state (including positions of all snakes and apples) and the last move's rationale. This prompt is sent to an LLM provider, which returns a recommendation for the next direction.
   - **Fallback Mechanism:** If the response from the LLM is unclear, the snake falls back to selecting a random valid move.
 
-- **Batch Simulation (`run_batch.py`):**
-  - Orchestrates running a target LLM against multiple opponent LLMs.
-  - Supports filtering opponents based on cost criteria defined in `backend/model_lists/model_list.yaml`.
-  - Uses Python's `concurrent.futures` for efficient, in-process parallel execution of simulations.
-  - Allows configuration of the number of simulations per matchup and the degree of parallelism.
+- **Celery Execution:** Games are dispatched via Celery tasks (`backend/tasks.py`) backed by Redis, so you can scale workers horizontally instead of running threads locally.
 
 ### Frontend: Visualization & Dashboard (`frontend/src/app/page.tsx`)
 
@@ -53,25 +49,17 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
     ```
     You can also customize game parameters like `--width`, `--height`, `--max_rounds`, and `--num_apples`.
 
-2.  **Run Batch Simulations (Target Model vs. Others):**
-    To test a specific model against a pool of opponents, use the `run_batch.py` script.
+2.  **Dispatch Games via Celery:**
+    To run many games in parallel, submit tasks to the Celery queue:
 
     ```bash
     cd backend
+    # Start Redis separately, then in one terminal run workers:
+    celery -A celery_app worker --loglevel=info
 
-    # Basic usage: Run 'my-new-model' against all valid opponents 5 times each
-    python3 run_batch.py --target-model "my-new-model" --num-simulations 5
-
-    # With cost filtering: Only run against opponents cheaper than $1.00/million output tokens
-    python3 run_batch.py --target-model gpt-4.1-2025-04-14 --num-simulations 5 --max-output-cost-per-million 10.0
-
-    # Control parallelism: Limit to 8 concurrent simulations
-    python3 run_batch.py --target-model "my-new-model" --num-simulations 5 --max-workers 8
-
-    # Full example: Cost filtering and parallelism control
-    python3 run_batch.py --target-model "my-new-model" --num-simulations 5 --max-output-cost-per-million 1.0 --max-workers 8
+    # In another terminal, dispatch games:
+    python3 cli/dispatch_games.py --model_a gpt-4o-mini-2024-07-18 --model_b claude-3-haiku-20240307 --count 10 --monitor
     ```
-    This script uses the pricing information in `backend/model_lists/model_list.yaml` for filtering. Models without valid pricing information will be skipped during filtering. Game parameters (`--width`, etc.) can also be passed to `run_batch.py`.
 
 3.  **Run Elo Tracker:**
     After running simulations, update the Elo ratings based on the completed games:
@@ -80,20 +68,6 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
     cd backend
     python3 elo_tracker.py completed_games --output completed_games
     ```
-
-4.  **Evaluate a New Model (10-Game Quick Assessment):**
-    To quickly determine where a new model ranks without running hundreds of games:
-
-    ```bash
-    cd backend
-    source venv/bin/activate
-    python cli/evaluate_model.py --model gpt-4o-mini-2024-07-18
-    
-    # Or with custom game count
-    python cli/evaluate_model.py --model gpt-4o-mini-2024-07-18 --games 15
-    ```
-    
-    The evaluation tool adaptively selects opponents based on win/loss results, allowing the model to quickly find its appropriate ELO ranking. See [EVALUATION_TOOL.md](EVALUATION_TOOL.md) for detailed documentation.
 
 ---
 
@@ -105,7 +79,7 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
     - Update `backend/model_lists/model_list.yaml` with the models you want to test and their pricing information.
 
 2.  **Start Backend Simulations:**
-    - Use the `python3 main.py` command for single games or `python3 run_batch.py` for testing a model against multiple opponents. Simulations generate JSON files in `backend/completed_games/`.
+    - Use `python3 main.py` for single games or the Celery pipeline (`celery -A celery_app worker` + `python3 cli/dispatch_games.py`) for scalable runs. Simulations generate JSON files in `backend/completed_games/` and persist to the database.
 
 3.  **Launch the Frontend Application:**
     - Navigate to the `frontend` directory.
@@ -125,7 +99,7 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
 
 ## Architecture Summary
 
-- **Backend (Python):** Contains the core game logic (`main.py`) for simulating a snake game where each snake can be controlled by an LLM. It tracks game state, records round-by-round history, manages collisions and apple spawning, and decides game outcomes. A separate script (`run_batch.py`) handles running a target model against multiple opponents in parallel, with options for cost-based filtering.
+- **Backend (Python):** Contains the core game logic (`main.py`) for simulating a snake game where each snake can be controlled by an LLM. It tracks game state, records round-by-round history, manages collisions and apple spawning, and decides game outcomes. Celery tasks (`tasks.py`) handle running games at scale via Redis-backed workers.
   
 - **Frontend (Next.js):** Provides a visual dashboard for game results. It pulls data via APIs to render leaderboards and ASCII-based match replays clearly showing the state of the board.
 

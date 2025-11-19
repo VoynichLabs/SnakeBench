@@ -1,7 +1,7 @@
 # Celery Worker Implementation Checklist
 
 ## Overview
-Implement a distributed task queue system using Celery and Redis to enable parallel game execution. This is **fully backwards compatible** - all existing scripts continue to work unchanged.
+Implement a distributed task queue system using Celery and Redis to enable parallel game execution.
 
 ### Architecture
 ```
@@ -223,8 +223,7 @@ def health_check() -> Dict[str, str]:
 Mass-parallel game dispatcher using Celery task queue.
 
 This CLI submits multiple game tasks to the Celery queue for parallel execution
-by worker processes. Unlike the standalone evaluate_model.py, this dispatcher
-does not execute games directly - it orchestrates them.
+by worker processes. It orchestrates task submission; workers execute the games.
 
 Usage:
     # Dispatch 50 games between two models
@@ -574,19 +573,16 @@ if __name__ == "__main__":
 
 ### Phase 5: Verification
 
-- [ ] **5.1 Test Backwards Compatibility**
-  - Verify existing scripts still work:
+- [ ] **5.1 Smoke Test Runners**
+  - Verify the remaining entry points work:
     ```bash
-    # Test single game
+    # Test single game (direct)
     python backend/main.py --models "xAI: Grok Code Fast 1" "OpenAI: GPT-5 Nano"
 
-    # Test evaluation
-    python backend/cli/evaluate_model.py --model "xAI: Grok Code Fast 1" --games 3
-
-    # Test worker
-    python backend/cli/run_evaluation_worker.py --model "xAI: Grok Code Fast 1"
+    # Test Celery dispatch
+    python backend/cli/dispatch_games.py --model_a "gpt-4o-mini-2024-07-18" --model_b "claude-3-haiku-20240307" --count 3 --monitor
     ```
-  - All should work without errors
+  - Both should run without errors
 
 ---
 
@@ -769,8 +765,6 @@ celery -A backend.celery_app purge
 
 ### Unchanged Files
 - `backend/main.py` - No changes (backwards compatible)
-- `backend/cli/evaluate_model.py` - No changes
-- `backend/cli/run_evaluation_worker.py` - No changes
 - All other existing files - No changes
 
 ---

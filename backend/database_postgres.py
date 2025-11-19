@@ -80,13 +80,13 @@ def init_database() -> None:
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public'
-            AND table_name IN ('models', 'games', 'game_participants', 'evaluation_queue')
+            AND table_name IN ('models', 'games', 'game_participants')
             ORDER BY table_name
         """)
 
         tables = [row['table_name'] for row in cursor.fetchall()]
 
-        if len(tables) == 4:
+        if len(tables) == 3:
             print(f"✓ All required tables found: {', '.join(tables)}")
         else:
             print(f"⚠ Only found {len(tables)} tables: {', '.join(tables)}")

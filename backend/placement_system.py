@@ -289,27 +289,9 @@ def save_placement_state(placement_state: PlacementState) -> None:
     Args:
         placement_state: State to save
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        # Store in evaluation_queue metadata
-        import json
-
-        cursor.execute("""
-            UPDATE evaluation_queue
-            SET metadata = %s
-            WHERE model_id = %s AND status = 'running'
-        """, (json.dumps(placement_state.to_dict()), placement_state.model_id))
-
-        conn.commit()
-
-    except Exception as e:
-        print(f"Error saving placement state: {e}")
-        conn.rollback()
-
-    finally:
-        conn.close()
+    # Storage layer removed with evaluation queue deprecation.
+    # Keep a no-op to preserve interface if called inadvertently.
+    return
 
 
 def load_placement_state(model_id: int) -> Optional[PlacementState]:
@@ -322,25 +304,5 @@ def load_placement_state(model_id: int) -> Optional[PlacementState]:
     Returns:
         PlacementState if found, None otherwise
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("""
-            SELECT metadata
-            FROM evaluation_queue
-            WHERE model_id = %s AND status = 'running'
-        """, (model_id,))
-
-        row = cursor.fetchone()
-
-        if not row or not row['metadata']:
-            return None
-
-        import json
-        data = json.loads(row['metadata']) if isinstance(row['metadata'], str) else row['metadata']
-
-        return PlacementState.from_dict(data)
-
-    finally:
-        conn.close()
+    # Storage layer removed; return None to signal no persisted state.
+    return None

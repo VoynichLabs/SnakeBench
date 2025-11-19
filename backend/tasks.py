@@ -72,6 +72,16 @@ def run_game_task(
         # Add task ID for tracking
         result['task_id'] = self.request.id
 
+        # Kick off async video generation on a separate queue
+        try:
+            generate_video_task.apply_async(
+                args=[result['game_id']],
+                queue='video'
+            )
+            logger.info(f"Enqueued video generation for game {result['game_id']}")
+        except Exception as enqueue_err:
+            logger.error(f"Failed to enqueue video generation for game {result['game_id']}: {enqueue_err}")
+
         logger.info(
             f"Game {result['game_id']} complete: "
             f"Score {result['final_scores']['0']}-{result['final_scores']['1']}, "
@@ -97,3 +107,27 @@ def health_check() -> Dict[str, str]:
         Dict with status message
     """
     return {'status': 'healthy', 'message': 'Worker is operational'}
+
+
+@app.task(name='backend.tasks.generate_video_task', bind=True, base=GameTask)
+def generate_video_task(self, game_id: str) -> Dict[str, str]:
+    """
+    Generate and upload a replay video for the given game.
+
+    Args:
+        game_id: ID of the game whose replay should be rendered
+
+    Returns:
+        Dict with storage_path/public_url for the video
+    """
+    logger.info(f"Starting video generation for game {game_id}")
+    try:
+        # Lazy import to keep main workers light until needed
+        from services.video_generator import SnakeVideoGenerator
+        generator = SnakeVideoGenerator()
+        result = generator.generate_and_upload(game_id)
+        logger.info(f"Video generated and uploaded for game {game_id}: {result.get('public_url')}")
+        return result
+    except Exception as e:
+        logger.error(f"Video generation failed for game {game_id}: {e}", exc_info=True)
+        raise
