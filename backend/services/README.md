@@ -1,3 +1,22 @@
+# Cron Service
+
+Runs lightweight scheduled jobs (backed by the `schedule` Python library).
+
+### Current jobs
+- Delete `in_progress` games whose `updated_at` is older than 30 minutes (runs every 10 minutes by default).
+
+### Run locally
+```bash
+cd backend
+python services/cron_service.py
+```
+
+### Environment controls
+- `STALE_GAME_MAX_MINUTES` (default `30`)
+- `CRON_INTERVAL_MINUTES` (default `10`)
+- `SCHEDULER_LOOP_SLEEP_SECONDS` (default `5`)
+- `CRON_LOG_LEVEL` (default `INFO`)
+
 # Webhook Service
 
 This service handles sending webhook notifications to external services like Zapier.

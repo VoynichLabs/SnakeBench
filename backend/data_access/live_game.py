@@ -138,7 +138,8 @@ def update_game_state(
         cursor.execute("""
             UPDATE games
             SET current_state = %s,
-                rounds = %s
+                rounds = %s,
+                updated_at = NOW()
             WHERE id = %s
         """, (
             json.dumps(current_state),
@@ -183,6 +184,7 @@ def complete_game(
             UPDATE games
             SET status = 'completed',
                 end_time = %s,
+                updated_at = %s,
                 rounds = %s,
                 replay_path = %s,
                 total_score = %s,
@@ -190,6 +192,7 @@ def complete_game(
                 current_state = NULL
             WHERE id = %s
         """, (
+            end_time.isoformat() if isinstance(end_time, datetime) else end_time,
             end_time.isoformat() if isinstance(end_time, datetime) else end_time,
             rounds,
             replay_path,
