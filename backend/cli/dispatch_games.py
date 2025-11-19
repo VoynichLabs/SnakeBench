@@ -113,6 +113,7 @@ def monitor_tasks(task_ids: List[str]):
         task_ids: List of Celery task IDs to monitor
     """
     print("\nMonitoring task progress (Ctrl+C to stop monitoring)...\n")
+    reported_games = set()
 
     try:
         while True:
@@ -139,6 +140,17 @@ def monitor_tasks(task_ids: List[str]):
             print(f"\r[{bar}] {completed}/{total} complete "
                   f"| ✓ {success} | ✗ {failed} | ⟳ {retry} | ▶ {in_progress} | ⋯ {pending}",
                   end='', flush=True)
+
+            # Print newly finished game IDs for quick inspection
+            for r in results:
+                if r.state == 'SUCCESS' and r.id not in reported_games:
+                    reported_games.add(r.id)
+                    try:
+                        info = r.result or {}
+                        game_id = info.get('game_id') or '<unknown>'
+                        print(f"\n✓ Game complete: task_id={r.id}, game_id={game_id}")
+                    except Exception:
+                        print(f"\n✓ Game complete: task_id={r.id}")
 
             # Check if all done
             if completed == total:
