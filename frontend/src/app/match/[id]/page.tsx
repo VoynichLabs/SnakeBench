@@ -96,7 +96,6 @@ export default async function MatchPage(props: PageProps) {
           modelNames={modelNames}
           date={formattedDate}
           time={formattedTime}
-          matchId={id}
         />
 
         <GameViewer

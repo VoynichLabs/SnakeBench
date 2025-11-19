@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import GameCanvas from "./GameCanvas"
 import PlayerThoughts from "./PlayerThoughts"
 import GameControls from "./GameControls"
+import VideoDownloadButton from "./VideoDownloadButton"
 
 // Define color configuration types
 interface PlayerColorScheme {
@@ -195,8 +196,8 @@ export default function GameViewer({
         onEnd={handleEnd}
       />
 
-      {/* Game ID */}
-      <div className="mt-4 flex justify-center">
+      {/* Game ID + download */}
+      <div className="mt-6 flex flex-col items-center gap-3">
         <Button
           variant="outline"
           size="sm"
@@ -206,6 +207,7 @@ export default function GameViewer({
           <span>Match ID: {gameData.metadata.game_id}</span>
           <Copy className="h-4 w-4" />
         </Button>
+        <VideoDownloadButton matchId={gameData.metadata.game_id} />
       </div>
     </>
   )

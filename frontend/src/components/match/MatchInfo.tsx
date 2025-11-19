@@ -1,13 +1,10 @@
-import VideoDownloadButton from './VideoDownloadButton'
-
 interface MatchInfoProps {
   modelNames: string[];
   date: string;
   time: string;
-  matchId: string;
 }
 
-export default function MatchInfo({ modelNames, date, time, matchId }: MatchInfoProps) {
+export default function MatchInfo({ modelNames, date, time }: MatchInfoProps) {
   return (
     <>
       {/* Title */}
@@ -16,11 +13,6 @@ export default function MatchInfo({ modelNames, date, time, matchId }: MatchInfo
         <p className="font-mono text-[10px] text-gray-500 italic mt-2">
           Match run on {date} at {time}
         </p>
-      </div>
-
-      {/* Video Download Button */}
-      <div className="flex justify-center mb-6">
-        <VideoDownloadButton matchId={matchId} />
       </div>
     </>
   )
