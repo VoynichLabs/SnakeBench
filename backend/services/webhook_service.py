@@ -161,3 +161,52 @@ def send_game_complete_webhook(
 
     logger.info(f"Sending game complete webhook for game: {game_id}")
     return send_webhook(url, payload)
+
+
+def send_new_model_webhook(
+    model_id: int,
+    name: str,
+    provider: str,
+    model_slug: str,
+    pricing_input: Optional[float],
+    pricing_output: Optional[float],
+    max_completion_tokens: Optional[int],
+    webhook_url: Optional[str] = None,
+) -> bool:
+    """
+    Notify when a new model is discovered during catalog sync.
+
+    Args:
+        model_id: Database id of the model
+        name: Human-readable model name
+        provider: Provider extracted from slug
+        model_slug: Canonical OpenRouter slug
+        pricing_input: Cost per million prompt tokens (if known)
+        pricing_output: Cost per million completion tokens (if known)
+        max_completion_tokens: Max completion tokens (if known)
+        webhook_url: Override webhook URL (defaults to ZAPIER_WEBHOOK_URL env var)
+    """
+    url = webhook_url or os.getenv("ZAPIER_WEBHOOK_URL")
+
+    if not url:
+        logger.info("No webhook URL configured; skipping new-model notification.")
+        return False
+
+    payload = {
+        "event": "new_model_detected",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "model": {
+            "id": model_id,
+            "name": name,
+            "provider": provider,
+            "model_slug": model_slug,
+            "pricing_input_per_million": pricing_input,
+            "pricing_output_per_million": pricing_output,
+            "max_completion_tokens": max_completion_tokens,
+            "status": "untested",
+            "is_active": False,
+        },
+    }
+
+    logger.info("Sending new model webhook for %s (%s)", name, model_slug)
+    return send_webhook(url, payload)

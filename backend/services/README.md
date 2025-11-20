@@ -4,6 +4,7 @@ Runs lightweight scheduled jobs (backed by the `schedule` Python library).
 
 ### Current jobs
 - Delete `in_progress` games whose `updated_at` is older than 30 minutes (runs every 10 minutes by default).
+- Sync OpenRouter catalog and add any new models as inactive/`untested` (runs daily by default, requires `OPENROUTER_API_KEY`).
 
 ### Run locally
 ```bash
@@ -14,6 +15,9 @@ python services/cron_service.py
 ### Environment controls
 - `STALE_GAME_MAX_MINUTES` (default `30`)
 - `CRON_INTERVAL_MINUTES` (default `10`)
+- `OPENROUTER_SYNC_ENABLED` (default `true`)
+- `OPENROUTER_SYNC_INTERVAL_MINUTES` (default `1440` — once per day)
+- `OPENROUTER_API_KEY` (required for OpenRouter sync)
 - `SCHEDULER_LOOP_SLEEP_SECONDS` (default `5`)
 - `CRON_LOG_LEVEL` (default `INFO`)
 
@@ -76,3 +80,4 @@ Cost: ${{cost__total}}
 
 - `send_evaluation_complete_webhook()` - Sent when model evaluation finishes
 - `send_game_complete_webhook()` - Sent when a single game finishes (optional)
+- `send_new_model_webhook()` - Sent when a new OpenRouter model is discovered (inactive/untested)

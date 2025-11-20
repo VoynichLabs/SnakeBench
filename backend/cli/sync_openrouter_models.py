@@ -15,13 +15,14 @@ import sys
 import json
 import argparse
 import requests
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 
 # Add parent directory to path to import database modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from database_postgres import get_connection
+from services.webhook_service import send_new_model_webhook
 
 
 def fetch_openrouter_models(api_key: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -122,7 +123,7 @@ def normalize_model_data(openrouter_model: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
+def upsert_model(model_data: Dict[str, Any]) -> Tuple[Optional[int], bool]:
     """
     Insert or update a model in the database.
 
@@ -130,15 +131,16 @@ def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
         model_data: Normalized model data
 
     Returns:
-        Model ID if successful, None otherwise
+        (Model ID if successful, is_new flag) — ID is None on failure/skip
     """
     # Skip Auto Router entirely
     if model_data.get('name') == 'Auto Router':
         print(f"  ⊘ Skipped: Auto Router (excluded from sync)")
-        return None
+        return None, False
 
     conn = get_connection()
     cursor = conn.cursor()
+    is_new = False
 
     try:
         # Check if model already exists
@@ -203,15 +205,16 @@ def upsert_model(model_data: Dict[str, Any]) -> Optional[int]:
 
             result = cursor.fetchone()
             model_id = result['id'] if result else None
+            is_new = True
             print(f"  + Added: {model_data['name']} (new, untested)")
 
         conn.commit()
-        return model_id
+        return model_id, is_new
 
     except Exception as e:
         print(f"  ✗ Error upserting model {model_data.get('name')}: {e}")
         conn.rollback()
-        return None
+        return None, False
 
     finally:
         conn.close()
@@ -252,31 +255,25 @@ def sync_models(api_key: Optional[str] = None) -> Dict[str, int]:
         try:
             # Normalize and upsert
             normalized = normalize_model_data(or_model)
-            model_id = upsert_model(normalized)
+            model_id, is_new = upsert_model(normalized)
 
             if model_id is None:
                 stats['skipped'] += 1
                 continue
 
-            # Check if this is a new model
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT test_status
-                FROM models
-                WHERE id = %s
-            """, (model_id,))
-
-            row = cursor.fetchone()
-            conn.close()
-
-            if row:
-                test_status = row[0]
-
-                if test_status == 'untested':
-                    stats['added'] += 1
-                else:
-                    stats['updated'] += 1
+            if is_new:
+                stats['added'] += 1
+                send_new_model_webhook(
+                    model_id=model_id,
+                    name=normalized['name'],
+                    provider=normalized['provider'],
+                    model_slug=normalized['model_slug'],
+                    pricing_input=normalized.get('pricing_input'),
+                    pricing_output=normalized.get('pricing_output'),
+                    max_completion_tokens=normalized.get('max_completion_tokens'),
+                )
+            else:
+                stats['updated'] += 1
 
         except Exception as e:
             print(f"  ✗ Error processing model: {e}")
