@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import time
 import logging
 from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
@@ -12,7 +13,8 @@ from data_access.api_queries import (
     get_model_by_name,
     get_games,
     get_game_by_id,
-    get_total_games_count
+    get_total_games_count,
+    get_top_apples_game
 )
 from database_postgres import get_connection
 
@@ -20,6 +22,8 @@ load_dotenv()
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
+TOP_MATCH_CACHE_SECONDS = int(os.getenv("TOP_MATCH_CACHE_SECONDS", "900"))
+_top_apples_cache = {"timestamp": 0.0, "payload": None}
 
 # Enable CORS for API routes so the Next.js frontend (different origin) can call Flask
 # Allowed origins can be configured via CORS_ALLOWED_ORIGINS env var (comma-separated)
@@ -39,6 +43,35 @@ CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
 
 # New DB-backed endpoints for Phase 3
+
+
+def _get_cached_top_apples_game():
+    """
+    Return cached payload for the highest-apples game if fresh, otherwise refresh it.
+    """
+    now = time.time()
+    cache_age = now - _top_apples_cache["timestamp"]
+    if _top_apples_cache["payload"] and cache_age < TOP_MATCH_CACHE_SECONDS:
+        return _top_apples_cache["payload"]
+
+    top_game = get_top_apples_game()
+    if top_game is None:
+        return None
+
+    payload = {
+        "game_id": top_game["id"],
+        "total_apples": top_game.get("total_score") or 0,
+        "rounds": top_game.get("rounds"),
+        "start_time": top_game.get("start_time"),
+        "end_time": top_game.get("end_time"),
+        "board_width": top_game.get("board_width"),
+        "board_height": top_game.get("board_height")
+    }
+
+    _top_apples_cache["payload"] = payload
+    _top_apples_cache["timestamp"] = now
+    return payload
+
 
 @app.route("/api/models", methods=["GET"])
 def get_models():
@@ -178,6 +211,27 @@ def get_games_endpoint():
     except Exception as error:
         logging.error(f"Error fetching games: {error}")
         return jsonify({"error": "Failed to load game list"}), 500
+
+
+@app.route("/api/matches/top-apples", methods=["GET"])
+def get_top_apples_match():
+    """
+    Return the match with the highest total apples eaten (combined score).
+    Cached to avoid repeatedly scanning the table.
+    """
+    try:
+        payload = _get_cached_top_apples_game()
+
+        if payload is None:
+            return jsonify({"error": "No matches found"}), 404
+
+        response = jsonify(payload)
+        response.headers["Cache-Control"] = f"public, max-age={TOP_MATCH_CACHE_SECONDS}"
+        return response
+
+    except Exception as error:
+        logging.error(f"Error fetching top-apples match: {error}")
+        return jsonify({"error": "Failed to load top-apples match"}), 500
 
 
 # Endpoint for stats API - now DB-backed

@@ -362,3 +362,50 @@ def get_total_games_count() -> int:
 
     finally:
         conn.close()
+
+
+def get_top_apples_game() -> Optional[Dict[str, Any]]:
+    """
+    Retrieve the game with the highest combined apples eaten (total_score).
+
+    Returns:
+        Game dictionary with minimal metadata, or None if no games exist
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT
+                g.id,
+                g.total_score,
+                g.replay_path,
+                g.start_time,
+                g.end_time,
+                g.rounds,
+                g.board_width,
+                g.board_height
+            FROM games g
+            WHERE g.total_score IS NOT NULL
+                AND g.replay_path IS NOT NULL
+            ORDER BY g.total_score DESC, g.start_time DESC
+            LIMIT 1
+        """)
+
+        row = cursor.fetchone()
+        if row is None:
+            return None
+
+        return {
+            'id': row['id'],
+            'total_score': row['total_score'],
+            'replay_path': row['replay_path'],
+            'start_time': str(row['start_time']) if row['start_time'] else None,
+            'end_time': str(row['end_time']) if row['end_time'] else None,
+            'rounds': row['rounds'],
+            'board_width': row['board_width'],
+            'board_height': row['board_height']
+        }
+
+    finally:
+        conn.close()

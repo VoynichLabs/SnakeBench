@@ -4,9 +4,11 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef } from "react";
+import { useTopMatch } from "@/hooks/useTopMatch";
 
 export default function HeroSection() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { href: topMatchHref } = useTopMatch();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -185,7 +187,7 @@ export default function HeroSection() {
           </p>
           <div className="mt-8 flex justify-center font-mono">
             <Button asChild className="font-mono">
-              <Link href={`/match/${process.env.NEXT_PUBLIC_TOP_MATCH_ID}`}>
+              <Link href={topMatchHref}>
                 Watch Top Match
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>

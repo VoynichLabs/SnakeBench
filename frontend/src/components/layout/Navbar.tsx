@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useTopMatch } from "@/hooks/useTopMatch";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { href: topMatchHref } = useTopMatch();
 
   return (
     <nav className="bg-white border-b border-gray-200">
@@ -25,7 +27,7 @@ export default function Navbar() {
                 🔴 Live Games
               </Link>
               <Link
-                href={`/match/${process.env.NEXT_PUBLIC_TOP_MATCH_ID}`}
+                href={topMatchHref}
                 className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-mono"
               >
                 Top Match
@@ -71,7 +73,7 @@ export default function Navbar() {
               🔴 Live Games
             </Link>
             <Link
-              href={`/match/${process.env.NEXT_PUBLIC_TOP_MATCH_ID}`}
+              href={topMatchHref}
               className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-mono"
               onClick={() => setMobileMenuOpen(false)}
             >
