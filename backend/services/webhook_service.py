@@ -163,6 +163,53 @@ def send_game_complete_webhook(
     return send_webhook(url, payload)
 
 
+def send_evaluation_batch_webhook(
+    enqueued: list,
+    finalized: list,
+    pending_skipped: list,
+    errors: list,
+    webhook_url: Optional[str] = None,
+) -> bool:
+    """
+    Send a summary webhook after an evaluate_models run.
+
+    Args:
+        enqueued: List of dicts {model_name, opponent_name, task_id}
+        finalized: List of model names finalized this run
+        pending_skipped: List of model names skipped due to pending games
+        errors: List of error strings
+        webhook_url: Override webhook URL (defaults to ZAPIER_WEBHOOK_URL env var)
+    """
+    url = webhook_url or os.getenv("ZAPIER_WEBHOOK_URL")
+    if not url:
+        logger.info("No webhook URL configured; skipping evaluation batch notification.")
+        return False
+
+    payload = {
+        "event": "evaluation_batch_dispatched",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "summary": {
+            "enqueued_count": len(enqueued),
+            "finalized_count": len(finalized),
+            "pending_skipped_count": len(pending_skipped),
+            "error_count": len(errors),
+        },
+        "enqueued": enqueued,
+        "finalized": finalized,
+        "pending_skipped": pending_skipped,
+        "errors": errors,
+    }
+
+    logger.info(
+        "Sending evaluation batch webhook: enqueued=%s finalized=%s pending_skipped=%s errors=%s",
+        len(enqueued),
+        len(finalized),
+        len(pending_skipped),
+        len(errors),
+    )
+    return send_webhook(url, payload)
+
+
 def send_new_model_webhook(
     model_id: int,
     name: str,

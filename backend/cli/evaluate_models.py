@@ -172,6 +172,115 @@ def count_ranked(conn) -> int:
     return row["c"] if row else 0
 
 
+def run_evaluation_batch(
+    max_models: int,
+    max_games: int,
+    width: int,
+    height: int,
+    max_rounds: int,
+    num_apples: int,
+    printer=print,
+):
+    """
+    Run one evaluation sweep and return stats about what was enqueued/finalized.
+    """
+    stats = {
+        "enqueued": [],  # list of {model_name, opponent_name, task_id}
+        "finalized": [],  # list of model names
+        "pending_skipped": [],  # models skipped due to in-flight eval
+        "errors": [],  # string messages
+        "no_ranked": False,
+        "no_candidates": False,
+    }
+
+    conn = get_connection()
+    try:
+        ranked_models = get_ranked_models_by_index()
+        ranked_count = len(ranked_models)
+        if ranked_count == 0:
+            stats["no_ranked"] = True
+            printer("✗ No ranked models available to compare against. Aborting.")
+            return stats
+
+        candidates = fetch_candidates(conn, max_models)
+        if not candidates:
+            stats["no_candidates"] = True
+            printer("No untested/testing models found.")
+            return stats
+
+        game_params = {
+            "width": width,
+            "height": height,
+            "max_rounds": max_rounds,
+            "num_apples": num_apples,
+        }
+
+        for candidate in candidates:
+            model_id = candidate["id"]
+            model_name = candidate["name"]
+            status = candidate["test_status"]
+
+            printer(f"\n=== Evaluating {model_name} (status: {status}) ===")
+
+            pending = has_pending_eval_game(conn, model_id)
+            if pending:
+                printer("  • Pending evaluation game in progress; skipping enqueue.")
+                stats["pending_skipped"].append(model_name)
+                continue
+
+            history = fetch_eval_history(conn, model_id)
+            state, completed = rebuild_state_from_history(
+                model_id, max_games=max_games, history=history, ranked_models=ranked_models
+            )
+
+            printer(
+                f"  • Completed eval games: {completed}/{max_games} | interval=[{state.low},{state.high}]"
+            )
+            if completed >= max_games:
+                finalize_model(conn, model_id, model_name)
+                stats["finalized"].append(model_name)
+                continue
+
+            opponent = select_next_opponent(state, ranked_models=ranked_models)
+            if not opponent:
+                printer("  • No suitable opponent found; finalizing.")
+                finalize_model(conn, model_id, model_name)
+                stats["finalized"].append(model_name)
+                continue
+
+            opponent_id, opponent_name, opponent_elo = opponent
+            opponent_rank_index = get_opponent_rank_index(opponent_id, ranked_models=ranked_models)
+            if opponent_rank_index is None:
+                printer("  • Opponent has no rank; skipping enqueue.")
+                continue
+            printer(
+                f"  • Next opponent: {opponent_name} (rank #{opponent_rank_index}, ELO {opponent_elo:.1f}) | task queued as evaluation"
+            )
+
+            try:
+                task_id = dispatch_eval_game(model_name, opponent_name, game_params)
+                printer(f"  • Enqueued Celery task: {task_id}")
+                stats["enqueued"].append(
+                    {
+                        "model_name": model_name,
+                        "opponent_name": opponent_name,
+                        "task_id": task_id,
+                    }
+                )
+            except Exception as e:
+                msg = f"{model_name} vs {opponent_name}: {e}"
+                printer(f"  ✗ Failed to enqueue game: {msg}")
+                stats["errors"].append(msg)
+                continue
+
+            if status == "untested":
+                mark_status(conn, model_id, "testing")
+
+        return stats
+    finally:
+        conn.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Evaluate untested/testing models using binary-search placement."
@@ -199,74 +308,25 @@ def main():
 
     args = parser.parse_args()
 
-    conn = get_connection()
+    stats = run_evaluation_batch(
+        max_models=args.max_models,
+        max_games=args.max_games,
+        width=args.width,
+        height=args.height,
+        max_rounds=args.max_rounds,
+        num_apples=args.num_apples,
+        printer=print,
+    )
 
-    ranked_models = get_ranked_models_by_index()
-    ranked_count = len(ranked_models)
-    if ranked_count == 0:
-        print("✗ No ranked models available to compare against. Aborting.")
-        return
-
-    candidates = fetch_candidates(conn, args.max_models)
-    if not candidates:
-        print("No untested/testing models found.")
-        return
-
-    game_params = {
-        "width": args.width,
-        "height": args.height,
-        "max_rounds": args.max_rounds,
-        "num_apples": args.num_apples,
-    }
-
-    for candidate in candidates:
-        model_id = candidate["id"]
-        model_name = candidate["name"]
-        status = candidate["test_status"]
-
-        print(f"\n=== Evaluating {model_name} (status: {status}) ===")
-
-        pending = has_pending_eval_game(conn, model_id)
-        if pending:
-            print("  • Pending evaluation game in progress; skipping enqueue.")
-            continue
-
-        history = fetch_eval_history(conn, model_id)
-        state, completed = rebuild_state_from_history(
-            model_id, max_games=args.max_games, history=history, ranked_models=ranked_models
-        )
-
-        print(
-            f"  • Completed eval games: {completed}/{args.max_games} | interval=[{state.low},{state.high}]"
-        )
-        if completed >= args.max_games:
-            finalize_model(conn, model_id, model_name)
-            continue
-
-        opponent = select_next_opponent(state, ranked_models=ranked_models)
-        if not opponent:
-            print("  • No suitable opponent found; finalizing.")
-            finalize_model(conn, model_id, model_name)
-            continue
-
-        opponent_id, opponent_name, opponent_elo = opponent
-        opponent_rank_index = get_opponent_rank_index(opponent_id, ranked_models=ranked_models)
-        if opponent_rank_index is None:
-            print("  • Opponent has no rank; skipping enqueue.")
-            continue
-        print(
-            f"  • Next opponent: {opponent_name} (rank #{opponent_rank_index}, ELO {opponent_elo:.1f}) | task queued as evaluation"
-        )
-
-        try:
-            task_id = dispatch_eval_game(model_name, opponent_name, game_params)
-            print(f"  • Enqueued Celery task: {task_id}")
-        except Exception as e:
-            print(f"  ✗ Failed to enqueue game: {e}")
-            continue
-
-        if status == "untested":
-            mark_status(conn, model_id, "testing")
+    print(
+        f"\nRun summary: enqueued={len(stats['enqueued'])} "
+        f"finalized={len(stats['finalized'])} "
+        f"pending_skipped={len(stats['pending_skipped'])} "
+        f"errors={len(stats['errors'])}"
+    )
+    if stats["errors"]:
+        for err in stats["errors"]:
+            print(f"  ✗ {err}")
 
 
 if __name__ == "__main__":

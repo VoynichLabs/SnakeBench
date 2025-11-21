@@ -9,7 +9,6 @@ Currently includes:
 
 import logging
 import os
-import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -26,6 +25,8 @@ if str(ROOT_DIR) not in sys.path:
 
 from database_postgres import get_connection  # noqa: E402
 from cli.sync_openrouter_models import sync_models as sync_openrouter_models  # noqa: E402
+from cli import evaluate_models as eval_cli  # noqa: E402
+from services.webhook_service import send_evaluation_batch_webhook  # noqa: E402
 
 
 LOG_LEVEL = "INFO"  # Flip these constants in code if you want different schedules.
@@ -165,41 +166,43 @@ def run_scheduled_evaluation() -> None:
     if not EVALUATE_MODELS_ENABLED:
         return
 
-    eval_script = ROOT_DIR / "cli" / "evaluate_models.py"
-    cmd = [
-        sys.executable,
-        str(eval_script),
-        "--max-models",
-        str(EVALUATE_MODELS_MAX_MODELS),
-        "--max-games",
-        str(EVALUATE_MODELS_MAX_GAMES),
-    ]
-
     logger.info(
-        "Starting scheduled evaluate_models run: %s",
-        " ".join(cmd),
+        "Starting scheduled evaluate_models run (max_models=%s, max_games=%s).",
+        EVALUATE_MODELS_MAX_MODELS,
+        EVALUATE_MODELS_MAX_GAMES,
     )
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=False,
+        stats = eval_cli.run_evaluation_batch(
+            max_models=EVALUATE_MODELS_MAX_MODELS,
+            max_games=EVALUATE_MODELS_MAX_GAMES,
+            width=10,
+            height=10,
+            max_rounds=100,
+            num_apples=5,
+            printer=lambda msg: logger.info(msg),
         )
-
-        if result.stdout:
-            logger.info("evaluate_models stdout:\n%s", result.stdout.strip())
-
-        if result.stderr:
-            logger.warning("evaluate_models stderr:\n%s", result.stderr.strip())
-
-        if result.returncode != 0:
-            logger.error(
-                "evaluate_models exited with code %s", result.returncode
-            )
     except Exception:
         logger.exception("Scheduled evaluate_models run failed")
+        return
+
+    try:
+        send_evaluation_batch_webhook(
+            enqueued=stats.get("enqueued", []),
+            finalized=stats.get("finalized", []),
+            pending_skipped=stats.get("pending_skipped", []),
+            errors=stats.get("errors", []),
+        )
+    except Exception:
+        logger.exception("Failed to send evaluation batch webhook")
+
+    logger.info(
+        "Finished scheduled evaluate_models run: enqueued=%s finalized=%s pending=%s errors=%s",
+        len(stats.get("enqueued", [])),
+        len(stats.get("finalized", [])),
+        len(stats.get("pending_skipped", [])),
+        len(stats.get("errors", [])),
+    )
 
 
 def run_scheduler() -> None:
