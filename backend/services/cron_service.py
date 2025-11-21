@@ -4,10 +4,12 @@ Lightweight cron-style service for scheduled maintenance tasks.
 Currently includes:
  - Stale in-progress game cleanup every N minutes (default: 10)
  - OpenRouter catalog sync to insert new models as inactive/untested (default: daily)
+ - Hourly evaluate_models enqueue run (default: max-models=1, max-games=10)
 """
 
 import logging
 import os
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -26,15 +28,17 @@ from database_postgres import get_connection  # noqa: E402
 from cli.sync_openrouter_models import sync_models as sync_openrouter_models  # noqa: E402
 
 
-LOG_LEVEL = os.getenv("CRON_LOG_LEVEL", "INFO").upper()
-STALE_MINUTES = int(os.getenv("STALE_GAME_MAX_MINUTES", "30"))
-CRON_INTERVAL_MINUTES = int(os.getenv("CRON_INTERVAL_MINUTES", "10"))
-OPENROUTER_SYNC_ENABLED = os.getenv("OPENROUTER_SYNC_ENABLED", "true").lower() == "true"
-OPENROUTER_SYNC_INTERVAL_MINUTES = int(
-    os.getenv("OPENROUTER_SYNC_INTERVAL_MINUTES", "60")
-)
+LOG_LEVEL = "INFO"  # Flip these constants in code if you want different schedules.
+STALE_MINUTES = 30
+CRON_INTERVAL_MINUTES = 10
+OPENROUTER_SYNC_ENABLED = True
+OPENROUTER_SYNC_INTERVAL_MINUTES = 60
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-SCHEDULER_LOOP_SLEEP_SECONDS = int(os.getenv("SCHEDULER_LOOP_SLEEP_SECONDS", "5"))
+SCHEDULER_LOOP_SLEEP_SECONDS = 5
+EVALUATE_MODELS_ENABLED = True
+EVALUATE_MODELS_INTERVAL_MINUTES = 60
+EVALUATE_MODELS_MAX_MODELS = 1
+EVALUATE_MODELS_MAX_GAMES = 10
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -156,6 +160,48 @@ def sync_openrouter_catalog() -> None:
         logger.exception("OpenRouter model sync failed")
 
 
+def run_scheduled_evaluation() -> None:
+    """Kick off a placement/evaluation enqueue run."""
+    if not EVALUATE_MODELS_ENABLED:
+        return
+
+    eval_script = ROOT_DIR / "cli" / "evaluate_models.py"
+    cmd = [
+        sys.executable,
+        str(eval_script),
+        "--max-models",
+        str(EVALUATE_MODELS_MAX_MODELS),
+        "--max-games",
+        str(EVALUATE_MODELS_MAX_GAMES),
+    ]
+
+    logger.info(
+        "Starting scheduled evaluate_models run: %s",
+        " ".join(cmd),
+    )
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if result.stdout:
+            logger.info("evaluate_models stdout:\n%s", result.stdout.strip())
+
+        if result.stderr:
+            logger.warning("evaluate_models stderr:\n%s", result.stderr.strip())
+
+        if result.returncode != 0:
+            logger.error(
+                "evaluate_models exited with code %s", result.returncode
+            )
+    except Exception:
+        logger.exception("Scheduled evaluate_models run failed")
+
+
 def run_scheduler() -> None:
     """Start the scheduler loop."""
     logger.info(
@@ -184,6 +230,18 @@ def run_scheduler() -> None:
         )
     else:
         logger.info("OpenRouter sync disabled; skipping schedule registration.")
+
+    if EVALUATE_MODELS_ENABLED:
+        eval_interval = EVALUATE_MODELS_INTERVAL_MINUTES
+        schedule.every(eval_interval).minutes.do(run_scheduled_evaluation)
+        logger.info(
+            "Scheduled evaluate_models every %s minutes (max_models=%s, max_games=%s).",
+            eval_interval,
+            EVALUATE_MODELS_MAX_MODELS,
+            EVALUATE_MODELS_MAX_GAMES,
+        )
+    else:
+        logger.info("Scheduled evaluate_models disabled; set EVALUATE_MODELS_ENABLED=true to enable.")
 
     while True:
         schedule.run_pending()
