@@ -20,7 +20,8 @@ def insert_initial_game(
     board_width: int,
     board_height: int,
     num_apples: int,
-    status: str = 'in_progress'
+    status: str = 'in_progress',
+    game_type: str = 'ladder'
 ) -> None:
     """
     Insert initial game record when game starts.
@@ -39,15 +40,16 @@ def insert_initial_game(
     try:
         cursor.execute("""
             INSERT INTO games (
-                id, status, start_time, board_width, board_height, num_apples
-            ) VALUES (%s, %s, %s, %s, %s, %s)
+                id, status, start_time, board_width, board_height, num_apples, game_type
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             game_id,
             status,
             start_time.isoformat() if isinstance(start_time, datetime) else start_time,
             board_width,
             board_height,
-            num_apples
+            num_apples,
+            game_type
         ))
 
         conn.commit()

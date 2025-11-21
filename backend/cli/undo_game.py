@@ -15,7 +15,7 @@ Notes:
 import argparse
 from collections import defaultdict
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Callable
 
 from psycopg2.extras import RealDictCursor
 
@@ -291,7 +291,31 @@ def _recompute_last_played_excluding(cur, model_id: int, game_id_to_exclude: str
     return row["last_played"] if row else None
 
 
-def undo_game(game_id: str, dry_run: bool = False, scope: str = "participants") -> None:
+def _delete_replay_asset(game_id: str, deleter: Optional[Callable[[str], bool]] = None) -> bool:
+    """
+    Best-effort deletion of the replay asset (e.g., Supabase storage).
+    """
+    if deleter is None:
+        try:
+            from services.supabase_storage import delete_replay  # type: ignore
+        except Exception as exc:  # noqa: BLE001
+            print(f"Skip replay deletion (cannot import storage helper): {exc}")
+            return False
+        deleter = delete_replay
+
+    try:
+        return bool(deleter(game_id))
+    except Exception as exc:  # noqa: BLE001
+        print(f"Replay deletion failed for {game_id}: {exc}")
+        return False
+
+
+def undo_game(
+    game_id: str,
+    dry_run: bool = False,
+    scope: str = "participants",
+    delete_replay: bool = False
+) -> None:
     """
     Perform the undo operation for a given game id.
 
@@ -314,6 +338,10 @@ def undo_game(game_id: str, dry_run: bool = False, scope: str = "participants") 
 
     # Gather participants for messaging and to ensure it has players
     participants = _fetch_game_participants(cur, game_id)
+    if not participants:
+        cur.close()
+        conn.close()
+        raise ValueError(f"Game '{game_id}' has no participants; aborting undo.")
     
     participant_ids = [p["model_id"] for p in participants]
 
@@ -401,14 +429,12 @@ def undo_game(game_id: str, dry_run: bool = False, scope: str = "participants") 
             print(f"Will update {len(all_models)} models and then delete game and participants.")
         else:
             # Show current vs recomputed ELO for each participant
-            # Fetch current elos
+            placeholders = ",".join(["%s"] * len(participant_ids))
             cur.execute(
-                "SELECT id, elo_rating FROM models WHERE id IN (%s, %s)",
-                (participant_ids[0], participant_ids[1] if len(participant_ids) > 1 else participant_ids[0]),
+                f"SELECT id, elo_rating FROM models WHERE id IN ({placeholders})",
+                participant_ids,
             )
             current = {row["id"]: float(row["elo_rating"]) for row in cur.fetchall()}
-            # Compute recomputed elos (already computed earlier if scope==participants)
-            new_elos = _participants_only_recompute_elo(cur, game_id, participant_ids)
             for p in participants:
                 mid = p["model_id"]
                 old = current.get(mid)
@@ -419,6 +445,9 @@ def undo_game(game_id: str, dry_run: bool = False, scope: str = "participants") 
         cur.close()
         conn.close()
         return
+
+    participants_deleted = 0
+    games_deleted = 0
 
     try:
         # Begin transaction
@@ -442,15 +471,34 @@ def undo_game(game_id: str, dry_run: bool = False, scope: str = "participants") 
 
         # Now delete the game and its participants
         cur.execute("DELETE FROM game_participants WHERE game_id = %s", (game_id,))
+        participants_deleted = cur.rowcount or 0
+
         cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+        games_deleted = cur.rowcount or 0
+
+        if participants_deleted < len(participants):
+            raise RuntimeError(
+                f"Expected to delete {len(participants)} participant rows for {game_id}, "
+                f"deleted {participants_deleted}."
+            )
+        if games_deleted != 1:
+            raise RuntimeError(f"Expected to delete 1 game row for {game_id}, deleted {games_deleted}")
 
         conn.commit()
 
         # Print a concise summary
         if scope == "global":
-            print(f"Undid game {game_id}. Updated {len(all_models)} models and removed the game + participants.")
+            print(
+                f"Undid game {game_id}. "
+                f"Updated {len(all_models)} models and "
+                f"removed {participants_deleted} participants, {games_deleted} game row."
+            )
         else:
-            print(f"Undid game {game_id}. Updated {len(participant_ids)} models and removed the game + participants.")
+            print(
+                f"Undid game {game_id}. "
+                f"Updated {len(participant_ids)} models and "
+                f"removed {participants_deleted} participants, {games_deleted} game row."
+            )
 
     except Exception as e:
         conn.rollback()
@@ -459,6 +507,11 @@ def undo_game(game_id: str, dry_run: bool = False, scope: str = "participants") 
         cur.close()
         conn.close()
 
+    if delete_replay:
+        deleted = _delete_replay_asset(game_id)
+        msg = "Replay asset deleted." if deleted else "Replay asset not deleted."
+        print(msg)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Undo a game and recompute ELO/aggregates.")
@@ -466,9 +519,15 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show what would change without applying it")
     parser.add_argument("--scope", choices=["participants", "global"], default="participants",
                         help="Participants: adjust only players of the game; Global: full recompute (default: participants)")
+    parser.add_argument("--delete-replay", action="store_true", help="Also delete the replay asset from storage if configured")
     args = parser.parse_args()
 
-    undo_game(args.game_id, dry_run=args.dry_run, scope=args.scope)
+    undo_game(
+        args.game_id,
+        dry_run=args.dry_run,
+        scope=args.scope,
+        delete_replay=args.delete_replay,
+    )
 
 
 if __name__ == "__main__":

@@ -24,7 +24,8 @@ def insert_game(
     board_height: int,
     num_apples: int,
     total_score: int,
-    total_cost: float = 0.0
+    total_cost: float = 0.0,
+    game_type: str = 'ladder'
 ) -> None:
     """
     Insert a game record into the games table.
@@ -48,8 +49,8 @@ def insert_game(
         cursor.execute("""
             INSERT INTO games (
                 id, start_time, end_time, rounds, replay_path,
-                board_width, board_height, num_apples, total_score, total_cost
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                board_width, board_height, num_apples, total_score, total_cost, game_type
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             game_id,
             start_time.isoformat() if isinstance(start_time, datetime) else start_time,
@@ -60,7 +61,8 @@ def insert_game(
             board_height,
             num_apples,
             total_score,
-            total_cost
+            total_cost,
+            game_type
         ))
 
         conn.commit()

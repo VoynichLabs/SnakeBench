@@ -21,6 +21,13 @@ Command-line helpers for the LLMSnake backend. The system now runs games exclusi
   - `python backend/cli/generate_matchups.py --mode all --rounds 3`
   - `python backend/cli/generate_matchups.py --mode single --model my_model --rounds 3`
 
+## evaluate_models.py
+- Orchestrates binary-search style evaluations for untested/testing models (game_type='evaluation').
+- Usage:
+  - `python backend/cli/evaluate_models.py --max-models 5 --max-games 10`
+  - Optional board params: `--width`, `--height`, `--max-rounds`, `--num-apples`.
+  - Picks up from history if rerun; dispatches one eval game per model per run.
+
 ## Other scripts
 - `cleanup_stale_games.py`, `reset_database.py`, `undo_game.py`, `generate_video.py` remain available for maintenance/video export tasks.
 

@@ -308,8 +308,8 @@ class LLMPlayer(Player):
             "Decreasing your x coordinate is to the left, increasing your x coordinate is to the right.\n"
             "Decreasing your y coordinate is down, increasing your y coordinate is up.\n"
             "You may think out loud first then respond with the direction.\n"
-            "You may also state a strategy you want to tell yourself next turn.\n"
-            "End your response with your decided next move: UP, DOWN, LEFT, or RIGHT.\n"
+            "You may also state a strategy you want to tell yourself next turn, but it must come before your final move line.\n"
+            "The final non-empty line of your response must be only one word with your decided next move (UP, DOWN, LEFT, or RIGHT) and nothing after it. Do not mention any future directions after that line.\n"
         )
         # print(f"----------Prompt:\n\n {prompt}\n\n------------")
         return prompt
@@ -325,7 +325,15 @@ class SnakeGame:
       - Rounds
       - History for replay
     """
-    def __init__(self, width: int, height: int, max_rounds: int = 20, num_apples: int = 3, game_id: str = None):
+    def __init__(
+        self,
+        width: int,
+        height: int,
+        max_rounds: int = 20,
+        num_apples: int = 3,
+        game_id: str = None,
+        game_type: str = 'ladder'
+    ):
         self.width = width
         self.height = height
         self.snakes: Dict[str, Snake] = {}
@@ -345,6 +353,7 @@ class SnakeGame:
 
         # Store how many apples we want to keep on the board at all times
         self.num_apples = num_apples
+        self.game_type = game_type
 
         # We store multiple apples as a set of (x, y) or a list.
         # Here, let's keep them as a list to preserve GameState JSON-friendliness.
@@ -372,7 +381,8 @@ class SnakeGame:
                     board_width=self.width,
                     board_height=self.height,
                     num_apples=self.num_apples,
-                    status='in_progress'
+                    status='in_progress',
+                    game_type=self.game_type
                 )
             except Exception as e:
                 print(f"Warning: Could not insert initial game record: {e}")
@@ -861,10 +871,12 @@ def run_simulation(model_config_1: Dict, model_config_2: Dict, game_params: argp
     """
     # Create a game instance using parameters from game_params
     game = SnakeGame(
-        width=game_params.width, 
-        height=game_params.height, 
-        max_rounds=game_params.max_rounds, 
-        num_apples=game_params.num_apples
+        width=game_params.width,
+        height=game_params.height,
+        max_rounds=game_params.max_rounds,
+        num_apples=game_params.num_apples,
+        game_id=getattr(game_params, 'game_id', None),
+        game_type=getattr(game_params, 'game_type', 'ladder')
     )
 
     # Add two snakes with LLM players using the provided model configurations
@@ -874,6 +886,19 @@ def run_simulation(model_config_1: Dict, model_config_2: Dict, game_params: argp
             snake_id=str(i),
             player=LLMPlayer(str(i), player_config=player_config)
         )
+
+    # Insert initial participants for live tracking/pending detection
+    if DB_AVAILABLE:
+        try:
+            from data_access.live_game import insert_initial_participants
+
+            participants = [
+                {'model_name': pc['name'], 'player_slot': idx}
+                for idx, pc in enumerate(player_configs)
+            ]
+            insert_initial_participants(game.game_id, participants)
+        except Exception as e:
+            print(f"Warning: Could not insert initial participants: {e}")
 
     # Insert initial participants for live game tracking
     if DB_AVAILABLE:

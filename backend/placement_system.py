@@ -160,7 +160,10 @@ def select_opponent_at_index(
     return best_candidate
 
 
-def select_next_opponent(placement_state: PlacementState) -> Optional[Tuple[int, str, float]]:
+def select_next_opponent(
+    placement_state: PlacementState,
+    ranked_models: Optional[List[Tuple[int, str, float, int]]] = None
+) -> Optional[Tuple[int, str, float]]:
     """
     Select the next opponent for placement using binary search strategy.
 
@@ -173,7 +176,7 @@ def select_next_opponent(placement_state: PlacementState) -> Optional[Tuple[int,
     if placement_state.games_played >= placement_state.max_games:
         return None
 
-    ranked_models = get_ranked_models_by_index()
+    ranked_models = ranked_models if ranked_models is not None else get_ranked_models_by_index()
 
     if not ranked_models:
         print("  ⚠️  No ranked models available for placement")
@@ -248,7 +251,7 @@ def update_placement_interval(
     placement_state.games_played += 1
 
 
-def get_opponent_rank_index(opponent_id: int) -> int:
+def get_opponent_rank_index(opponent_id: int, ranked_models: Optional[List[Tuple[int, str, float, int]]] = None) -> Optional[int]:
     """
     Get the current rank index of an opponent.
 
@@ -258,13 +261,14 @@ def get_opponent_rank_index(opponent_id: int) -> int:
     Returns:
         Rank index (0 = best)
     """
-    ranked_models = get_ranked_models_by_index()
+    ranked_models = ranked_models if ranked_models is not None else get_ranked_models_by_index()
 
     for model_id, _, _, rank_index in ranked_models:
         if model_id == opponent_id:
             return rank_index
 
-    return 0  # Default to top if not found
+    # Unknown opponent (not currently ranked/active)
+    return None
 
 
 def finalize_placement(placement_state: PlacementState) -> int:
