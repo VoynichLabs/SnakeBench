@@ -3,8 +3,8 @@
 Sync OpenRouter model catalog to the local database.
 
 This script pulls the latest model information from OpenRouter's API and
-upserts it into the models table. New models are added with is_active=false
-by default and require evaluation before being activated.
+upserts it into the models table. New models are auto-activated when they
+pass baseline filters; otherwise they remain inactive and await evaluation.
 
 Usage:
     python backend/cli/sync_openrouter_models.py [--api-key <key>]
@@ -138,6 +138,16 @@ def upsert_model(model_data: Dict[str, Any]) -> Tuple[Optional[int], bool]:
         print(f"  ⊘ Skipped: Auto Router (excluded from sync)")
         return None, False
 
+    def qualifies_for_auto_activation(data: Dict[str, Any]) -> bool:
+        """Decide if a brand-new model should start as active."""
+        max_tokens = data.get('max_completion_tokens')
+        price_in = data.get('pricing_input')
+
+        return (
+            max_tokens is not None and max_tokens >= 5000
+            and price_in is not None and 0 < price_in <= 11
+        )
+
     conn = get_connection()
     cursor = conn.cursor()
     is_new = False
@@ -181,7 +191,8 @@ def upsert_model(model_data: Dict[str, Any]) -> Tuple[Optional[int], bool]:
 
             print(f"  ↻ Updated: {model_data['name']} (already has {games_played} games)")
         else:
-            # Insert new model (inactive by default)
+            # Insert new model; auto-activate if it meets baseline filters
+            is_active_default = qualifies_for_auto_activation(model_data)
             cursor.execute("""
                 INSERT INTO models (
                     name, provider, model_slug,
@@ -190,7 +201,7 @@ def upsert_model(model_data: Dict[str, Any]) -> Tuple[Optional[int], bool]:
                     is_active, test_status,
                     discovered_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, FALSE, 'untested', %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'untested', %s)
                 RETURNING id
             """, (
                 model_data['name'],
@@ -200,13 +211,15 @@ def upsert_model(model_data: Dict[str, Any]) -> Tuple[Optional[int], bool]:
                 model_data['pricing_output'],
                 model_data['max_completion_tokens'],
                 model_data['metadata_json'],
+                is_active_default,
                 datetime.now().isoformat()
             ))
 
             result = cursor.fetchone()
             model_id = result['id'] if result else None
             is_new = True
-            print(f"  + Added: {model_data['name']} (new, untested)")
+            status_note = "auto-activated" if is_active_default else "inactive"
+            print(f"  + Added: {model_data['name']} (new, untested, {status_note})")
 
         conn.commit()
         return model_id, is_new
