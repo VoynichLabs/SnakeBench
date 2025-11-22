@@ -7,12 +7,16 @@ leaderboard by playing exactly 10 games against strategically chosen opponents.
 
 from typing import Optional, Tuple, Set, List
 from dataclasses import dataclass
+import random
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from database_postgres import get_connection
 
+# Limit how far we jitter the very first opponent pick so new models don't all
+# start against the exact same midpoint opponent.
+INITIAL_TARGET_SPREAD = 3
 
 @dataclass
 class PlacementState:
@@ -182,8 +186,22 @@ def select_next_opponent(
         print("  ⚠️  No ranked models available for placement")
         return None
 
-    # Calculate midpoint of current interval
-    target_index = (placement_state.low + placement_state.high) // 2
+    # Calculate target index, jittering the very first pick so simultaneous new
+    # models don't all face the exact same midpoint opponent.
+    def pick_target_index(state: PlacementState) -> int:
+        midpoint = (state.low + state.high) // 2
+        if state.games_played > 0:
+            return midpoint
+
+        spread = min(INITIAL_TARGET_SPREAD, max(0, (state.high - state.low) // 2))
+        if spread == 0:
+            return midpoint
+
+        rng = random.Random(state.model_id)
+        offset = rng.randint(-spread, spread)
+        return max(state.low, min(state.high, midpoint + offset))
+
+    target_index = pick_target_index(placement_state)
 
     # Select opponent near midpoint
     opponent = select_opponent_at_index(target_index, ranked_models, placement_state)
