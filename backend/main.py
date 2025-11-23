@@ -41,6 +41,7 @@ DOWN = "DOWN"
 LEFT = "LEFT"
 RIGHT = "RIGHT"
 VALID_MOVES = {UP, DOWN, LEFT, RIGHT}
+APPLE_TARGET = 30
 
 class Snake:
     """
@@ -69,6 +70,7 @@ class GameState:
       - width, height: board dimensions
       - apples: list of (x, y) positions of all apples on the board
       - move_history: list of dicts (one per round), each mapping snake_id -> move
+      - max_rounds: optional upper limit on total rounds
     """
     def __init__(self,
                  round_number: int,
@@ -78,7 +80,8 @@ class GameState:
                  width: int,
                  height: int,
                  apples: List[Tuple[int, int]],
-                 move_history: List[Dict[str, str]]):
+                 move_history: List[Dict[str, str]],
+                 max_rounds: Optional[int] = None):
         self.round_number = round_number
         self.snake_positions = snake_positions
         self.alive = alive
@@ -87,6 +90,7 @@ class GameState:
         self.height = height
         self.apples = apples
         self.move_history = move_history
+        self.max_rounds = max_rounds
 
     def print_board(self) -> str:
         """
@@ -266,53 +270,104 @@ class LLMPlayer(Player):
         return move_data
 
     def _construct_prompt(self, game_state: GameState) -> str:
-        # Summarize the multiple apples
-        apples_str = ", ".join(str(a) for a in game_state.apples)
+        apples_str = ", ".join(str(a) for a in game_state.apples) if game_state.apples else "none"
 
         # Get your snake's position with explicit head/body labels
         your_pos = game_state.snake_positions[self.snake_id]
         your_head = your_pos[0]
         your_body = your_pos[1:] if len(your_pos) > 1 else []
 
-        # Format enemy snake positions with explicit head/body labels
+        # Your score (apples eaten)
+        your_score = game_state.scores.get(self.snake_id, 0)
+
+        # Format enemy snake positions with explicit head/body labels + scores
         enemy_positions = []
         for sid, pos in game_state.snake_positions.items():
             if sid != self.snake_id:
                 enemy_head = pos[0]
                 enemy_body = pos[1:] if len(pos) > 1 else []
-                enemy_positions.append(f"* Snake #{sid} - Head: {enemy_head}, Body: {enemy_body if enemy_body else 'none'}")
+                enemy_score = game_state.scores.get(sid, 0)
+                enemy_positions.append(
+                    f"* Snake #{sid} - Head: {enemy_head}, "
+                    f"Body: {enemy_body if enemy_body else 'none'}, "
+                    f"Apples: {enemy_score}"
+                )
+
+        # Last move / rationale (for long-term plan)
+        last_move = self.move_history[-1][self.snake_id]['direction'] if self.move_history else 'None'
+        last_rationale = self.move_history[-1][self.snake_id]['rationale'] if self.move_history else 'None'
+
+        turn_line = (
+            f"Turn: {game_state.round_number} / {game_state.max_rounds}"
+            if game_state.max_rounds is not None
+            else f"Turn: {game_state.round_number}"
+        )
+        max_turns_rule = (
+            f"- The game lasts at most {game_state.max_rounds} turns.\n"
+            if game_state.max_rounds is not None
+            else ""
+        )
+        enemy_positions_str = "\n".join(enemy_positions) if enemy_positions else "  - none"
 
         prompt = (
             f"You are controlling a snake in a multi-apple Snake game. "
-            f"The board size is {game_state.width}x{game_state.height}. Normal X,Y coordinates are used. Coordinates range from (0,0) at bottom left to ({game_state.width-1},{game_state.height-1}) at top right.\n"
+            f"The board size is {game_state.width}x{game_state.height}. Normal X,Y coordinates are used. "
+            f"Coordinates range from (0,0) at bottom left to ({game_state.width-1},{game_state.height-1}) at top right.\n"
+            f"{turn_line}\n\n"
             f"Apples at: {apples_str}\n\n"
+            f"Scores so far:\n"
+            f"  - Your snake (ID {self.snake_id}) apples: {your_score}\n"
+            + "".join(
+                f"  - Snake #{sid} apples: {game_state.scores.get(sid, 0)}\n"
+                for sid in game_state.snake_positions.keys()
+                if sid != self.snake_id
+            )
+            + "\n"
             f"Your snake (ID: {self.snake_id}):\n"
             f"  - Head: {your_head}\n"
-            f"  - Body: {your_body if your_body else 'none'}\n\n"
-            f"Enemy snakes:\n" +
-            "\n".join(enemy_positions) + "\n\n"
+            f"  - Body: {your_body if your_body else 'none'}\n"
+            f"  - Apples collected: {your_score}\n\n"
+            f"Enemy snakes:\n"
+            f"{enemy_positions_str}\n\n"
             f"Board state:\n"
             f"{game_state.print_board()}\n\n"
             f"--Your last move information:--\n\n"
             f"**START LAST MOVE PICK**\n"
-            f"{self.move_history[-1][self.snake_id]['direction'] if self.move_history else 'None'}\n"
+            f"{last_move}\n"
             f"**END LAST MOVE PICK**\n\n"
             f"**START LAST RATIONALE**\n"
-            f"{self.move_history[-1][self.snake_id]['rationale'] if self.move_history else 'None'}\n"
+            f"{last_rationale}\n"
             f"**END LAST RATIONALE**\n\n"
             f"--End of your last move information.--\n\n"
-            "Rules:\n"
-            "1) If you move onto an apple, you grow and gain 1 point.\n"
-            "2) If you run into a wall (outside the range of the listed coordinates), another snake, or yourself (like go backwards), you die.\n"
-            "3) If another snake's head hits any part of your body, that snake dies (your body remains). In a two-snake game you immediately win if they die and you survive the round.\n"
-            "4) The goal is to have the most points by the end (or be the last snake alive if opponents crash).\n\n"
-            "Decreasing your x coordinate is to the left, increasing your x coordinate is to the right.\n"
-            "Decreasing your y coordinate is down, increasing your y coordinate is up.\n"
-            "You may think out loud first then respond with the direction.\n"
-            "You may also state a strategy you want to tell yourself next turn, but it must come before your final move line.\n"
-            "The final non-empty line of your response must be only one word with your decided next move (UP, DOWN, LEFT, or RIGHT) and nothing after it. Do not mention any future directions after that line.\n"
+            "Rules and win conditions:\n"
+            "- All snakes move simultaneously each turn.\n"
+            "- Each turn, you choose one move: UP, DOWN, LEFT, or RIGHT. Every snake's head moves one cell in its chosen direction at the same time.\n"
+            "- If you move onto an apple, you grow by 1 segment and gain 1 point (1 apple).\n"
+            "- If you move outside the board (beyond the listed coordinate ranges), you die.\n"
+            "- If your head moves into any snake's body (including your own), you die.\n"
+            "- Moving directly backwards into your own body (into the cell directly behind your head) counts as hitting yourself and you die.\n"
+            "- If another snake's head moves into any part of your body, that snake dies and your body remains.\n"
+            "- If two snake heads move into the same cell on the same turn, both snakes die (head-on collision).\n"
+            "- If all snakes die on the same turn for any reason, the game ends immediately and the snake with more apples at that moment wins; if apples are tied, the game is a draw.\n"
+            f"- The game ends immediately when any snake reaches {APPLE_TARGET} apples. If multiple snakes reach {APPLE_TARGET} or more on the same turn, the snake with the higher apple count wins that round; if tied, it is a draw.\n"
+            f"{max_turns_rule}"
+            "- If at any point all opponents are dead and you are alive, you immediately win.\n"
+            "- If multiple snakes are still alive at the final turn, the snake with the most apples wins. If apples are tied at the end of the game, the game is a draw.\n\n"
+            "Objective and strategy:\n"
+            "- You cannot win if you are dead, so never choose a move that obviously kills you.\n"
+            "- Among the moves that keep you alive, prefer moves that both:\n"
+            "  * increase your chance of safely eating apples, and\n"
+            "  * keep future options open (avoid getting trapped in tight spaces or dead-ends).\n\n"
+            "Decision process for each move:\n"
+            "1) Consider all four directions: UP, DOWN, LEFT, RIGHT.\n"
+            "2) Eliminate any move that would immediately kill you (off the board, into your own body including backwards, or into another snake's body).\n"
+            "3) Among remaining safe moves, favor moves that keep multiple safe follow-up moves available and move you closer to reachable apples while avoiding likely head-on collisions (remember enemy heads will also move this turn).\n\n"
+            "You may think out loud and explain your reasoning.\n"
+            "You may also write a short long-term plan or strategy note to your future self for the next few turns. This plan will be shown back to you as your last rationale on the next turn. Any such plan must appear before your final move line.\n"
+            "Coordinate reminder: decreasing your x coordinate is to the left, increasing your x coordinate is to the right. Decreasing your y coordinate is down, increasing your y coordinate is up.\n"
+            "The final non-empty line of your response must be exactly one word: UP, DOWN, LEFT, or RIGHT. Do not add anything after that word, and do not mention future directions after it.\n\n"
         )
-        # print(f"----------Prompt:\n\n {prompt}\n\n------------")
+        print(f"----------Prompt:\n\n {prompt}\n\n------------")
         return prompt
 
 class SnakeGame:
@@ -330,8 +385,8 @@ class SnakeGame:
         self,
         width: int,
         height: int,
-        max_rounds: int = 20,
-        num_apples: int = 3,
+        max_rounds: int = 150,
+        num_apples: int = 5,
         game_id: str = None,
         game_type: str = 'ladder'
     ):
@@ -448,7 +503,8 @@ class SnakeGame:
             width=self.width,
             height=self.height,
             apples=self.apples.copy(),
-            move_history=list(self.move_history)
+            move_history=list(self.move_history),
+            max_rounds=self.max_rounds
         )
 
     def gather_moves_in_parallel(self, game):
@@ -641,12 +697,14 @@ class SnakeGame:
             self.apples.append(self._random_free_cell())
 
         # --------------------------------------------------
-        # 6) End-of-round bookkeeping (round limit / last snake)
+        # 6) End-of-round bookkeeping (apple cap / round limit / last snake)
         # --------------------------------------------------
         self.round_number += 1
         alive_snakes = [sid for sid, s in self.snakes.items() if s.alive]
 
-        if self.round_number >= self.max_rounds:
+        if any(score >= APPLE_TARGET for score in self.scores.values()):
+            self.end_game(f"Reached {APPLE_TARGET} apples.")
+        elif self.round_number >= self.max_rounds:
             self.end_game("Reached max rounds.")
         elif len(alive_snakes) <= 1:
             self.end_game("All but one snake are dead.")
@@ -693,7 +751,8 @@ class SnakeGame:
                 "width": state.width,
                 "height": state.height,
                 "apples": state.apples,       # list of (x, y)
-                "move_history": state.move_history
+                "move_history": state.move_history,
+                "max_rounds": state.max_rounds
             }
             # Note: If any data is in tuples, it's okay because JSON
             # can store them as lists. But Python's json library will 
@@ -948,7 +1007,7 @@ def main():
                         help="Width of the board from 0 to N")
     parser.add_argument("--height", type=int, required=False, default=10,
                         help="Height of the board from 0 to N")
-    parser.add_argument("--max_rounds", type=int, required=False, default=100,
+    parser.add_argument("--max_rounds", type=int, required=False, default=150,
                         help="Maximum number of rounds")
     parser.add_argument("--num_apples", type=int, required=False, default=5,
                         help="Number of apples on the board")

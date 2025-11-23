@@ -258,7 +258,7 @@ def get_stats():
                 JOIN models m ON gp.model_id = m.id
                 GROUP BY m.name
             """)
-            stats_by_model = {row['name']: {'top_score': row['top_score'], 'total_cost': row['total_cost'] or 0.0} for row in cursor.fetchall()}
+            stats_by_model = {row['name']: {'top_score': row['top_score'] or 0, 'total_cost': row['total_cost'] or 0.0} for row in cursor.fetchall()}
             conn.close()
 
             # Transform to match stats_simple.json format
@@ -272,7 +272,7 @@ def get_stats():
                     'wins': model_data['wins'],
                     'losses': model_data['losses'],
                     'ties': model_data['ties'],
-                    'apples_eaten': model_data['apples_eaten'],
+                    'apples_eaten': model_data.get('apples_eaten', 0),
                     'games_played': model_data['games_played'],
                     'top_score': model_stats['top_score'],
                     'total_cost': model_stats['total_cost'],

@@ -7,6 +7,7 @@ type LeaderboardItem = {
   elo: number;
   top_score: number;
   total_cost: number;
+  apples_eaten: number;
 };
 
 type StatsData = {
@@ -56,6 +57,7 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         ties: stats.ties,
         top_score: stats.top_score,
         total_cost: stats.total_cost,
+        apples_eaten: stats.apples_eaten || 0,
         winRate: stats.wins + stats.losses > 0
           ? Number(((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1))
           : 0,
@@ -137,6 +139,12 @@ export default async function LeaderboardSection() {
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
+                        Apples
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                      >
                         Top Score
                       </th>
                       <th
@@ -174,6 +182,9 @@ export default async function LeaderboardSection() {
                           <div className="font-mono text-sm text-gray-900">
                             {item.wins}/{item.losses}
                           </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-mono text-sm text-gray-900">{item.apples_eaten}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">{item.top_score}</div>
