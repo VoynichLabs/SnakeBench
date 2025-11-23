@@ -88,7 +88,12 @@ def get_all_models(active_only: bool = False) -> List[Dict[str, Any]]:
                 'pricing_output': row['pricing_output'],
                 'max_completion_tokens': row['max_completion_tokens'],
                 'last_played_at': row['last_played_at'],
-                'discovered_at': row['discovered_at']
+                'discovered_at': row['discovered_at'],
+                # Compat: nested pricing dict used by game cost calculation
+                'pricing': {
+                    'input': float(row['pricing_input']) if row['pricing_input'] is not None else 0,
+                    'output': float(row['pricing_output']) if row['pricing_output'] is not None else 0,
+                }
             })
 
         return models
@@ -158,7 +163,12 @@ def get_model_by_name(model_name: str) -> Optional[Dict[str, Any]]:
             'pricing_output': row['pricing_output'],
             'max_completion_tokens': row['max_completion_tokens'],
             'last_played_at': row['last_played_at'],
-            'discovered_at': row['discovered_at']
+            'discovered_at': row['discovered_at'],
+            # Compat: provide nested pricing dict for game cost calculation
+            'pricing': {
+                'input': float(row['pricing_input']) if row['pricing_input'] is not None else 0,
+                'output': float(row['pricing_output']) if row['pricing_output'] is not None else 0,
+            }
         }
 
     finally:

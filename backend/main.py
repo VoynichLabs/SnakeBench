@@ -251,9 +251,15 @@ class LLMPlayer(Player):
             response_text += f"\n\nThis is a random move: {direction}"
 
         # Calculate cost based on pricing from config
-        pricing = self.config.get('pricing', {})
-        input_price_per_m = pricing.get('input', 0)
-        output_price_per_m = pricing.get('output', 0)
+        pricing = self.config.get('pricing') or {}
+        # Fallback for DB fields when nested pricing isn't present
+        if not pricing and ('pricing_input' in self.config or 'pricing_output' in self.config):
+            pricing = {
+                'input': self.config.get('pricing_input', 0) or 0,
+                'output': self.config.get('pricing_output', 0) or 0
+            }
+        input_price_per_m = pricing.get('input', 0) or 0
+        output_price_per_m = pricing.get('output', 0) or 0
 
         # Calculate cost (price is per million tokens)
         cost = (input_tokens * input_price_per_m / 1_000_000) + (output_tokens * output_price_per_m / 1_000_000)
@@ -367,7 +373,6 @@ class LLMPlayer(Player):
             "Coordinate reminder: decreasing your x coordinate is to the left, increasing your x coordinate is to the right. Decreasing your y coordinate is down, increasing your y coordinate is up.\n"
             "The final non-empty line of your response must be exactly one word: UP, DOWN, LEFT, or RIGHT. Do not add anything after that word, and do not mention future directions after it.\n\n"
         )
-        print(f"----------Prompt:\n\n {prompt}\n\n------------")
         return prompt
 
 class SnakeGame:
