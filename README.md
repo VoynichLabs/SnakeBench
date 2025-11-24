@@ -103,6 +103,10 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
   
 - **Frontend (Next.js):** Provides a visual dashboard for game results. It pulls data via APIs to render leaderboards and ASCII-based match replays clearly showing the state of the board.
 
+## Phaser Replay Renderer
+
+A standalone Phaser 3 capture service lives in `phaser-renderer/` (Puppeteer + FFmpeg) for higher fidelity MP4 replays. See `phaser-renderer/README.md` for how to run it against `backend/completed_games/*.json`.
+
 ---
 
 Made with ❤️ by [Greg Kamradt](https://www.x.com/gregkamradt)

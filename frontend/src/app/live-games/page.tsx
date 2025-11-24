@@ -12,6 +12,7 @@ interface LiveGame {
   board_height: number;
   num_apples: number;
   models: Record<string, string>;
+  model_ranks: Record<string, number>;
   current_state: {
     round_number: number;
     snake_positions: Record<string, number[][]>;
@@ -168,6 +169,7 @@ export default function LiveGamesPage() {
                         const currentRound = game.current_state?.round_number || 0;
                         const scores = game.current_state?.scores || {};
                         const models = game.models || {};
+                        const modelRanks = game.model_ranks || {};
                         const playDuration = formatDuration(game.start_time);
 
                         return (
@@ -179,11 +181,20 @@ export default function LiveGamesPage() {
                               </span>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-900">
-                              {Object.entries(models).map(([id, modelName]) => (
-                                <div key={id}>
-                                  {modelName.slice(0, 25)}
-                                </div>
-                              ))}
+                              {Object.entries(models).map(([id, modelName]) => {
+                                const rank = modelRanks[id];
+                                return (
+                                  <div key={id}>
+                                    <Link
+                                      href={`/models/${encodeURIComponent(modelName)}`}
+                                      className="text-indigo-600 hover:text-indigo-900 hover:underline"
+                                    >
+                                      {modelName.slice(0, 25)}
+                                      {rank && ` (#${rank})`}
+                                    </Link>
+                                  </div>
+                                );
+                              })}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {playDuration}

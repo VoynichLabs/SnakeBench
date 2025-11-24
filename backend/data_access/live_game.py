@@ -245,17 +245,28 @@ def get_live_games() -> List[Dict[str, Any]]:
         rows = cursor.fetchall()
         games = []
         for row in rows:
-            # Get model names for this game
+            # Get model names and ranks for this game
             cursor.execute("""
-                SELECT gp.player_slot, m.name
+                WITH ranked_models AS (
+                    SELECT
+                        id,
+                        name,
+                        elo_rating,
+                        ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
+                    FROM models
+                    WHERE test_status = 'ranked' AND is_active = TRUE
+                )
+                SELECT gp.player_slot, m.name, rm.rank
                 FROM game_participants gp
                 JOIN models m ON gp.model_id = m.id
+                LEFT JOIN ranked_models rm ON m.id = rm.id
                 WHERE gp.game_id = %s
                 ORDER BY gp.player_slot
             """, (row['id'],))
 
             model_rows = cursor.fetchall()
             models = {str(model_row['player_slot']): model_row['name'] for model_row in model_rows}
+            model_ranks = {str(model_row['player_slot']): model_row['rank'] for model_row in model_rows}
 
             game = {
                 'id': row['id'],
@@ -266,7 +277,8 @@ def get_live_games() -> List[Dict[str, Any]]:
                 'board_height': row['board_height'],
                 'num_apples': row['num_apples'],
                 'current_state': json.loads(row['current_state']) if row['current_state'] else None,
-                'models': models
+                'models': models,
+                'model_ranks': model_ranks
             }
             games.append(game)
 
@@ -313,17 +325,28 @@ def get_game_state(game_id: str) -> Optional[Dict[str, Any]]:
         if row is None:
             return None
 
-        # Get model names for this game
+        # Get model names and ranks for this game
         cursor.execute("""
-            SELECT gp.player_slot, m.name
+            WITH ranked_models AS (
+                SELECT
+                    id,
+                    name,
+                    elo_rating,
+                    ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
+                FROM models
+                WHERE test_status = 'ranked' AND is_active = TRUE
+            )
+            SELECT gp.player_slot, m.name, rm.rank
             FROM game_participants gp
             JOIN models m ON gp.model_id = m.id
+            LEFT JOIN ranked_models rm ON m.id = rm.id
             WHERE gp.game_id = %s
             ORDER BY gp.player_slot
         """, (game_id,))
 
         model_rows = cursor.fetchall()
         models = {str(model_row['player_slot']): model_row['name'] for model_row in model_rows}
+        model_ranks = {str(model_row['player_slot']): model_row['rank'] for model_row in model_rows}
 
         return {
             'id': row['id'],
@@ -336,7 +359,8 @@ def get_game_state(game_id: str) -> Optional[Dict[str, Any]]:
             'current_state': json.loads(row['current_state']) if row['current_state'] else None,
             'total_score': row['total_score'],
             'total_cost': row['total_cost'],
-            'models': models
+            'models': models,
+            'model_ranks': model_ranks
         }
 
     except Exception as e:
