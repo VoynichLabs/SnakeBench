@@ -116,6 +116,7 @@ def insert_game_participants(
             model_id = row['id']
 
             # Insert or update participant record (handles live games that already have placeholder records)
+            # Note: opponent_rank_at_match is NOT updated on conflict, preserving the initial value set during game creation
             cursor.execute("""
                 INSERT INTO game_participants (
                     game_id, model_id, player_slot, score, result,

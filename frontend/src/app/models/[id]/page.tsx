@@ -7,6 +7,7 @@ interface Game {
   opponent_model: string;
   start_time: string;
   opponent_elo: number;
+  opponent_rank?: number;
   end_time: string;
   result: string;
   cost?: number;
@@ -217,6 +218,7 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                             <Link href={`/models/${game.opponent_model}`} className="text-indigo-600 hover:text-indigo-900">
                               {game.opponent_model}
+                              {game.opponent_rank && ` (#${game.opponent_rank})`}
                             </Link>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

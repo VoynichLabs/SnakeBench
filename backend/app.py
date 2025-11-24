@@ -311,6 +311,15 @@ def get_stats():
 
         # Get games for this model
         cursor.execute("""
+            WITH ranked_models AS (
+                SELECT
+                    id,
+                    name,
+                    elo_rating,
+                    ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
+                FROM models
+                WHERE test_status = 'ranked' AND is_active = TRUE
+            )
             SELECT
                 g.id as game_id,
                 g.start_time,
@@ -323,12 +332,14 @@ def get_stats():
                 gp.cost,
                 gp2.score as opponent_score,
                 m2.name as opponent_model,
-                m2.elo_rating as opponent_elo
+                m2.elo_rating as opponent_elo,
+                rm.rank as opponent_rank
             FROM game_participants gp
             JOIN games g ON gp.game_id = g.id
             JOIN models m ON gp.model_id = m.id
             JOIN game_participants gp2 ON gp2.game_id = g.id AND gp2.player_slot != gp.player_slot
             JOIN models m2 ON gp2.model_id = m2.id
+            LEFT JOIN ranked_models rm ON m2.id = rm.id
             WHERE m.name = %s
             ORDER BY g.start_time DESC
             LIMIT 100
@@ -346,7 +357,8 @@ def get_stats():
                 'cost': row['cost'],
                 'opponent_score': row['opponent_score'],
                 'opponent_model': row['opponent_model'],
-                'opponent_elo': row['opponent_elo']
+                'opponent_elo': row['opponent_elo'],
+                'opponent_rank': row['opponent_rank']
             }
 
             # Add death info if the model lost

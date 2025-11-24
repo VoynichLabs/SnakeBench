@@ -76,7 +76,7 @@ def has_pending_eval_game(conn, model_id: int) -> bool:
 
 def fetch_eval_history(conn, model_id: int) -> List[Dict]:
     """
-    Get completed evaluation games for the model with opponent + result.
+    Get completed evaluation games for the model with opponent + result + opponent's rank at match time.
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -91,7 +91,14 @@ def fetch_eval_history(conn, model_id: int) -> List[Dict]:
                 WHERE opp.game_id = g.id
                   AND opp.model_id != gp.model_id
                 LIMIT 1
-            ) AS opponent_id
+            ) AS opponent_id,
+            (
+                SELECT opp.opponent_rank_at_match
+                FROM game_participants opp
+                WHERE opp.game_id = g.id
+                  AND opp.model_id != gp.model_id
+                LIMIT 1
+            ) AS opponent_rank_at_match
         FROM games g
         JOIN game_participants gp ON gp.game_id = g.id
         WHERE gp.model_id = %s
@@ -109,18 +116,27 @@ def rebuild_state_from_history(
 ) -> Tuple[object, int]:
     """
     Recreate placement state based on completed evaluation games.
+    Uses the stored opponent_rank_at_match from the database to ensure accurate
+    binary search interval reconstruction, even if opponent ranks have changed since the match.
     """
     state = init_placement_state(model_id, max_games=max_games)
 
     for record in history:
         opponent_id = record.get("opponent_id")
         result = record.get("model_result")
+        opponent_rank_at_match = record.get("opponent_rank_at_match")
+
         if not opponent_id or not result:
             continue
 
-        opponent_rank_index = get_opponent_rank_index(opponent_id, ranked_models=ranked_models)
-        if opponent_rank_index is None:
-            continue
+        # Use the stored rank from match time if available (new behavior)
+        # Fall back to current rank lookup for historical games without stored rank (old behavior)
+        if opponent_rank_at_match is not None:
+            opponent_rank_index = opponent_rank_at_match
+        else:
+            opponent_rank_index = get_opponent_rank_index(opponent_id, ranked_models=ranked_models)
+            if opponent_rank_index is None:
+                continue
 
         update_placement_interval(state, opponent_rank_index, result)
         state.opponents_played.add(opponent_id)
@@ -146,10 +162,19 @@ def dispatch_eval_game(
     model_name: str,
     opponent_name: str,
     game_params: Dict[str, int],
+    model_rank_at_match: Optional[int] = None,
+    opponent_rank_at_match: Optional[int] = None,
 ) -> str:
     """
     Enqueue a single evaluation game between two named models.
     Returns Celery task ID.
+
+    Args:
+        model_name: Name of the model being evaluated
+        opponent_name: Name of the opponent model
+        game_params: Game parameters (width, height, max_rounds, num_apples)
+        model_rank_at_match: Rank index of model_name at match time (None if unranked)
+        opponent_rank_at_match: Rank index of opponent_name at match time
     """
     config_a = get_model_by_name(model_name)
     config_b = get_model_by_name(opponent_name)
@@ -157,8 +182,18 @@ def dispatch_eval_game(
     if config_a is None or config_b is None:
         raise ValueError(f"Could not load configs for {model_name} vs {opponent_name}")
 
+    # Add rank information to game_params for storage during game creation
+    enhanced_params = {
+        **game_params,
+        "game_type": "evaluation",
+        "player_ranks": {
+            "0": model_rank_at_match,  # Player 0 is model_a
+            "1": opponent_rank_at_match  # Player 1 is model_b
+        }
+    }
+
     result = run_game_task.apply_async(
-        args=[config_a, config_b, {**game_params, "game_type": "evaluation"}],
+        args=[config_a, config_b, enhanced_params],
     )
     return result.id
 
@@ -257,8 +292,18 @@ def run_evaluation_batch(
                 f"  • Next opponent: {opponent_name} (rank #{opponent_rank_index}, ELO {opponent_elo:.1f}) | task queued as evaluation"
             )
 
+            # Get the testing model's current "rank" (it doesn't have one yet, so we'll use None)
+            # and the opponent's rank so we can store them for binary search placement
+            model_rank_index = get_opponent_rank_index(model_id, ranked_models=ranked_models)  # Will be None for untested/testing models
+
             try:
-                task_id = dispatch_eval_game(model_name, opponent_name, game_params)
+                task_id = dispatch_eval_game(
+                    model_name,
+                    opponent_name,
+                    game_params,
+                    model_rank_at_match=model_rank_index,
+                    opponent_rank_at_match=opponent_rank_index
+                )
                 printer(f"  • Enqueued Celery task: {task_id}")
                 stats["enqueued"].append(
                     {

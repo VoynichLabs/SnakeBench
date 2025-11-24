@@ -957,23 +957,20 @@ def run_simulation(model_config_1: Dict, model_config_2: Dict, game_params: argp
         try:
             from data_access.live_game import insert_initial_participants
 
-            participants = [
-                {'model_name': pc['name'], 'player_slot': idx}
-                for idx, pc in enumerate(player_configs)
-            ]
-            insert_initial_participants(game.game_id, participants)
-        except Exception as e:
-            print(f"Warning: Could not insert initial participants: {e}")
+            # Get player ranks from game_params if available (for evaluation games)
+            player_ranks = getattr(game_params, 'player_ranks', None)
 
-    # Insert initial participants for live game tracking
-    if DB_AVAILABLE:
-        try:
             participants = []
-            for i, player_config in enumerate(player_configs):
-                participants.append({
-                    'model_name': player_config['name'],
-                    'player_slot': i
-                })
+            for idx, pc in enumerate(player_configs):
+                participant_data = {
+                    'model_name': pc['name'],
+                    'player_slot': idx
+                }
+                # Add opponent rank if this is an evaluation game
+                if player_ranks and str(idx) in player_ranks:
+                    participant_data['opponent_rank_at_match'] = player_ranks[str(idx)]
+                participants.append(participant_data)
+
             insert_initial_participants(game.game_id, participants)
         except Exception as e:
             print(f"Warning: Could not insert initial participants: {e}")

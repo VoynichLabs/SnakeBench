@@ -76,6 +76,7 @@ def insert_initial_participants(
         participants: List of participant dictionaries with keys:
             - model_name: Name of the model (must exist in models table)
             - player_slot: Player slot number (0, 1, etc.)
+            - opponent_rank_at_match: Rank index of this model at match time (optional, for evaluation games)
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -98,14 +99,15 @@ def insert_initial_participants(
             # Insert participant record with placeholder values
             cursor.execute("""
                 INSERT INTO game_participants (
-                    game_id, model_id, player_slot, score, result
-                ) VALUES (%s, %s, %s, %s, %s)
+                    game_id, model_id, player_slot, score, result, opponent_rank_at_match
+                ) VALUES (%s, %s, %s, %s, %s, %s)
             """, (
                 game_id,
                 model_id,
                 participant['player_slot'],
                 0,  # Placeholder score, will be updated at end
-                'tied'  # Temporary placeholder result, will be updated at end
+                'tied',  # Temporary placeholder result, will be updated at end
+                participant.get('opponent_rank_at_match')  # Store rank if provided (for evaluation games)
             ))
 
         conn.commit()
