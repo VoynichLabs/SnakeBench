@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-Evaluate untested/testing models using binary-search placement in a fixed game budget.
+Evaluate untested/testing models using confidence-weighted placement.
+
+This system:
+  - Uses probabilistic skill estimates instead of hard binary bounds
+  - Weights game results by confidence (score differential, death type, game length)
+  - Selects opponents to maximize information gain
+  - Allows rematches for fluky losses
+  - Is more forgiving of variance in snake games
 
 This script:
   - Selects up to N models in states ('untested', 'testing') and is_active = TRUE.
   - Reconstructs placement state from completed evaluation games (game_type = 'evaluation').
   - Dispatches exactly one new evaluation game per model when needed (Celery task).
-  - Finalizes models (test_status -> 'ranked') when their budget is exhausted or no opponents remain.
+  - Finalizes models (test_status -> 'ranked') when their budget is exhausted.
 
 Idempotent: if interrupted, rerun and it will pick up from history.
 """
@@ -24,10 +31,13 @@ from tasks import run_game_task
 from placement_system import (
     init_placement_state,
     select_next_opponent,
-    update_placement_interval,
+    update_placement_state,
+    rebuild_state_from_history,
     get_ranked_models_by_index,
+    get_opponent_rank_index,
+    format_state_summary,
+    PlacementState,
 )
-from placement_system import get_opponent_rank_index
 from data_access.api_queries import get_model_by_name
 
 
@@ -76,7 +86,13 @@ def has_pending_eval_game(conn, model_id: int) -> bool:
 
 def fetch_eval_history(conn, model_id: int) -> List[Dict]:
     """
-    Get completed evaluation games for the model with opponent + result + opponent's rank at match time.
+    Get completed evaluation games with detailed info for confidence scoring.
+
+    Returns all the data needed to calculate result confidence:
+    - Scores for both players
+    - Death reason and round
+    - Total rounds played
+    - Opponent ELO at match time
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -84,7 +100,11 @@ def fetch_eval_history(conn, model_id: int) -> List[Dict]:
         SELECT
             g.id AS game_id,
             g.start_time,
+            g.rounds AS total_rounds,
             gp.result AS model_result,
+            gp.score AS my_score,
+            gp.death_reason AS my_death_reason,
+            gp.death_round AS my_death_round,
             (
                 SELECT opp.model_id
                 FROM game_participants opp
@@ -93,12 +113,27 @@ def fetch_eval_history(conn, model_id: int) -> List[Dict]:
                 LIMIT 1
             ) AS opponent_id,
             (
+                SELECT opp.score
+                FROM game_participants opp
+                WHERE opp.game_id = g.id
+                  AND opp.model_id != gp.model_id
+                LIMIT 1
+            ) AS opponent_score,
+            (
                 SELECT opp.opponent_rank_at_match
                 FROM game_participants opp
                 WHERE opp.game_id = g.id
                   AND opp.model_id != gp.model_id
                 LIMIT 1
-            ) AS opponent_rank_at_match
+            ) AS opponent_rank_at_match,
+            (
+                SELECT m.elo_rating
+                FROM game_participants opp
+                JOIN models m ON m.id = opp.model_id
+                WHERE opp.game_id = g.id
+                  AND opp.model_id != gp.model_id
+                LIMIT 1
+            ) AS opponent_elo
         FROM games g
         JOIN game_participants gp ON gp.game_id = g.id
         WHERE gp.model_id = %s
@@ -111,39 +146,6 @@ def fetch_eval_history(conn, model_id: int) -> List[Dict]:
     return cursor.fetchall()
 
 
-def rebuild_state_from_history(
-    model_id: int, max_games: int, history: List[Dict], ranked_models: List[Tuple[int, str, float, int]]
-) -> Tuple[object, int]:
-    """
-    Recreate placement state based on completed evaluation games.
-    Uses the stored opponent_rank_at_match from the database to ensure accurate
-    binary search interval reconstruction, even if opponent ranks have changed since the match.
-    """
-    state = init_placement_state(model_id, max_games=max_games)
-
-    for record in history:
-        opponent_id = record.get("opponent_id")
-        result = record.get("model_result")
-        opponent_rank_at_match = record.get("opponent_rank_at_match")
-
-        if not opponent_id or not result:
-            continue
-
-        # Use the stored rank from match time if available (new behavior)
-        # Fall back to current rank lookup for historical games without stored rank (old behavior)
-        if opponent_rank_at_match is not None:
-            opponent_rank_index = opponent_rank_at_match
-        else:
-            opponent_rank_index = get_opponent_rank_index(opponent_id, ranked_models=ranked_models)
-            if opponent_rank_index is None:
-                continue
-
-        update_placement_interval(state, opponent_rank_index, result)
-        state.opponents_played.add(opponent_id)
-
-    return state, len(history)
-
-
 def mark_status(conn, model_id: int, status: str) -> None:
     cursor = conn.cursor()
     cursor.execute(
@@ -153,9 +155,12 @@ def mark_status(conn, model_id: int, status: str) -> None:
     conn.commit()
 
 
-def finalize_model(conn, model_id: int, model_name: str) -> None:
+def finalize_model(conn, model_id: int, model_name: str, state: PlacementState) -> None:
+    """Finalize model and print summary."""
     mark_status(conn, model_id, "ranked")
-    print(f"✓ Finalized and ranked model: {model_name}")
+    print(f"Finalized: {model_name}")
+    print(f"  Final skill estimate: {state.skill.mu:.0f}+/-{state.skill.sigma:.0f}")
+    print(f"  Win-loss-tie from {state.games_played} games")
 
 
 def dispatch_eval_game(
@@ -164,17 +169,11 @@ def dispatch_eval_game(
     game_params: Dict[str, int],
     model_rank_at_match: Optional[int] = None,
     opponent_rank_at_match: Optional[int] = None,
+    opponent_elo_at_match: Optional[float] = None,
 ) -> str:
     """
     Enqueue a single evaluation game between two named models.
     Returns Celery task ID.
-
-    Args:
-        model_name: Name of the model being evaluated
-        opponent_name: Name of the opponent model
-        game_params: Game parameters (width, height, max_rounds, num_apples)
-        model_rank_at_match: Rank index of model_name at match time (None if unranked)
-        opponent_rank_at_match: Rank index of opponent_name at match time
     """
     config_a = get_model_by_name(model_name)
     config_b = get_model_by_name(opponent_name)
@@ -182,13 +181,17 @@ def dispatch_eval_game(
     if config_a is None or config_b is None:
         raise ValueError(f"Could not load configs for {model_name} vs {opponent_name}")
 
-    # Add rank information to game_params for storage during game creation
+    # Add rank and ELO information to game_params for storage during game creation
     enhanced_params = {
         **game_params,
         "game_type": "evaluation",
         "player_ranks": {
             "0": model_rank_at_match,  # Player 0 is model_a
             "1": opponent_rank_at_match  # Player 1 is model_b
+        },
+        "player_elos": {
+            "0": None,  # New model doesn't have ELO yet
+            "1": opponent_elo_at_match
         }
     }
 
@@ -196,15 +199,6 @@ def dispatch_eval_game(
         args=[config_a, config_b, enhanced_params],
     )
     return result.id
-
-
-def count_ranked(conn) -> int:
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT COUNT(*) AS c FROM models WHERE test_status = 'ranked' AND is_active = TRUE"
-    )
-    row = cursor.fetchone()
-    return row["c"] if row else 0
 
 
 def run_evaluation_batch(
@@ -217,12 +211,15 @@ def run_evaluation_batch(
     printer=print,
 ):
     """
-    Run one evaluation sweep and return stats about what was enqueued/finalized.
+    Run one evaluation sweep using confidence-weighted placement.
+
+    Returns stats about what was enqueued/finalized.
     """
     stats = {
         "enqueued": [],  # list of {model_name, opponent_name, task_id}
         "finalized": [],  # list of model names
         "pending_skipped": [],  # models skipped due to in-flight eval
+        "rematches": [],  # models with rematch scheduled
         "errors": [],  # string messages
         "no_ranked": False,
         "no_candidates": False,
@@ -234,8 +231,11 @@ def run_evaluation_batch(
         ranked_count = len(ranked_models)
         if ranked_count == 0:
             stats["no_ranked"] = True
-            printer("✗ No ranked models available to compare against. Aborting.")
+            printer("No ranked models available to compare against. Aborting.")
             return stats
+
+        # Create ELO lookup for quick access
+        elo_lookup = {m[0]: m[2] for m in ranked_models}
 
         candidates = fetch_candidates(conn, max_models)
         if not candidates:
@@ -257,44 +257,56 @@ def run_evaluation_batch(
 
             printer(f"\n=== Evaluating {model_name} (status: {status}) ===")
 
+            # Check for pending games
             pending = has_pending_eval_game(conn, model_id)
             if pending:
-                printer("  • Pending evaluation game in progress; skipping enqueue.")
+                printer("  Pending evaluation game in progress; skipping enqueue.")
                 stats["pending_skipped"].append(model_name)
                 continue
 
+            # Fetch detailed history for confidence scoring
             history = fetch_eval_history(conn, model_id)
+
+            # Rebuild state using confidence-weighted system
             state, completed = rebuild_state_from_history(
-                model_id, max_games=max_games, history=history, ranked_models=ranked_models
+                model_id,
+                max_games=max_games,
+                history=history,
+                ranked_models=ranked_models
             )
 
-            printer(
-                f"  • Completed eval games: {completed}/{max_games} | interval=[{state.low},{state.high}]"
-            )
+            # Print state summary
+            printer(f"  {format_state_summary(state)}")
+
+            # Check if evaluation is complete
             if completed >= max_games:
-                finalize_model(conn, model_id, model_name)
+                finalize_model(conn, model_id, model_name, state)
                 stats["finalized"].append(model_name)
                 continue
 
+            # Select next opponent using information gain
             opponent = select_next_opponent(state, ranked_models=ranked_models)
             if not opponent:
-                printer("  • No suitable opponent found; finalizing.")
-                finalize_model(conn, model_id, model_name)
+                printer("  No suitable opponent found; finalizing.")
+                finalize_model(conn, model_id, model_name, state)
                 stats["finalized"].append(model_name)
                 continue
 
-            opponent_id, opponent_name, opponent_elo = opponent
-            opponent_rank_index = get_opponent_rank_index(opponent_id, ranked_models=ranked_models)
-            if opponent_rank_index is None:
-                printer("  • Opponent has no rank; skipping enqueue.")
-                continue
+            opponent_id, opponent_name, opponent_elo, opponent_rank = opponent
+
+            # Check if this is a rematch
+            is_rematch = state.pending_rematch == opponent_id
+            if is_rematch:
+                printer(f"  REMATCH scheduled with {opponent_name}")
+                stats["rematches"].append(model_name)
+
             printer(
-                f"  • Next opponent: {opponent_name} (rank #{opponent_rank_index}, ELO {opponent_elo:.1f}) | task queued as evaluation"
+                f"  Next opponent: {opponent_name} (rank #{opponent_rank}, ELO {opponent_elo:.1f})"
+                f"{' [REMATCH]' if is_rematch else ''}"
             )
 
-            # Get the testing model's current "rank" (it doesn't have one yet, so we'll use None)
-            # and the opponent's rank so we can store them for binary search placement
-            model_rank_index = get_opponent_rank_index(model_id, ranked_models=ranked_models)  # Will be None for untested/testing models
+            # Get model's current rank (None for untested/testing models)
+            model_rank_index = get_opponent_rank_index(model_id, ranked_models=ranked_models)
 
             try:
                 task_id = dispatch_eval_game(
@@ -302,19 +314,21 @@ def run_evaluation_batch(
                     opponent_name,
                     game_params,
                     model_rank_at_match=model_rank_index,
-                    opponent_rank_at_match=opponent_rank_index
+                    opponent_rank_at_match=opponent_rank,
+                    opponent_elo_at_match=opponent_elo,
                 )
-                printer(f"  • Enqueued Celery task: {task_id}")
+                printer(f"  Enqueued Celery task: {task_id}")
                 stats["enqueued"].append(
                     {
                         "model_name": model_name,
                         "opponent_name": opponent_name,
                         "task_id": task_id,
+                        "is_rematch": is_rematch,
                     }
                 )
             except Exception as e:
                 msg = f"{model_name} vs {opponent_name}: {e}"
-                printer(f"  ✗ Failed to enqueue game: {msg}")
+                printer(f"  Failed to enqueue game: {msg}")
                 stats["errors"].append(msg)
                 continue
 
@@ -328,7 +342,7 @@ def run_evaluation_batch(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Evaluate untested/testing models using binary-search placement."
+        description="Evaluate models using confidence-weighted placement."
     )
     parser.add_argument(
         "--max-models",
@@ -339,8 +353,8 @@ def main():
     parser.add_argument(
         "--max-games",
         type=int,
-        default=10,
-        help="Max evaluation games per model (default: 10).",
+        default=9,
+        help="Max evaluation games per model (default: 9).",
     )
     parser.add_argument("--width", type=int, default=10, help="Board width.")
     parser.add_argument("--height", type=int, default=10, help="Board height.")
@@ -352,6 +366,10 @@ def main():
     )
 
     args = parser.parse_args()
+
+    print("=" * 60)
+    print("Confidence-Weighted Placement System")
+    print("=" * 60)
 
     stats = run_evaluation_batch(
         max_models=args.max_models,
@@ -367,11 +385,12 @@ def main():
         f"\nRun summary: enqueued={len(stats['enqueued'])} "
         f"finalized={len(stats['finalized'])} "
         f"pending_skipped={len(stats['pending_skipped'])} "
+        f"rematches={len(stats['rematches'])} "
         f"errors={len(stats['errors'])}"
     )
     if stats["errors"]:
         for err in stats["errors"]:
-            print(f"  ✗ {err}")
+            print(f"  {err}")
 
 
 if __name__ == "__main__":
