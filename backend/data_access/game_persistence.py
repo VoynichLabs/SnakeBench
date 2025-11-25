@@ -1,17 +1,16 @@
 """
 Game persistence functions for inserting game data into the database.
+
+These functions delegate to the GameRepository for actual database operations.
 """
 
-import psycopg2
 from datetime import datetime
 from typing import Dict, Any, List
-import sys
-import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from .repositories import GameRepository
 
-from database_postgres import get_connection
+# Repository instance
+_game_repo = GameRepository()
 
 
 def insert_game(
@@ -41,42 +40,21 @@ def insert_game(
         num_apples: Number of apples in the game
         total_score: Combined score of all players
         total_cost: Total cost of LLM API calls for this game
+        game_type: Type of game ('ladder', 'evaluation', etc.)
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("""
-            INSERT INTO games (
-                id, start_time, end_time, rounds, replay_path,
-                board_width, board_height, num_apples, total_score, total_cost, game_type
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            game_id,
-            start_time.isoformat() if isinstance(start_time, datetime) else start_time,
-            end_time.isoformat() if isinstance(end_time, datetime) else end_time,
-            rounds,
-            replay_path,
-            board_width,
-            board_height,
-            num_apples,
-            total_score,
-            total_cost,
-            game_type
-        ))
-
-        conn.commit()
-        print(f"Inserted game {game_id} into database (cost: ${total_cost:.6f})")
-
-    except psycopg2.IntegrityError as e:
-        print(f"Game {game_id} already exists in database: {e}")
-        conn.rollback()
-    except Exception as e:
-        print(f"Error inserting game {game_id}: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    _game_repo.insert_game(
+        game_id=game_id,
+        start_time=start_time,
+        end_time=end_time,
+        rounds=rounds,
+        replay_path=replay_path,
+        board_width=board_width,
+        board_height=board_height,
+        num_apples=num_apples,
+        total_score=total_score,
+        total_cost=total_cost,
+        game_type=game_type
+    )
 
 
 def insert_game_participants(
@@ -97,55 +75,4 @@ def insert_game_participants(
             - death_reason: Reason for death (optional)
             - cost: Total cost for this player (optional)
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        for participant in participants:
-            # Get model_id from model name
-            cursor.execute(
-                "SELECT id FROM models WHERE name = %s",
-                (participant['model_name'],)
-            )
-            row = cursor.fetchone()
-
-            if row is None:
-                print(f"Warning: Model '{participant['model_name']}' not found in database. Skipping participant.")
-                continue
-
-            model_id = row['id']
-
-            # Insert or update participant record (handles live games that already have placeholder records)
-            # Note: opponent_rank_at_match is NOT updated on conflict, preserving the initial value set during game creation
-            cursor.execute("""
-                INSERT INTO game_participants (
-                    game_id, model_id, player_slot, score, result,
-                    death_round, death_reason, cost
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (game_id, player_slot)
-                DO UPDATE SET
-                    score = EXCLUDED.score,
-                    result = EXCLUDED.result,
-                    death_round = EXCLUDED.death_round,
-                    death_reason = EXCLUDED.death_reason,
-                    cost = EXCLUDED.cost
-            """, (
-                game_id,
-                model_id,
-                participant['player_slot'],
-                participant['score'],
-                participant['result'],
-                participant.get('death_round'),
-                participant.get('death_reason'),
-                participant.get('cost', 0.0)
-            ))
-
-        conn.commit()
-        print(f"Inserted {len(participants)} participants for game {game_id}")
-
-    except Exception as e:
-        print(f"Error inserting participants for game {game_id}: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    _game_repo.insert_participants(game_id, participants)

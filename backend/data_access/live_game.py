@@ -1,17 +1,16 @@
 """
 Live game state management functions.
+
+These functions delegate to the GameRepository for actual database operations.
 """
 
-import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional
-import sys
-import os
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from .repositories import GameRepository
 
-from database_postgres import get_connection
+# Repository instance
+_game_repo = GameRepository()
 
 
 def insert_initial_game(
@@ -33,34 +32,17 @@ def insert_initial_game(
         board_height: Height of the game board
         num_apples: Number of apples in the game
         status: Initial status (default 'in_progress')
+        game_type: Type of game
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("""
-            INSERT INTO games (
-                id, status, start_time, board_width, board_height, num_apples, game_type
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (
-            game_id,
-            status,
-            start_time.isoformat() if isinstance(start_time, datetime) else start_time,
-            board_width,
-            board_height,
-            num_apples,
-            game_type
-        ))
-
-        conn.commit()
-        print(f"Inserted initial game record {game_id}")
-
-    except Exception as e:
-        print(f"Error inserting initial game {game_id}: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    _game_repo.insert_initial_game(
+        game_id=game_id,
+        start_time=start_time,
+        board_width=board_width,
+        board_height=board_height,
+        num_apples=num_apples,
+        status=status,
+        game_type=game_type
+    )
 
 
 def insert_initial_participants(
@@ -69,56 +51,15 @@ def insert_initial_participants(
 ) -> None:
     """
     Insert initial game participant records when game starts.
-    This is called before the game runs to enable live game model name display.
 
     Args:
         game_id: The game identifier
         participants: List of participant dictionaries with keys:
-            - model_name: Name of the model (must exist in models table)
-            - player_slot: Player slot number (0, 1, etc.)
-            - opponent_rank_at_match: Rank index of this model at match time (optional, for evaluation games)
+            - model_name: Name of the model
+            - player_slot: Player slot number
+            - opponent_rank_at_match: Rank index (optional)
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        for participant in participants:
-            # Get model_id from model name
-            cursor.execute(
-                "SELECT id FROM models WHERE name = %s",
-                (participant['model_name'],)
-            )
-            row = cursor.fetchone()
-
-            if row is None:
-                print(f"Warning: Model '{participant['model_name']}' not found in database. Skipping participant.")
-                continue
-
-            model_id = row['id']
-
-            # Insert participant record with placeholder values
-            cursor.execute("""
-                INSERT INTO game_participants (
-                    game_id, model_id, player_slot, score, result, opponent_rank_at_match
-                ) VALUES (%s, %s, %s, %s, %s, %s)
-            """, (
-                game_id,
-                model_id,
-                participant['player_slot'],
-                0,  # Placeholder score, will be updated at end
-                'tied',  # Temporary placeholder result, will be updated at end
-                participant.get('opponent_rank_at_match')  # Store rank if provided (for evaluation games)
-            ))
-
-        conn.commit()
-        print(f"Inserted {len(participants)} initial participants for game {game_id}")
-
-    except Exception as e:
-        print(f"Error inserting initial participants for game {game_id}: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    _game_repo.insert_initial_participants(game_id, participants)
 
 
 def update_game_state(
@@ -132,33 +73,9 @@ def update_game_state(
     Args:
         game_id: The game identifier
         current_state: Dictionary containing the current game state
-            (round_number, snake_positions, scores, alive_status, apples, board_state)
         rounds: Current round number
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("""
-            UPDATE games
-            SET current_state = %s,
-                rounds = %s,
-                updated_at = NOW()
-            WHERE id = %s
-        """, (
-            json.dumps(current_state),
-            rounds,
-            game_id
-        ))
-
-        conn.commit()
-
-    except Exception as e:
-        print(f"Error updating game state for {game_id}: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    _game_repo.update_game_state(game_id, current_state, rounds)
 
 
 def complete_game(
@@ -180,40 +97,14 @@ def complete_game(
         total_score: Combined score of all players
         total_cost: Total cost of LLM API calls
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("""
-            UPDATE games
-            SET status = 'completed',
-                end_time = %s,
-                updated_at = %s,
-                rounds = %s,
-                replay_path = %s,
-                total_score = %s,
-                total_cost = %s,
-                current_state = NULL
-            WHERE id = %s
-        """, (
-            end_time.isoformat() if isinstance(end_time, datetime) else end_time,
-            end_time.isoformat() if isinstance(end_time, datetime) else end_time,
-            rounds,
-            replay_path,
-            total_score,
-            total_cost,
-            game_id
-        ))
-
-        conn.commit()
-        print(f"Marked game {game_id} as completed")
-
-    except Exception as e:
-        print(f"Error completing game {game_id}: {e}")
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    _game_repo.complete_game(
+        game_id=game_id,
+        end_time=end_time,
+        rounds=rounds,
+        replay_path=replay_path,
+        total_score=total_score,
+        total_cost=total_cost
+    )
 
 
 def get_live_games() -> List[Dict[str, Any]]:
@@ -223,72 +114,7 @@ def get_live_games() -> List[Dict[str, Any]]:
     Returns:
         List of game dictionaries with basic info and current state
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("""
-            SELECT
-                g.id,
-                g.status,
-                g.start_time,
-                g.rounds,
-                g.board_width,
-                g.board_height,
-                g.num_apples,
-                g.current_state
-            FROM games g
-            WHERE g.status = 'in_progress'
-            ORDER BY g.start_time DESC
-        """)
-
-        rows = cursor.fetchall()
-        games = []
-        for row in rows:
-            # Get model names and ranks for this game
-            cursor.execute("""
-                WITH ranked_models AS (
-                    SELECT
-                        id,
-                        name,
-                        elo_rating,
-                        ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
-                    FROM models
-                    WHERE test_status = 'ranked' AND is_active = TRUE
-                )
-                SELECT gp.player_slot, m.name, rm.rank
-                FROM game_participants gp
-                JOIN models m ON gp.model_id = m.id
-                LEFT JOIN ranked_models rm ON m.id = rm.id
-                WHERE gp.game_id = %s
-                ORDER BY gp.player_slot
-            """, (row['id'],))
-
-            model_rows = cursor.fetchall()
-            models = {str(model_row['player_slot']): model_row['name'] for model_row in model_rows}
-            model_ranks = {str(model_row['player_slot']): model_row['rank'] for model_row in model_rows}
-
-            game = {
-                'id': row['id'],
-                'status': row['status'],
-                'start_time': row['start_time'],
-                'rounds': row['rounds'],
-                'board_width': row['board_width'],
-                'board_height': row['board_height'],
-                'num_apples': row['num_apples'],
-                'current_state': json.loads(row['current_state']) if row['current_state'] else None,
-                'models': models,
-                'model_ranks': model_ranks
-            }
-            games.append(game)
-
-        return games
-
-    except Exception as e:
-        print(f"Error fetching live games: {e}")
-        raise
-    finally:
-        conn.close()
+    return _game_repo.get_live_games()
 
 
 def get_game_state(game_id: str) -> Optional[Dict[str, Any]]:
@@ -301,70 +127,4 @@ def get_game_state(game_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dictionary with game info and current state, or None if not found
     """
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("""
-            SELECT
-                g.id,
-                g.status,
-                g.start_time,
-                g.rounds,
-                g.board_width,
-                g.board_height,
-                g.num_apples,
-                g.current_state,
-                g.total_score,
-                g.total_cost
-            FROM games g
-            WHERE g.id = %s
-        """, (game_id,))
-
-        row = cursor.fetchone()
-        if row is None:
-            return None
-
-        # Get model names and ranks for this game
-        cursor.execute("""
-            WITH ranked_models AS (
-                SELECT
-                    id,
-                    name,
-                    elo_rating,
-                    ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
-                FROM models
-                WHERE test_status = 'ranked' AND is_active = TRUE
-            )
-            SELECT gp.player_slot, m.name, rm.rank
-            FROM game_participants gp
-            JOIN models m ON gp.model_id = m.id
-            LEFT JOIN ranked_models rm ON m.id = rm.id
-            WHERE gp.game_id = %s
-            ORDER BY gp.player_slot
-        """, (game_id,))
-
-        model_rows = cursor.fetchall()
-        models = {str(model_row['player_slot']): model_row['name'] for model_row in model_rows}
-        model_ranks = {str(model_row['player_slot']): model_row['rank'] for model_row in model_rows}
-
-        return {
-            'id': row['id'],
-            'status': row['status'],
-            'start_time': row['start_time'],
-            'rounds': row['rounds'],
-            'board_width': row['board_width'],
-            'board_height': row['board_height'],
-            'num_apples': row['num_apples'],
-            'current_state': json.loads(row['current_state']) if row['current_state'] else None,
-            'total_score': row['total_score'],
-            'total_cost': row['total_cost'],
-            'models': models,
-            'model_ranks': model_ranks
-        }
-
-    except Exception as e:
-        print(f"Error fetching game state for {game_id}: {e}")
-        raise
-    finally:
-        conn.close()
+    return _game_repo.get_game_state(game_id)
