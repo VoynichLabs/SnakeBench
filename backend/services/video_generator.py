@@ -45,16 +45,16 @@ CELL_SIZE = 40  # Size of each grid cell in pixels
 class ColorScheme:
     """Color configuration matching frontend design"""
 
-    # Player 1 (Blue theme) - Snake color matches panel header
-    PLAYER1_SNAKE = "#3B82F6"  # Blue - matches panel border/header
+    # Player 1 (Green/Olive theme) - matches frontend colorConfig
+    PLAYER1_SNAKE = "#4F7022"  # Green/olive - matches frontend player1.main
     PLAYER1_PANEL_BG = "#1a1f2e"
-    PLAYER1_PANEL_BORDER = "#3B82F6"
+    PLAYER1_PANEL_BORDER = "#4F7022"
     PLAYER1_TEXT = "#FFFFFF"
 
-    # Player 2 (Green theme) - Snake color matches panel header
-    PLAYER2_SNAKE = "#4A9B5E"  # Earthy green - matches panel border/header
+    # Player 2 (Blue/Teal theme) - matches frontend colorConfig
+    PLAYER2_SNAKE = "#036C8E"  # Blue/teal - matches frontend player2.main
     PLAYER2_PANEL_BG = "#1a1f2e"
-    PLAYER2_PANEL_BORDER = "#4A9B5E"
+    PLAYER2_PANEL_BORDER = "#036C8E"
     PLAYER2_TEXT = "#FFFFFF"
 
     # Game board
@@ -106,9 +106,9 @@ class SnakeVideoGenerator:
 
         # Try to load a font, fallback to default if not available
         try:
-            self.font_large = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 24)
-            self.font_medium = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 18)
-            self.font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+            self.font_large = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 32)
+            self.font_medium = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 26)
+            self.font_small = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 20)
         except Exception:
             self.font_large = ImageFont.load_default()
             self.font_medium = ImageFont.load_default()
@@ -243,18 +243,22 @@ class SnakeVideoGenerator:
             font=self.font_medium
         )
 
-        thoughts_y += 35
-        for i, thought in enumerate(thoughts[:8]):  # Limit to 8 thoughts
-            # Wrap text if too long
-            wrapped = self._wrap_text(thought, self.panel_width - 40)
-            for line in wrapped[:2]:  # Max 2 lines per thought
-                draw.text(
-                    (x + 20, thoughts_y),
-                    f"• {line}",
-                    fill=hex_to_rgb(ColorScheme.THOUGHT_TEXT),
-                    font=self.font_small
-                )
-                thoughts_y += 25
+        thoughts_y += 40
+        # Join all thoughts and limit to 700 characters
+        full_text = " ".join(thoughts)[:700]
+        # Wrap the text to fit panel width
+        wrapped_lines = self._wrap_text(full_text, self.panel_width - 60)
+        for line in wrapped_lines:
+            draw.text(
+                (x + 20, thoughts_y),
+                line,
+                fill=hex_to_rgb(ColorScheme.THOUGHT_TEXT),
+                font=self.font_small
+            )
+            thoughts_y += 30
+            # Stop if we're running out of panel space
+            if thoughts_y > y + panel_height - 60:
+                break
 
     def _wrap_text(self, text: str, max_width: int) -> List[str]:
         """Wrap text to fit within max_width"""
@@ -264,14 +268,14 @@ class SnakeVideoGenerator:
 
         for word in words:
             current_line.append(word)
-            # Rough estimate: 7 pixels per character
-            if len(' '.join(current_line)) * 7 > max_width:
+            # Rough estimate: 10 pixels per character for larger font
+            if len(' '.join(current_line)) * 10 > max_width:
                 if len(current_line) > 1:
                     current_line.pop()
                     lines.append(' '.join(current_line))
                     current_line = [word]
                 else:
-                    lines.append(word[:max_width // 7])
+                    lines.append(word[:max_width // 10])
                     current_line = []
 
         if current_line:
@@ -280,7 +284,7 @@ class SnakeVideoGenerator:
         return lines
 
     def _get_thoughts(self, round_data: Dict[str, Any], model_id: str) -> List[str]:
-        """Extract thoughts from round data"""
+        """Extract thoughts from round data and clean up markdown formatting"""
         if 'move_history' in round_data and round_data['move_history']:
             move_history = round_data['move_history']
 
@@ -288,7 +292,24 @@ class SnakeVideoGenerator:
                 last_move = move_history[-1]
                 if model_id in last_move and 'rationale' in last_move[model_id]:
                     rationale = last_move[model_id]['rationale']
-                    thoughts = [t.strip() for t in rationale.split('\n') if t.strip()]
+                    thoughts = []
+                    for line in rationale.split('\n'):
+                        line = line.strip()
+                        if not line:
+                            continue
+                        # Remove markdown bullet points (-, *, or numbered lists)
+                        if line.startswith('- '):
+                            line = line[2:]
+                        elif line.startswith('* '):
+                            line = line[2:]
+                        elif len(line) > 2 and line[0].isdigit() and line[1] in '.):':
+                            line = line[2:].strip()
+                        elif len(line) > 3 and line[0:2].isdigit() and line[2] in '.):':
+                            line = line[3:].strip()
+                        # Remove markdown bold/italic markers
+                        line = line.replace('**', '').replace('__', '').replace('*', '').replace('_', '')
+                        if line:
+                            thoughts.append(line)
                     return thoughts if thoughts else ["No thoughts available"]
 
         return ["No thoughts available"]
