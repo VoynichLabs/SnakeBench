@@ -13,7 +13,7 @@ const pressStart2P = Press_Start_2P({
 })
 
 export const metadata = {
-  title: 'Snake AI Arena',
+  title: 'Snake Bench',
   description: 'Watch AI models compete in Snake battles',
 }
 
