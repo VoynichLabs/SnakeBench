@@ -179,7 +179,15 @@ def send_evaluation_batch_webhook(
         pending_skipped: List of model names skipped due to pending games
         errors: List of error strings
         webhook_url: Override webhook URL (defaults to ZAPIER_WEBHOOK_URL env var)
+    Returns:
+        False without sending when there are no updates to report; otherwise the
+        result of the webhook dispatch.
     """
+    total_updates = len(enqueued) + len(finalized) + len(pending_skipped) + len(errors)
+    if total_updates == 0:
+        logger.info("No evaluation batch updates to send; skipping webhook.")
+        return False
+
     url = webhook_url or os.getenv("ZAPIER_WEBHOOK_URL")
     if not url:
         logger.info("No webhook URL configured; skipping evaluation batch notification.")

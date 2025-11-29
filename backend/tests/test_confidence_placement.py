@@ -867,6 +867,74 @@ def test_rematch_logic():
         print("  -> Correct! Decisive loss should not trigger rematch")
 
 
+# =============================================================================
+# Interval-aware placement tests (fail until interval/probe logic is implemented)
+# =============================================================================
+
+
+class TestIntervalAwarePlacement:
+    """Tests for the interval/probe-based placement refinements."""
+
+    def _ranked_models(self) -> List[Tuple[int, str, float, int]]:
+        """
+        Deterministic small leaderboard:
+        rank 0: 1700, rank 1: 1600, rank 2: 1500, rank 3: 1400
+        """
+        return [
+            (1, "Top", 1700.0, 0),
+            (2, "MidHigh", 1600.0, 1),
+            (3, "Mid", 1500.0, 2),
+            (4, "Low", 1400.0, 3),
+        ]
+
+    def test_upward_probe_targets_upper_interval(self):
+        """
+        After one game (odd index), selection should probe high in the interval,
+        preferring the upper quartile rather than hovering near current mu,
+        even when sigma is small.
+        """
+        state = init_placement_state(model_id=999, max_games=9)
+        state.games_played = 1  # Next pick should be an upward probe
+        # Seed an interval that spans the board; mu sits near the middle
+        state.skill.mu = 1500.0
+        state.skill.sigma = 50.0  # Tight sigma would normally keep us near mu
+        state.elo_low = 1650.0
+        state.elo_high = 1750.0
+
+        ranked_models = self._ranked_models()
+        opponent = select_next_opponent(state, ranked_models=ranked_models)
+
+        # Expect it to honor the interval probe and pick the top candidate (1700)
+        assert opponent is not None
+        assert opponent[0] == 1  # Top
+
+    def test_draw_vs_low_does_not_cap_ceiling(self):
+        """
+        A draw against a much lower-rated opponent should not collapse the upper bound,
+        to avoid getting stuck with weak opponents early.
+        """
+        state = init_placement_state(model_id=999, max_games=9)
+        state.elo_low = 1200.0
+        state.elo_high = 1800.0
+        state.skill.mu = 1500.0
+        state.skill.sigma = 200.0
+
+        game_result = {
+            "opponent_id": 123,
+            "result": "tied",
+            "my_score": 4,
+            "opponent_score": 4,
+            "my_death_reason": None,
+            "total_rounds": 30,
+        }
+
+        update_placement_state(state, game_result, opponent_elo=1300.0)
+
+        # Upper bound should remain high, and floor should rise from its initial value
+        assert state.elo_high >= 1700.0
+        assert state.elo_low > 1200.0
+
+
 if __name__ == "__main__":
     test_with_actual_match_history()
     test_production_system()

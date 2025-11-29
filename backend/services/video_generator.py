@@ -114,6 +114,42 @@ class SnakeVideoGenerator:
             self.font_medium = ImageFont.load_default()
             self.font_small = ImageFont.load_default()
 
+    def _normalize_replay(self, replay_data: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Accept both the new schema (frames + game + players) and the legacy
+        schema (metadata + rounds) and return a normalized tuple of
+        (metadata_like, rounds_like).
+        """
+        if "frames" in replay_data and "game" in replay_data:
+            board = replay_data.get("game", {}).get("board", {})
+            players = replay_data.get("players", {}) or {}
+
+            metadata = {
+                "game_id": replay_data.get("game", {}).get("id"),
+                "models": {pid: pdata.get("name", f"Player {pid}") for pid, pdata in players.items()},
+                "board": board
+            }
+
+            rounds: List[Dict[str, Any]] = []
+            for idx, frame in enumerate(replay_data.get("frames", [])):
+                state = frame.get("state", {}) or {}
+                rounds.append({
+                    "round_number": frame.get("round", idx),
+                    "snake_positions": state.get("snakes", {}),
+                    "alive": state.get("alive", {}),
+                    "scores": state.get("scores", {}),
+                    "apples": state.get("apples", []),
+                    "width": board.get("width"),
+                    "height": board.get("height"),
+                    # Legacy renderer expects a list of move histories
+                    "move_history": [frame.get("moves", {})] if frame.get("moves") else []
+                })
+
+            return metadata, rounds
+
+        # Legacy schema fallback
+        return replay_data.get("metadata", {}), replay_data.get("rounds", [])
+
     def render_frame(
         self,
         round_data: Dict[str, Any],
@@ -487,11 +523,16 @@ class SnakeVideoGenerator:
             if replay_data is None:
                 raise ValueError(f"Could not find replay data for game {game_id}")
 
-        # Extract metadata
-        metadata = replay_data['metadata']
-        rounds = replay_data['rounds']
-        model_ids = list(metadata['models'].keys())
-        model_names = list(metadata['models'].values())
+        metadata, rounds = self._normalize_replay(replay_data)
+        model_ids = list(metadata.get('models', {}).keys())
+        model_names = list(metadata.get('models', {}).values())
+        if len(model_ids) < 2:
+            # Ensure we always have two placeholders to render
+            while len(model_ids) < 2:
+                model_ids.append(str(len(model_ids)))
+        if len(model_names) < 2:
+            while len(model_names) < 2:
+                model_names.append(f"Player {len(model_names)}")
 
         logger.info(f"Rendering {len(rounds)} frames for {model_names[0]} vs {model_names[1]}")
 

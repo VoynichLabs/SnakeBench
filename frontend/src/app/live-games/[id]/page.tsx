@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -39,7 +39,7 @@ export default function LiveGameViewerPage({ params }: { params: Promise<{ id: s
   }, [params]);
 
   // Fetch game state
-  const fetchGameState = async (id: string) => {
+  const fetchGameState = useCallback(async (id: string) => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_FLASK_URL || 'http://127.0.0.1:5000';
       const response = await fetch(`${apiUrl}/api/games/${id}/live`);
@@ -65,7 +65,7 @@ export default function LiveGameViewerPage({ params }: { params: Promise<{ id: s
     } finally {
       setLoading(false);
     }
-  };
+  }, [router]);
 
   // Poll for game state every 1 second
   useEffect(() => {
@@ -78,7 +78,7 @@ export default function LiveGameViewerPage({ params }: { params: Promise<{ id: s
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [gameId]);
+  }, [gameId, fetchGameState]);
 
   // Update duration counter every second
   useEffect(() => {

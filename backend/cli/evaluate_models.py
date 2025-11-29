@@ -30,7 +30,7 @@ from database_postgres import get_connection
 from tasks import run_game_task
 from placement_system import (
     init_placement_state,
-    select_next_opponent,
+    select_next_opponent_with_reason,
     update_placement_state,
     rebuild_state_from_history,
     get_ranked_models_by_index,
@@ -285,7 +285,9 @@ def run_evaluation_batch(
                 continue
 
             # Select next opponent using information gain
-            opponent = select_next_opponent(state, ranked_models=ranked_models)
+            opponent, debug = select_next_opponent_with_reason(
+                state, ranked_models=ranked_models
+            )
             if not opponent:
                 printer("  No suitable opponent found; finalizing.")
                 finalize_model(conn, model_id, model_name, state)
@@ -300,9 +302,31 @@ def run_evaluation_batch(
                 printer(f"  REMATCH scheduled with {opponent_name}")
                 stats["rematches"].append(model_name)
 
+            interval = debug.get("interval")
+            target_elo = debug.get("target_elo")
+            distance = debug.get("distance_to_target")
+            info_gain = debug.get("info_gain")
+            probe = debug.get("probe")
+            pc = debug.get("play_count")
+            selection_meta = []
+            if probe:
+                selection_meta.append(f"probe={probe}")
+            if target_elo is not None and interval:
+                selection_meta.append(
+                    f"target={target_elo:.1f} interval=[{interval[0]:.1f}, {interval[1]:.1f}]"
+                )
+            if distance is not None:
+                selection_meta.append(f"dist={distance:.1f}")
+            if info_gain is not None:
+                selection_meta.append(f"info={info_gain:.3f}")
+            if pc is not None:
+                selection_meta.append(f"played={pc}")
+
+            meta_str = f" [{' | '.join(selection_meta)}]" if selection_meta else ""
+
             printer(
                 f"  Next opponent: {opponent_name} (rank #{opponent_rank}, ELO {opponent_elo:.1f})"
-                f"{' [REMATCH]' if is_rematch else ''}"
+                f"{' [REMATCH]' if is_rematch else ''}{meta_str}"
             )
 
             # Get model's current rank (None for untested/testing models)

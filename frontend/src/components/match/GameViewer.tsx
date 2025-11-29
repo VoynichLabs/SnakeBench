@@ -21,54 +21,43 @@ interface ColorConfig {
   player2: PlayerColorScheme;
 }
 
-// Define the game data structure types
-type Position = [number, number];
+// Replay types (normalized for both new + legacy schemas)
+export type Position = [number, number]
 
-interface MoveHistory {
-  [modelId: string]: {
-    move: string;
-    rationale: string;
-  };
+export type MoveEntry = {
+  move: string
+  rationale?: string
+  input_tokens?: number
+  output_tokens?: number
+  cost?: number
 }
 
-interface RoundData {
-  round_number: number;
-  move_history?: MoveHistory[];
-  snake_positions: {
-    [modelId: string]: Position[];
-  };
-  alive: {
-    [modelId: string]: boolean;
-  };
-  scores: {
-    [modelId: string]: number;
-  };
-  apples: Position[];
-  width: number;
-  height: number;
+export type FrameState = {
+  snakes: Record<string, Position[]>
+  apples: Position[]
+  alive: Record<string, boolean>
+  scores: Record<string, number>
 }
 
-interface GameMetadata {
-  game_id: string;
-  start_time: string;
-  end_time: string;
-  models: Record<string, string>;
-  game_result: Record<string, string>;
-  final_scores: Record<string, number>;
-  death_info: Record<string, { reason: string, round?: number }>;
-  max_rounds: number;
-  actual_rounds: number;
+export type NormalizedFrame = {
+  round: number
+  state: FrameState
+  moves?: Record<string, MoveEntry>
+  events?: unknown[]
 }
 
-interface GameData {
-  rounds: RoundData[];
-  metadata: GameMetadata;
+export type BoardInfo = {
+  width: number
+  height: number
+  num_apples?: number
 }
 
 interface GameViewerProps {
-  gameData: GameData;
+  frames: NormalizedFrame[];
+  board: BoardInfo;
   modelIds: string[];
   modelNames: string[];
+  gameId: string;
   colorConfig?: ColorConfig; // Optional custom color config
 }
 
@@ -89,30 +78,27 @@ const defaultColorConfig: ColorConfig = {
 };
 
 export default function GameViewer({ 
-  gameData, 
+  frames,
+  board,
   modelIds, 
   modelNames,
+  gameId,
   colorConfig = defaultColorConfig 
 }: GameViewerProps) {
   const [currentRound, setCurrentRound] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const playbackSpeed = 1;
   
-  const totalRounds = gameData.rounds.length;
-  const currentRoundData = gameData.rounds[currentRound];
+  const totalRounds = frames.length;
+  const currentRoundData = frames[currentRound] || frames[frames.length - 1];
   
   // Extract thoughts for current round
   const getThoughtsForModel = (modelId: string) => {
-    if (currentRoundData && currentRoundData.move_history) {
-      // If move_history is an array, get the last entry
-      if (Array.isArray(currentRoundData.move_history) && currentRoundData.move_history.length > 0) {
-        // Get the last move in the array
-        const lastMove = currentRoundData.move_history[currentRoundData.move_history.length - 1];
-        
-        if (lastMove && lastMove[modelId] && lastMove[modelId].rationale) {
-          const thoughts = lastMove[modelId].rationale.split('\n').filter(Boolean);
-          return thoughts;
-        }
+    if (currentRoundData && currentRoundData.moves) {
+      const move = currentRoundData.moves[modelId];
+      if (move?.rationale) {
+        const thoughts = move.rationale.split('\n').filter(Boolean);
+        return thoughts;
       }
     }
     
@@ -144,8 +130,23 @@ export default function GameViewer({
   const handleEnd = () => setCurrentRound(totalRounds - 1);
   
   const copyGameId = () => {
-    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_FRONTEND_URL}/match/${gameData.metadata.game_id}`);
+    navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_FRONTEND_URL}/match/${gameId}`);
   };
+
+  if (!currentRoundData) {
+    return (
+      <div className="mt-6 text-center text-sm text-gray-500">
+        Replay data unavailable for this match.
+      </div>
+    )
+  }
+
+  const snakePositions = currentRoundData.state.snakes || {};
+  const apples = currentRoundData.state.apples || [];
+  const alive = currentRoundData.state.alive || {};
+  const scores = currentRoundData.state.scores || {};
+  const boardWidth = board.width || 10;
+  const boardHeight = board.height || 10;
 
   return (
     <>
@@ -154,18 +155,18 @@ export default function GameViewer({
         <PlayerThoughts 
           modelName={modelNames[0]} 
           thoughts={getThoughtsForModel(modelIds[0])}
-          score={currentRoundData.scores[modelIds[0]] || 0}
-          isAlive={currentRoundData.alive[modelIds[0]] || false}
+          score={scores[modelIds[0]] || 0}
+          isAlive={alive[modelIds[0]] || false}
           color="player1"
           colorScheme={colorConfig.player1}
         />
 
         {/* Game Canvas */}
         <GameCanvas 
-          snakePositions={currentRoundData.snake_positions}
-          apples={currentRoundData.apples}
-          width={currentRoundData.width}
-          height={currentRoundData.height}
+          snakePositions={snakePositions}
+          apples={apples}
+          width={boardWidth}
+          height={boardHeight}
           modelIds={modelIds}
           colorConfig={{
             [modelIds[0]]: colorConfig.player1.main,
@@ -177,8 +178,8 @@ export default function GameViewer({
         <PlayerThoughts 
           modelName={modelNames[1]} 
           thoughts={getThoughtsForModel(modelIds[1])}
-          score={currentRoundData.scores[modelIds[1]] || 0}
-          isAlive={currentRoundData.alive[modelIds[1]] || false}
+          score={scores[modelIds[1]] || 0}
+          isAlive={alive[modelIds[1]] || false}
           color="player2"
           colorScheme={colorConfig.player2}
         />
@@ -204,10 +205,10 @@ export default function GameViewer({
           className="text-sm text-gray-500 flex items-center gap-2 font-mono"
           onClick={copyGameId}
         >
-          <span>Match ID: {gameData.metadata.game_id}</span>
+          <span>Match ID: {gameId}</span>
           <Copy className="h-4 w-4" />
         </Button>
-        <VideoDownloadButton matchId={gameData.metadata.game_id} />
+        <VideoDownloadButton matchId={gameId} />
       </div>
     </>
   )

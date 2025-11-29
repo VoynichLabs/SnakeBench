@@ -10,6 +10,8 @@ import sys
 import os
 from collections import deque
 from unittest.mock import Mock, patch, MagicMock
+from pathlib import Path
+import json
 
 # Add backend to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,6 +27,8 @@ from main import (
     VALID_MOVES,
     APPLE_TARGET
 )
+from players.base import Player
+from cli.migrate_replays import migrate_replay
 
 
 class TestSnake:
@@ -153,6 +157,24 @@ class TestGameState:
         repr_str = repr(state)
         assert "round=5" in repr_str
         assert "apples=" in repr_str
+
+
+class StubPlayer(Player):
+    """Test-only player that returns a fixed move with token metadata."""
+
+    def __init__(self, snake_id: str, move: str = UP):
+        super().__init__(snake_id)
+        self.name = "StubPlayer"
+        self.move = move
+
+    def get_move(self, game_state):
+        return {
+            "direction": self.move,
+            "rationale": "Test rationale",
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cost": 0.001
+        }
 
 
 class TestRandomPlayer:
@@ -815,6 +837,58 @@ class TestGameHistory:
         assert "snake_positions" in serialized[0]
         assert "alive" in serialized[0]
         assert "scores" in serialized[0]
+
+    @patch('main.DB_AVAILABLE', False)
+    @patch('main.time.sleep', return_value=None)
+    def test_save_history_uses_new_schema(self, _sleep):
+        """save_history_to_json() writes frames-based schema with player model_id."""
+        game = SnakeGame(width=5, height=5, num_apples=0, max_rounds=1)
+        game.add_snake("0", StubPlayer("0", move=UP))
+        game.add_snake("1", StubPlayer("1", move=DOWN))
+
+        # Play one round to populate replay frames
+        game.run_round()
+
+        filename = f"test_replay_{game.game_id}.json"
+        game.save_history_to_json(filename)
+
+        path = Path("completed_games") / filename
+        assert path.exists(), "Replay file was not written"
+
+        with path.open() as f:
+            data = json.load(f)
+
+        assert data["version"] == 1
+        assert "frames" in data and len(data["frames"]) == 1
+
+        frame = data["frames"][0]
+        assert frame["round"] == 0
+        assert frame["moves"]["0"]["move"] == UP
+        assert frame["moves"]["1"]["move"] == DOWN
+
+        # Players block should carry model_id and totals
+        assert data["players"]["0"]["model_id"] == "0"
+        assert data["players"]["1"]["model_id"] == "1"
+        assert data["players"]["0"]["totals"]["input_tokens"] == 10
+        assert data["players"]["0"]["totals"]["output_tokens"] == 5
+        assert data["players"]["0"]["totals"]["cost"] == game.player_costs["0"]
+
+        # Clean up test artifact
+        path.unlink()
+
+
+def test_migrate_replay_strips_metadata_when_already_migrated():
+    """Re-migrating a migrated file should strip legacy metadata."""
+    migrated = {
+        "version": 1,
+        "game": {"id": "abc"},
+        "players": {"0": {"model_id": "0", "name": "A"}},
+        "frames": [],
+        "metadata": {"legacy": True}
+    }
+    cleaned = migrate_replay(migrated)
+    assert "metadata" not in cleaned
+    assert cleaned["version"] == 1
 
 
 class TestMoveDirections:

@@ -24,7 +24,8 @@ export default function GameControls({
   onStart,
   onEnd
 }: GameControlsProps) {
-  const progressPercentage = (currentRound / (totalRounds - 1)) * 100;
+  const denominator = Math.max(totalRounds - 1, 1);
+  const progressPercentage = totalRounds ? (currentRound / denominator) * 100 : 0;
   
   return (
     <div className="mt-6 flex flex-col items-center gap-4">

@@ -85,6 +85,9 @@ class SnakeGame:
         # For replay or for the LLM context
         self.move_history: List[Dict[str, str]] = []
         self.history: List[GameState] = []
+        # New, lossless replay frames (one per round, no duplication)
+        self.replay_frames: List[Dict[str, Any]] = []
+        self.initial_state: Optional[Dict[str, Any]] = None
 
         # Cost tracking
         self.total_cost: float = 0.0
@@ -226,6 +229,11 @@ class SnakeGame:
             print("Game is already over. No more rounds.")
             return
         
+        # Capture the initial state once (before any moves are applied)
+        if self.initial_state is None:
+            self.initial_state = self._snapshot_state()
+
+        round_index = self.round_number
         self.print_board()
 
         # --- PARALLEL GATHER OF MOVES ---
@@ -239,8 +247,6 @@ class SnakeGame:
 
         # Store the moves of this round
         self.move_history.append(round_moves)
-
-        self.record_history()
 
         # 2) Compute the intended new head for every snake
         new_heads: Dict[str, Optional[Tuple[int, int]]] = {}
@@ -331,6 +337,14 @@ class SnakeGame:
             sid for sid, s in self.snakes.items()
             if not s.alive and s.death_round == self.round_number
         ]
+        events: List[Dict[str, Any]] = []
+        if snakes_died_this_round:
+            for sid in snakes_died_this_round:
+                events.append({
+                    "type": "death",
+                    "player_id": sid,
+                    "reason": self.snakes[sid].death_reason
+                })
 
         # If exactly two snakes total, handle immediate win / tie logic
         if len(snakes_died_this_round) > 0 and len(self.snakes) == 2:
@@ -343,7 +357,7 @@ class SnakeGame:
                 self.game_result = {sid: "tied" for sid in self.snakes}
 
             self.round_number += 1
-            self.record_history()
+            self.record_frame(round_index, round_moves, events=events)
             return
 
         # --------------------------------------------------
@@ -398,6 +412,9 @@ class SnakeGame:
             except Exception as e:
                 print(f"Warning: Could not update game state: {e}")
 
+        # Persist replay frame for this round
+        self.record_frame(round_index, round_moves, events=events)
+
         time.sleep(0.3)
 
     def serialize_history(self, history):
@@ -442,11 +459,61 @@ class SnakeGame:
             for sid, player in self.players.items()
         }
 
-        # Build metadata for the game
+        end_time = datetime.utcfromtimestamp(time.time()).isoformat()
+
+        # Aggregate token counts per player from the recorded moves
+        player_totals: Dict[str, Dict[str, Any]] = {}
+        for frame in self.replay_frames:
+            for sid, move in frame.get("moves", {}).items():
+                totals = player_totals.setdefault(sid, {"input_tokens": 0, "output_tokens": 0, "cost": 0.0})
+                totals["input_tokens"] += move.get("input_tokens", 0) or 0
+                totals["output_tokens"] += move.get("output_tokens", 0) or 0
+        # Cost is tracked during gameplay
+        for sid, cost in self.player_costs.items():
+            totals = player_totals.setdefault(sid, {"input_tokens": 0, "output_tokens": 0, "cost": 0.0})
+            totals["cost"] = cost
+
+        players_payload: Dict[str, Dict[str, Any]] = {}
+        for sid, name in model_names.items():
+            snake = self.snakes.get(sid)
+            death_payload = None
+            if snake and not snake.alive:
+                death_payload = {"reason": snake.death_reason, "round": snake.death_round}
+
+            players_payload[sid] = {
+                "model_id": sid,
+                "name": name,
+                "result": (self.game_result or {}).get(sid),
+                "final_score": self.scores.get(sid, 0),
+                "death": death_payload,
+                "totals": player_totals.get(sid, {"input_tokens": 0, "output_tokens": 0, "cost": 0.0}),
+            }
+
+        totals_payload = {
+            "cost": self.total_cost,
+            "input_tokens": sum(t.get("input_tokens", 0) for t in player_totals.values()),
+            "output_tokens": sum(t.get("output_tokens", 0) for t in player_totals.values())
+        }
+
+        game_payload = {
+            "id": self.game_id,
+            "started_at": datetime.utcfromtimestamp(self.start_time).isoformat(),
+            "ended_at": end_time,
+            "game_type": self.game_type,
+            "max_rounds": self.max_rounds,
+            "rounds_played": self.round_number,
+            "board": {
+                "width": self.width,
+                "height": self.height,
+                "num_apples": self.num_apples
+            }
+        }
+
+        # Backwards-compatible metadata block (lighter than the old duplicate rounds)
         metadata = {
             "game_id": self.game_id,
-            "start_time": datetime.utcfromtimestamp(self.start_time).isoformat(),
-            "end_time": datetime.utcfromtimestamp(time.time()).isoformat(),
+            "start_time": game_payload["started_at"],
+            "end_time": end_time,
             "models": model_names,
             "game_result": self.game_result,
             "final_scores": self.scores,
@@ -454,10 +521,10 @@ class SnakeGame:
                 sid: {
                     "reason": snake.death_reason,
                     "round": snake.death_round
-            }
-            for sid, snake in self.snakes.items()
-            if not snake.alive  # you could record info for dead snakes only
-        },
+                }
+                for sid, snake in self.snakes.items()
+                if not snake.alive
+            },
             "max_rounds": self.max_rounds,
             "actual_rounds": self.round_number,
             "total_cost": self.total_cost,
@@ -465,8 +532,13 @@ class SnakeGame:
         }
 
         data = {
-            "metadata": metadata,
-            "rounds": self.serialize_history(self.history)
+            "version": 1,
+            "game": game_payload,
+            "players": players_payload,
+            "totals": totals_payload,
+            "initial_state": self.initial_state or self._snapshot_state(),
+            "frames": self.replay_frames,
+            "metadata": metadata  # Keep for compatibility with existing tools
         }
 
         # Upload to Supabase Storage
@@ -547,6 +619,51 @@ class SnakeGame:
         except Exception as e:
             print(f"Error persisting game {self.game_id} to database: {e}")
             # Don't raise - we want the game to complete even if DB persistence fails
+
+    def _snapshot_state(self) -> Dict[str, Any]:
+        """
+        Capture the current board state without duplicating historical moves.
+        """
+        return {
+            "snakes": {sid: list(snake.positions) for sid, snake in self.snakes.items()},
+            "apples": self.apples.copy(),
+            "alive": {sid: snake.alive for sid, snake in self.snakes.items()},
+            "scores": self.scores.copy(),
+        }
+
+    def record_frame(self, round_index: int, round_moves: Dict[str, Any], events: Optional[List[Dict[str, Any]]] = None):
+        """
+        Persist a single replay frame (post-move state) with only the data
+        required for playback, plus a compact per-round move record.
+        """
+        state = self._snapshot_state()
+        game_state = GameState(
+            round_number=round_index,
+            snake_positions=state["snakes"],
+            alive=state["alive"],
+            scores=state["scores"],
+            width=self.width,
+            height=self.height,
+            apples=state["apples"],
+            # Keep only this round's moves in the legacy move_history slot
+            move_history=[round_moves],
+            max_rounds=self.max_rounds
+        )
+        self.history.append(game_state)
+
+        frame_payload: Dict[str, Any] = {
+            "round": round_index,
+            "state": {
+                "snakes": state["snakes"],
+                "apples": state["apples"],
+                "alive": state["alive"],
+                "scores": state["scores"],
+            },
+            "moves": round_moves
+        }
+        if events:
+            frame_payload["events"] = events
+        self.replay_frames.append(frame_payload)
     
     def print_board(self):
         """
@@ -575,8 +692,23 @@ class SnakeGame:
             print(f"Tie! Winners: {winners} with score {top_score}.")
 
     def record_history(self):
-        state = self.get_current_state()
-        self.history.append(state)
+        """
+        Backwards-compatible helper for tests; captures the current state
+        without duplicating the full move history.
+        """
+        state = self._snapshot_state()
+        game_state = GameState(
+            round_number=self.round_number,
+            snake_positions=state["snakes"],
+            alive=state["alive"],
+            scores=state["scores"],
+            width=self.width,
+            height=self.height,
+            apples=state["apples"],
+            move_history=[],
+            max_rounds=self.max_rounds
+        )
+        self.history.append(game_state)
 
 
 # -------------------------------
