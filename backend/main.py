@@ -402,7 +402,9 @@ class SnakeGame:
                     'alive': current_state.alive,
                     'scores': current_state.scores,
                     'apples': current_state.apples,
-                    'board_state': current_state.print_board()
+                    'board_state': current_state.print_board(),
+                    'move_history': [round_moves],
+                    'last_move_time': time.time()
                 }
                 update_game_state(
                     game_id=self.game_id,

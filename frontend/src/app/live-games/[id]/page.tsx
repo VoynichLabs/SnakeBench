@@ -1,42 +1,114 @@
 "use client";
 
-import { useEffect, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import GameViewer, { BoardInfo, MoveEntry, NormalizedFrame, Position } from '@/components/match/GameViewer';
+import MatchInfo from '@/components/match/MatchInfo';
 
-interface GameState {
+interface LiveFramePayload {
+  round_number?: number;
+  snake_positions?: Record<string, number[][]>;
+  alive?: Record<string, boolean>;
+  scores?: Record<string, number>;
+  apples?: number[][];
+  board_state?: string;
+  move_history?: Record<string, MoveEntry>[];
+  last_move_time?: number;
+}
+
+interface LiveGameState {
   id: string;
   status: string;
-  start_time: string;
+  start_time: string | null;
   rounds: number;
   board_width: number;
   board_height: number;
   num_apples: number;
   models: Record<string, string>;
-  current_state: {
-    round_number: number;
-    snake_positions: Record<string, number[][]>;
-    alive: Record<string, boolean>;
-    scores: Record<string, number>;
-    apples: number[][];
-    board_state: string;
-  } | null;
+  model_ranks?: Record<string, number>;
+  current_state: LiveFramePayload | null;
   total_score: number | null;
   total_cost: number | null;
 }
 
+function formatDuration(startTime: string | null | undefined, nowMs: number) {
+  if (!startTime) return '—';
+  const start = new Date(startTime).getTime();
+  if (Number.isNaN(start)) return '—';
+  const diff = Math.max(0, Math.floor((nowMs - start) / 1000));
+  const minutes = Math.floor(diff / 60);
+  const seconds = diff % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function formatAgo(lastUpdate: number | null, nowMs: number) {
+  if (!lastUpdate) return 'waiting...';
+  const diff = Math.max(0, Math.floor((nowMs - lastUpdate) / 1000));
+  if (diff < 60) return `${diff}s ago`;
+  const minutes = Math.floor(diff / 60);
+  const seconds = diff % 60;
+  return `${minutes}m ${seconds}s ago`;
+}
+
+function StatCard({ label, value, tone = 'normal' }: { label: string; value: ReactNode; tone?: 'normal' | 'warn' | 'error' }) {
+  const toneStyles = {
+    normal: 'bg-gray-50 text-gray-800 border-gray-100',
+    warn: 'bg-amber-50 text-amber-800 border-amber-100',
+    error: 'bg-red-50 text-red-800 border-red-100',
+  }[tone];
+
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${toneStyles}`}>
+      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
+      <div className="text-sm font-semibold leading-tight">{value}</div>
+    </div>
+  );
+}
+
 export default function LiveGameViewerPage({ params }: { params: Promise<{ id: string }> }) {
   const [gameId, setGameId] = useState<string | null>(null);
-  const [gameState, setGameState] = useState<GameState | null>(null);
+  const [gameState, setGameState] = useState<LiveGameState | null>(null);
+  const [frames, setFrames] = useState<NormalizedFrame[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [duration, setDuration] = useState<string>('0:00');
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const latestRoundRef = useRef<number>(-1);
   const router = useRouter();
 
   // Unwrap params
   useEffect(() => {
     params.then((p) => setGameId(p.id));
   }, [params]);
+
+  // Heartbeat for timers
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const normalizeFrame = useCallback((state: LiveFramePayload): NormalizedFrame => {
+    const snakes: Record<string, Position[]> = {};
+    Object.entries(state.snake_positions || {}).forEach(([id, coords]) => {
+      snakes[id] = (coords || []).map((pair) => [pair[0], pair[1]] as Position);
+    });
+
+    const moves = Array.isArray(state.move_history)
+      ? state.move_history[state.move_history.length - 1] as Record<string, MoveEntry> | undefined
+      : undefined;
+
+    return {
+      round: typeof state.round_number === 'number' ? state.round_number : 0,
+      state: {
+        snakes,
+        apples: (state.apples || []).map((pair) => [pair[0], pair[1]] as Position),
+        alive: state.alive || {},
+        scores: state.scores || {},
+      },
+      moves,
+    };
+  }, []);
 
   // Fetch game state
   const fetchGameState = useCallback(async (id: string) => {
@@ -49,15 +121,48 @@ export default function LiveGameViewerPage({ params }: { params: Promise<{ id: s
         }
         throw new Error(`Failed to fetch game state: ${response.status} ${response.statusText}`);
       }
-      const data = await response.json();
+      const data: LiveGameState = await response.json();
       setGameState(data);
       setError(null);
+      const nowTs = Date.now();
+      let changeDetected = false;
 
-      // If game is completed, redirect to match page after 3 seconds
+      if (data.current_state) {
+        const frame = normalizeFrame(data.current_state);
+        setFrames((prev) => {
+          const existingIndex = prev.findIndex((entry) => entry.round === frame.round);
+          if (existingIndex !== -1) {
+            const existing = prev[existingIndex];
+            const sameState = JSON.stringify(existing.state) === JSON.stringify(frame.state);
+            const sameMoves = JSON.stringify(existing.moves) === JSON.stringify(frame.moves);
+            if (sameState && sameMoves) return prev;
+            const updated = [...prev];
+            updated[existingIndex] = frame;
+            changeDetected = true;
+            return updated;
+          }
+          const updated = [...prev, frame].sort((a, b) => a.round - b.round);
+          changeDetected = true;
+          return updated;
+        });
+
+        const newestRound = frame.round ?? latestRoundRef.current;
+        latestRoundRef.current = newestRound;
+      }
+
+      // Use server-provided last_move_time if available, otherwise fall back to client timestamp
+      const serverMoveTime = data.current_state?.last_move_time;
+      if (serverMoveTime) {
+        // Convert Unix timestamp (seconds) to milliseconds
+        setLastUpdate(serverMoveTime * 1000);
+      } else if (changeDetected) {
+        // Fallback: use client timestamp when change detected but no server time
+        setLastUpdate(nowTs);
+      }
+
+      // If game is completed, redirect to match page after replay processes
       if (data.status === 'completed') {
-        setTimeout(() => {
-          router.push(`/match/${id}`);
-        }, 3000);
+        setTimeout(() => router.push(`/match/${id}`), 2500);
       }
     } catch (err) {
       console.error('Error fetching game state:', err);
@@ -65,46 +170,62 @@ export default function LiveGameViewerPage({ params }: { params: Promise<{ id: s
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [normalizeFrame, router]);
 
-  // Poll for game state every 1 second
+  // Poll for game state
   useEffect(() => {
     if (!gameId) return;
 
     fetchGameState(gameId);
-
     const interval = setInterval(() => {
       fetchGameState(gameId);
-    }, 1000);
+    }, 1200);
 
     return () => clearInterval(interval);
   }, [gameId, fetchGameState]);
 
-  // Update duration counter every second
   useEffect(() => {
-    if (!gameState || gameState.status === 'completed') return;
+    if (!frames.length) return;
+    const latest = frames[frames.length - 1]?.round ?? -1;
+    latestRoundRef.current = latest;
+  }, [frames]);
 
-    const updateDuration = () => {
-      const startTime = new Date(gameState.start_time).getTime();
-      const now = Date.now();
-      const diff = Math.floor((now - startTime) / 1000); // difference in seconds
+  const models = useMemo(() => gameState?.models || {}, [gameState?.models]);
+  const isCompleted = gameState?.status === 'completed';
+  const board: BoardInfo | null = gameState ? {
+    width: gameState.board_width,
+    height: gameState.board_height,
+    num_apples: gameState.num_apples,
+  } : null;
 
-      const minutes = Math.floor(diff / 60);
-      const seconds = diff % 60;
-      setDuration(`${minutes}:${seconds.toString().padStart(2, '0')}`);
-    };
+  const modelIds = useMemo(() => {
+    const ids = Object.keys(models);
+    return ids.sort((a, b) => Number(a) - Number(b));
+  }, [models]);
+  const modelNames = useMemo(
+    () => modelIds.map((id) => models?.[id] || `Player ${id}`),
+    [modelIds, models]
+  );
 
-    updateDuration(); // Update immediately
-    const interval = setInterval(updateDuration, 1000);
+  const duration = formatDuration(gameState?.start_time, now);
+  const sinceUpdateLabel = formatAgo(lastUpdate, now);
 
-    return () => clearInterval(interval);
-  }, [gameState]);
+  const latestFrame = frames[frames.length - 1];
+  const latestRound = latestFrame?.round ?? gameState?.current_state?.round_number ?? 0;
+
+  const startTime = gameState?.start_time ? new Date(gameState.start_time) : null;
+  const formattedDate = startTime
+    ? startTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    : 'Unknown date';
+  const formattedTime = startTime
+    ? startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : 'Unknown time';
 
   if (loading || !gameId) {
     return (
       <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
         <div className="text-center">
-          <p className="text-gray-500">Loading game...</p>
+          <p className="text-gray-500">Loading live game...</p>
         </div>
       </div>
     );
@@ -126,160 +247,72 @@ export default function LiveGameViewerPage({ params }: { params: Promise<{ id: s
     );
   }
 
-  const currentState = gameState.current_state;
-  const isCompleted = gameState.status === 'completed';
-
   return (
     <div className="bg-white min-h-screen">
-      {/* Header */}
-      <div className="bg-gray-50 py-8 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center">
-                {!isCompleted && (
-                  <span className="flex items-center mr-4">
-                    <span className="h-3 w-3 rounded-full bg-red-500 animate-pulse mr-2"></span>
-                    <span className="text-sm font-semibold text-red-600">LIVE</span>
-                  </span>
-                )}
-                {isCompleted && (
-                  <span className="flex items-center mr-4">
-                    <span className="text-sm font-semibold text-gray-600">COMPLETED</span>
-                  </span>
-                )}
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Game {gameId.slice(0, 8)}...
-                </h1>
-                {!isCompleted && (
-                  <span className="ml-4 text-lg font-mono text-indigo-600">
-                    {duration}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-500 mt-1">
-                Started: {new Date(gameState.start_time).toISOString().replace('T', ' ').replace('Z', '')} (UTC)
-              </p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center px-3 py-1 rounded-full bg-red-50 border border-red-100">
+              <span className={`h-2 w-2 rounded-full mr-2 ${isCompleted ? 'bg-gray-400' : 'bg-red-500 animate-pulse'}`} />
+              <span className="text-xs font-semibold text-red-700">
+                {isCompleted ? 'Completed' : 'Live'}
+              </span>
+            </span>
+            <div className="text-sm text-gray-600 font-mono">
+              Game {gameId.slice(0, 8)}...
             </div>
-            <Link
-              href="/live-games"
-              className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-            >
-              ← Back to Live Games
-            </Link>
           </div>
+          <Link
+            href="/live-games"
+            className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+          >
+            ← Back to Live Games
+          </Link>
         </div>
-      </div>
 
-      {/* Main Game View */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Board Visualization */}
-          <div className="lg:col-span-2">
-            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Game Board</h2>
-              {currentState ? (
-                <pre className="font-mono text-xs overflow-x-auto bg-white p-4 rounded border border-gray-300 leading-relaxed">
-                  {currentState.board_state}
+        <div className="mt-4">
+          <MatchInfo modelNames={modelNames} date={formattedDate} time={formattedTime} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Live for" value={duration} />
+          <StatCard label="Last response" value={sinceUpdateLabel} />
+          <StatCard label="Current round" value={latestRound} />
+          <StatCard label="Board" value={`${gameState.board_width}×${gameState.board_height} • ${gameState.num_apples} apples`} />
+          <StatCard
+            label="Status"
+            value={isCompleted ? 'Finished - building replay' : 'Streaming moves'}
+            tone={isCompleted ? 'warn' : 'normal'}
+          />
+        </div>
+
+        <div className="mt-6">
+          {board && frames.length > 0 ? (
+            <GameViewer
+              frames={frames}
+              board={board}
+              modelIds={modelIds}
+              modelNames={modelNames}
+              gameId={gameId}
+              liveMode
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
+              <p className="font-medium">Waiting for the first live frame...</p>
+              {gameState.current_state?.board_state && (
+                <pre className="mt-4 font-mono text-[11px] overflow-x-auto bg-white p-4 rounded border border-gray-200 text-left">
+                  {gameState.current_state.board_state}
                 </pre>
-              ) : (
-                <p className="text-gray-500 text-center py-8">
-                  {isCompleted ? 'Game completed - redirecting to replay...' : 'Waiting for game data...'}
-                </p>
               )}
             </div>
-
-            {/* Board Legend */}
-            {currentState && (
-              <div className="mt-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <h3 className="text-sm font-semibold text-gray-900 mb-2">Legend</h3>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div><span className="font-bold">.</span> - Empty space</div>
-                  <div><span className="font-bold">A</span> - Apple</div>
-                  <div><span className="font-bold">0, 1, 2...</span> - Snake head (player number)</div>
-                  <div><span className="font-bold">T</span> - Snake body/tail</div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Scores & Stats Sidebar */}
-          <div className="space-y-6">
-            {/* Scores */}
-            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Scores</h2>
-                <span className="text-sm text-gray-600">Round {currentState?.round_number || 0}</span>
-              </div>
-              {currentState && currentState.scores ? (
-                <div className="space-y-3">
-                  {Object.entries(currentState.scores).map(([playerId, score]) => {
-                    const isAlive = currentState.alive[playerId];
-                    const modelName = gameState.models?.[playerId] || `Player ${playerId}`;
-                    return (
-                      <div key={playerId} className="flex items-center justify-between">
-                        <div className="flex items-center">
-                          <span className={`h-2 w-2 rounded-full mr-2 ${isAlive ? 'bg-green-500' : 'bg-gray-400'}`}></span>
-                          <span className="font-medium text-gray-900">{modelName}</span>
-                        </div>
-                        <span className="text-2xl font-bold text-gray-900">{score}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-sm">No scores available</p>
-              )}
-            </div>
-
-            {/* Snake Positions */}
-            <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Snake Info</h2>
-              {currentState && currentState.snake_positions ? (
-                <div className="space-y-4">
-                  {Object.entries(currentState.snake_positions).map(([playerId, positions]) => {
-                    const isAlive = currentState.alive[playerId];
-                    const modelName = gameState.models?.[playerId] || `Player ${playerId}`;
-                    return (
-                      <div key={playerId}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-gray-900">{modelName}</span>
-                          <span className={`text-xs font-semibold ${isAlive ? 'text-green-600' : 'text-red-600'}`}>
-                            {isAlive ? 'ALIVE' : 'DEAD'}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600 space-y-0.5">
-                          <div>Head: ({positions[0]?.[0]}, {positions[0]?.[1]})</div>
-                          <div>Length: {positions.length}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-gray-500 text-sm">No snake data available</p>
-              )}
-            </div>
-
-            {/* Auto-refresh indicator */}
-            {!isCompleted && (
-              <div className="text-center">
-                <p className="text-xs text-gray-400">
-                  Auto-refreshing every 1 second...
-                </p>
-              </div>
-            )}
-
-            {/* Completed message */}
-            {isCompleted && (
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <p className="text-sm text-blue-800 text-center">
-                  Game completed! Redirecting to full replay in 3 seconds...
-                </p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
+
+        {isCompleted && (
+          <div className="mt-4 bg-blue-50 rounded-lg p-4 border border-blue-200 text-blue-800 text-sm">
+            Game finished. Redirecting to the full replay once it is ready...
+          </div>
+        )}
       </div>
     </div>
   );

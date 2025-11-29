@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import GameCanvas from "./GameCanvas"
@@ -59,6 +59,7 @@ interface GameViewerProps {
   modelNames: string[];
   gameId: string;
   colorConfig?: ColorConfig; // Optional custom color config
+  liveMode?: boolean;
 }
 
 // Default color configuration
@@ -83,17 +84,24 @@ export default function GameViewer({
   modelIds, 
   modelNames,
   gameId,
-  colorConfig = defaultColorConfig 
+  colorConfig = defaultColorConfig,
+  liveMode = false
 }: GameViewerProps) {
   const [currentRound, setCurrentRound] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
+  const [wasAutoStopped, setWasAutoStopped] = useState(false);
   const playbackSpeed = 1;
+  const prevTotalRoundsRef = useRef(frames.length);
   
   const totalRounds = frames.length;
   const currentRoundData = frames[currentRound] || frames[frames.length - 1];
   
   // Extract thoughts for current round
   const getThoughtsForModel = (modelId: string) => {
+    if (liveMode && (!currentRoundData?.moves || !currentRoundData.moves[modelId]?.rationale)) {
+      return ["Waiting for live move and rationale..."];
+    }
+
     if (currentRoundData && currentRoundData.moves) {
       const move = currentRoundData.moves[modelId];
       if (move?.rationale) {
@@ -108,11 +116,13 @@ export default function GameViewer({
   // Auto-play functionality
   useEffect(() => {
     if (!isPlaying) return;
+    if (!totalRounds) return;
     
     const interval = setInterval(() => {
       setCurrentRound(prev => {
         if (prev >= totalRounds - 1) {
           setIsPlaying(false);
+          setWasAutoStopped(true);
           return prev;
         }
         return prev + 1;
@@ -122,8 +132,33 @@ export default function GameViewer({
     return () => clearInterval(interval);
   }, [isPlaying, totalRounds, playbackSpeed]);
 
+  // Keep playback in sync when new frames stream in
+  useEffect(() => {
+    if (!liveMode) {
+      prevTotalRoundsRef.current = totalRounds;
+      return;
+    }
+
+    const gainedFrame = totalRounds > prevTotalRoundsRef.current;
+    const wasAtEnd = currentRound >= prevTotalRoundsRef.current - 1;
+
+    if (gainedFrame && wasAutoStopped && wasAtEnd) {
+      setIsPlaying(true);
+      setWasAutoStopped(false);
+    }
+
+    if (currentRound > Math.max(totalRounds - 1, 0)) {
+      setCurrentRound(Math.max(totalRounds - 1, 0));
+    }
+
+    prevTotalRoundsRef.current = totalRounds;
+  }, [totalRounds, currentRound, liveMode, wasAutoStopped]);
+
   // Handle controls
-  const handlePlay = () => setIsPlaying(!isPlaying);
+  const handlePlay = () => {
+    setWasAutoStopped(false);
+    setIsPlaying(prev => !prev);
+  };
   const handleNext = () => setCurrentRound(prev => Math.min(prev + 1, totalRounds - 1));
   const handlePrev = () => setCurrentRound(prev => Math.max(prev - 1, 0));
   const handleStart = () => setCurrentRound(0);
@@ -208,7 +243,7 @@ export default function GameViewer({
           <span>Match ID: {gameId}</span>
           <Copy className="h-4 w-4" />
         </Button>
-        <VideoDownloadButton matchId={gameId} />
+        {!liveMode && <VideoDownloadButton matchId={gameId} />}
       </div>
     </>
   )

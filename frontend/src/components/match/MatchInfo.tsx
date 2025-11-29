@@ -1,3 +1,5 @@
+"use client"
+
 interface MatchInfoProps {
   modelNames: string[];
   date: string;
