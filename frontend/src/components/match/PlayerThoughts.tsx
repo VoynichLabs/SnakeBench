@@ -41,10 +41,12 @@ export default function PlayerThoughts({
   });
 
   return (
-    <div className={`h-[400px] bg-white rounded-lg border ${colorScheme.border} ${colorScheme.shadow} overflow-hidden`}>
+    <div className={`h-[320px] sm:h-[400px] bg-white rounded-lg border ${colorScheme.border} ${colorScheme.shadow} overflow-hidden`}>
       <div className="h-full flex flex-col">
-        <div className={`p-3 border-b border-gray-100 backdrop-blur-sm sticky top-0 z-10 text-center ${colorScheme.title_background} bg-opacity-50`}>
-          <h2 className="font-mono leading-none text-sm text-gray-800 px-2 py-1 inline-block rounded">{modelName}</h2>
+        <div className={`hidden lg:block p-3 border-b border-gray-100 backdrop-blur-sm sticky top-0 z-10 text-center ${colorScheme.title_background} bg-opacity-80`}>
+          <h2 className="font-mono leading-none text-sm text-white px-2 py-1 inline-block rounded">
+            {modelName}
+          </h2>
         </div>
         <div className="flex-1 p-4 overflow-auto">
           <div
