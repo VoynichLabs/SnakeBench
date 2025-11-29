@@ -1,312 +1,358 @@
 {
-  "metadata": {
-    "game_id": "c79e6dc0-2e85-4914-91d5-d6ad4dd201a5",
-    "start_time": "2025-02-09T12:38:37.778578",
-    "end_time": "2025-02-09T12:39:49.312871",
-    "models": {
-      "1": "DeepSeek-R1",
-      "2": "Llama-3.3-70B-Instruct-Turbo"
-    },
-    "game_result": {
-      "1": "won",
-      "2": "lost"
-    },
-    "final_scores": {
-      "1": 0,
-      "2": 2
-    },
-    "death_info": {
-      "2": {
-        "reason": "body_collision",
-        "round": 2
+  "version": 1,
+  "game": {
+    "id": "c79e6dc0-2e85-4914-91d5-d6ad4dd201a5",
+    "started_at": "2025-02-09T12:38:37.778578",
+    "ended_at": "2025-02-09T12:39:49.312871",
+    "game_type": "ladder",
+    "max_rounds": 100,
+    "rounds_played": 2,
+    "board": {
+      "width": 10,
+      "height": 10
+    }
+  },
+  "players": {
+    "1": {
+      "model_id": "1",
+      "name": "DeepSeek-R1",
+      "result": "won",
+      "final_score": 0,
+      "death": null,
+      "totals": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cost": 0.0
       }
     },
-    "max_rounds": 100,
-    "actual_rounds": 2
+    "2": {
+      "model_id": "2",
+      "name": "Llama-3.3-70B-Instruct-Turbo",
+      "result": "lost",
+      "final_score": 2,
+      "death": {
+        "reason": "body_collision",
+        "round": 2
+      },
+      "totals": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cost": 0.0
+      }
+    }
   },
-  "rounds": [
-    {
-      "round_number": 0,
-      "snake_positions": {
-        "1": [
-          [
-            4,
-            3
-          ]
-        ],
-        "2": [
-          [
-            8,
-            2
-          ]
+  "totals": {
+    "cost": 0.0,
+    "input_tokens": 0,
+    "output_tokens": 0
+  },
+  "initial_state": {
+    "snakes": {
+      "1": [
+        [
+          4,
+          3
         ]
-      },
-      "alive": {
-        "1": true,
-        "2": true
-      },
-      "scores": {
-        "1": 0,
-        "2": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
+      ],
+      "2": [
         [
-          6,
-          6
-        ],
-        [
-          9,
-          1
-        ],
-        [
-          2,
-          5
-        ],
-        [
-          3,
-          7
-        ],
-        [
-          9,
+          8,
           2
         ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "LEFT",
-            "rationale": "<think>\nOkay, let's see. I need to figure out the best move for my snake here. The board is 10x10, and my snake is at (4,3). The apples are at (6,6), (9,1), (2,5), (3,7), (9,2). The enemy snake is at (8,2) with an empty body, so it's just the head.\n\nFirst, I should check the possible directions I can move. From (4,3), the possible moves are UP to (4,4), DOWN to (4,2), LEFT to (3,3), or RIGHT to (5,3). I need to make sure I don't hit any walls, other snakes, or myself.\n\nLooking at the board state, the enemy snake is at (8,2) and there's an apple at (9,2). Wait, the board shows that at position (9,2) there's an apple and snake 2's body? Wait, the enemy snake positions say snake #2 is at (8,2) with body at [], so their body is just that position. So (8,2) is the head. The apple at (9,2) is next to them. So if I move towards that area, maybe I can avoid collision.\n\nBut my snake is at (4,3). Let's look at the apples. The closest apples are (2,5) and (3,7). (3,7) is up and to the left. From (4,3), moving left would take me to (3,3), then up towards (3,4), etc. But (3,7) is higher up. Alternatively, (2,5) is to the left and up. Let's see the path.\n\nIf I go LEFT to (3,3), then maybe up towards (3,4), (3,5), etc. But (2,5) is at x=2, y=5. So from (3,3), moving left again to (2,3), then up to (2,4), (2,5). That's two moves left and two up. But maybe there's a shorter path.\n\nAlternatively, moving UP from (4,3) to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Hmm. But maybe there's a better way.\n\nWait, but the enemy snake is at (8,2). So they might be moving towards the apple at (9,2) or (9,1). But that's on the other side of the board. So maybe I don't need to worry about them immediately.\n\nI need to check if any of the possible moves would cause me to hit a wall or another snake. Let's check each direction:\n\n- UP: (4,4). Is that a valid spot? The board shows at row 3 (y=3) there's the snake at (4,3). Row 4 (y=4) is empty. So moving up to (4,4) is safe. No apples there, so no growth.\n\n- DOWN: (4,2). That's within the board. No snakes there. Safe. But no apple either.\n\n- LEFT: (3,3). Also within the board. No snakes there. Safe. No apple here.\n\n- RIGHT: (5,3). Safe, no obstacles. No apple here either.\n\nSo all four directions are safe. Now, which direction gets me closer to an apple?\n\nThe apples are at (6,6), (9,1), (2,5), (3,7), (9,2). Let's calculate the Manhattan distance from (4,3) to each:\n\n- (6,6): |6-4| + |6-3| = 2 + 3 = 5\n- (9,1): 5 + 2 = 7\n- (2,5): 2 + 2 = 4\n- (3,7): 1 +4=5\n- (9,2):5 +1=6\n\nSo the closest are (2,5) at distance 4 and (3,7) at 5. Let's aim for (2,5) first.\n\nTo get to (2,5) from (4,3), the path would be moving left twice and up twice. So first move left to (3,3), then left to (2,3), then up to (2,4), then up to (2,5). But maybe there's a way to approach it more efficiently. Alternatively, moving up first then left.\n\nAlternatively, moving up from (4,3) to (4,4), then left to (3,4), left to (2,4), then up to (2,5). That's three moves. But maybe there's a better path.\n\nAlternatively, moving left first to (3,3), then up to (3,4), then left to (2,4), then up to (2,5). Also three moves. Either way, the first step would be left or up.\n\nBut since all initial moves are safe, which direction gives the best path towards the nearest apple?\n\nIf I move LEFT to (3,3), then next move could be LEFT again to (2,3), then UP twice. That's three moves to reach the apple. Alternatively, moving UP first to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP. That's four moves. So moving left first seems better.\n\nAlternatively, maybe moving UP first. Let's see. From (4,3), moving UP to (4,4). Then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Wait, same as before. Hmm.\n\nWait, maybe the Manhattan distance is the same regardless of the path. So the direction choice now depends on which path is safer. Since the enemy snake is at (8,2), which is far away, maybe not a threat. So perhaps moving left first is better.\n\nAlternatively, moving towards (3,7). Let's see. (3,7) is at x=3, y=7. From (4,3), moving left to (3,3), then up four times. That's a longer path. But maybe that's another option. But (3,7) is further away.\n\nAlternatively, the apple at (6,6) is to the right and up. But that's a longer distance. So probably better to go for (2,5) first.\n\nSo the first move should be LEFT towards (3,3), then proceed towards (2,5). But I need to make sure that moving left doesn't lead me into any danger next steps. Since the enemy snake is at (8,2), which is far away, and there's no other snakes, moving left is safe.\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But moving left first would get me closer to the apple in the same number of steps.\n\nWait, from (4,3), moving left to (3,3) is one step. Then moving left again to (2,3), then up to (2,4), then up to (2,5). So three steps. Alternatively, moving up first, then left, then left, then up. Also three steps. So same number of steps. But maybe moving left first allows me to get closer to the apple's x-coordinate earlier.\n\nAlternatively, maybe moving left first is better. Let's think about possible apples. Also, after eating an apple, the snake grows. So if I can reach an apple in the fewest moves, that's better. But in this case, the first move doesn't land on an apple. So whichever path gets me to the apple in the fewest steps.\n\nAlternatively, maybe there's another apple that's reachable in fewer steps. Let's check the apple at (3,7). From (4,3), moving left to (3,3), then up four times. That's five moves. Not as good as the (2,5) apple.\n\nThe apple at (9,1) and (9,2) are on the far right. Probably not worth going there now. The apple at (6,6) is up and right. So moving right and up. But that's a longer path.\n\nSo the best bet is to go for (2,5). So first move left to (3,3), then left to (2,3), then up twice. But I need to make sure that the path is safe. Are there any obstacles in that path?\n\nFrom (3,3), next move left to (2,3). Then up to (2,4), then up to (2,5). Are any of those positions occupied by other snakes or walls? The enemy snake is at (8,2), so no. The board state shows that at (2,5) there's an apple. So that's safe.\n\nAnother consideration: when moving towards the apple, I need to make sure that after eating it, I don't get stuck. But since the snake grows when eating an apple, but the body is only the head right now (since the snake's body is empty except for the current position?), wait, the snake's body is empty. Wait, the problem says \"Your snake ID: 1 which is currently positioned at (4,3)\". The enemy snake's body is at [], so their body is just the head. So my snake's body is also just the head. So when I eat an apple, I grow by one segment. So after eating the apple, my body will be two segments. So I need to make sure that after moving, I don't run into myself. But since I'm just the head now, moving in any direction is safe except if I reverse direction. Wait, but the last move information says direction: None. So this is the first move. So there's no previous direction. So I can move any direction without worrying about reversing into myself.\n\nSo moving left is safe. Then next move left again, then up. So the first move should be LEFT to (3,3). That's the first step towards the apple at (2,5).\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Same as moving left first. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving LEFT first is better because it's a straight path towards the apple's x-coordinate. But I need to check if there are any other apples along the way. For example, moving left to (3,3), then up to (3,4), then up to (3,5), then up to (3,6), then up to (3,7) to get that apple. But that's a longer path. But maybe after getting (2,5), I can go for (3,7). But that's a future consideration.\n\nAlternatively, maybe moving UP first allows me to reach (3,7) faster. But (3,7) is further away. So probably better to go for the closer apple.\n\nSo the best move is LEFT to (3,3), then proceed towards (2,5). So the first move should be LEFT.\n\nWait, but let me double-check. If I move LEFT to (3,3), that's safe. Then next move LEFT to (2,3). Then UP to (2,4). Then UP to (2,5) to eat the apple. That's three moves. So after three moves, I can get the apple. That's good.\n\nAlternatively, if I move UP first, then LEFT twice and UP once. Same number of moves. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving UP first allows me to have more options. For example, after moving UP to (4,4), I can then go LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But also, from (4,4), I could go RIGHT towards the apple at (6,6) if that's possible. But that's a longer path. So maybe moving UP first gives more flexibility.\n\nBut since the closest apple is (2,5), moving LEFT first seems more direct. So I think LEFT is the best first move.\n\nAnother thing to consider: the enemy snake is at (8,2). They might be moving towards the apples at (9,1) or (9,2). So they might move right or up. But since they are at (8,2), moving right would take them to (9,2) which is an apple. So they might go there. But that's on the other side of the board, so not a threat to me right now.\n\nSo the immediate danger is minimal. So I can focus on getting the closest apple.\n\nTherefore, the best move is LEFT to (3,3).\n</think>\n\nStrategy: Head towards the closest apple at (2,5) by moving left first. Next turn, continue moving left then up to reach the apple. \n\nDirection: LEFT"
-          },
-          "2": {
-            "move": "RIGHT",
-            "rationale": "To determine the best next move, I'll consider the current positions of the apples, the enemy snake, and my own snake. \n\nFirst, I notice that there's an apple at (9, 1) and another at (9, 2), both of which are close to my current position at (8, 2). However, since my snake is already at (8, 2), moving right to (9, 2) would allow me to eat the apple and gain a point. \n\nAdditionally, I should keep an eye on the enemy snake at (4, 3) to avoid potential collisions. But for now, it seems far enough away that I don't need to worry about it immediately.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions.\n\nConsidering these factors, my next move should be to eat the apple at (9, 2).\n\nNext move: RIGHT"
-          }
-        }
       ]
     },
+    "apples": [
+      [
+        6,
+        6
+      ],
+      [
+        9,
+        1
+      ],
+      [
+        2,
+        5
+      ],
+      [
+        3,
+        7
+      ],
+      [
+        9,
+        2
+      ]
+    ],
+    "alive": {
+      "1": true,
+      "2": true
+    },
+    "scores": {
+      "1": 0,
+      "2": 0
+    }
+  },
+  "frames": [
     {
-      "round_number": 1,
-      "snake_positions": {
-        "1": [
+      "round": 0,
+      "state": {
+        "snakes": {
+          "1": [
+            [
+              4,
+              3
+            ]
+          ],
+          "2": [
+            [
+              8,
+              2
+            ]
+          ]
+        },
+        "apples": [
+          [
+            6,
+            6
+          ],
+          [
+            9,
+            1
+          ],
+          [
+            2,
+            5
+          ],
           [
             3,
-            3
-          ]
-        ],
-        "2": [
+            7
+          ],
           [
             9,
             2
-          ],
-          [
-            8,
-            2
           ]
-        ]
-      },
-      "alive": {
-        "1": true,
-        "2": true
-      },
-      "scores": {
-        "1": 0,
-        "2": 1
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          6,
-          6
         ],
-        [
-          9,
-          1
-        ],
-        [
-          2,
-          5
-        ],
-        [
-          3,
-          7
-        ],
-        [
-          8,
-          6
-        ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "LEFT",
-            "rationale": "<think>\nOkay, let's see. I need to figure out the best move for my snake here. The board is 10x10, and my snake is at (4,3). The apples are at (6,6), (9,1), (2,5), (3,7), (9,2). The enemy snake is at (8,2) with an empty body, so it's just the head.\n\nFirst, I should check the possible directions I can move. From (4,3), the possible moves are UP to (4,4), DOWN to (4,2), LEFT to (3,3), or RIGHT to (5,3). I need to make sure I don't hit any walls, other snakes, or myself.\n\nLooking at the board state, the enemy snake is at (8,2) and there's an apple at (9,2). Wait, the board shows that at position (9,2) there's an apple and snake 2's body? Wait, the enemy snake positions say snake #2 is at (8,2) with body at [], so their body is just that position. So (8,2) is the head. The apple at (9,2) is next to them. So if I move towards that area, maybe I can avoid collision.\n\nBut my snake is at (4,3). Let's look at the apples. The closest apples are (2,5) and (3,7). (3,7) is up and to the left. From (4,3), moving left would take me to (3,3), then up towards (3,4), etc. But (3,7) is higher up. Alternatively, (2,5) is to the left and up. Let's see the path.\n\nIf I go LEFT to (3,3), then maybe up towards (3,4), (3,5), etc. But (2,5) is at x=2, y=5. So from (3,3), moving left again to (2,3), then up to (2,4), (2,5). That's two moves left and two up. But maybe there's a shorter path.\n\nAlternatively, moving UP from (4,3) to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Hmm. But maybe there's a better way.\n\nWait, but the enemy snake is at (8,2). So they might be moving towards the apple at (9,2) or (9,1). But that's on the other side of the board. So maybe I don't need to worry about them immediately.\n\nI need to check if any of the possible moves would cause me to hit a wall or another snake. Let's check each direction:\n\n- UP: (4,4). Is that a valid spot? The board shows at row 3 (y=3) there's the snake at (4,3). Row 4 (y=4) is empty. So moving up to (4,4) is safe. No apples there, so no growth.\n\n- DOWN: (4,2). That's within the board. No snakes there. Safe. But no apple either.\n\n- LEFT: (3,3). Also within the board. No snakes there. Safe. No apple here.\n\n- RIGHT: (5,3). Safe, no obstacles. No apple here either.\n\nSo all four directions are safe. Now, which direction gets me closer to an apple?\n\nThe apples are at (6,6), (9,1), (2,5), (3,7), (9,2). Let's calculate the Manhattan distance from (4,3) to each:\n\n- (6,6): |6-4| + |6-3| = 2 + 3 = 5\n- (9,1): 5 + 2 = 7\n- (2,5): 2 + 2 = 4\n- (3,7): 1 +4=5\n- (9,2):5 +1=6\n\nSo the closest are (2,5) at distance 4 and (3,7) at 5. Let's aim for (2,5) first.\n\nTo get to (2,5) from (4,3), the path would be moving left twice and up twice. So first move left to (3,3), then left to (2,3), then up to (2,4), then up to (2,5). But maybe there's a way to approach it more efficiently. Alternatively, moving up first then left.\n\nAlternatively, moving up from (4,3) to (4,4), then left to (3,4), left to (2,4), then up to (2,5). That's three moves. But maybe there's a better path.\n\nAlternatively, moving left first to (3,3), then up to (3,4), then left to (2,4), then up to (2,5). Also three moves. Either way, the first step would be left or up.\n\nBut since all initial moves are safe, which direction gives the best path towards the nearest apple?\n\nIf I move LEFT to (3,3), then next move could be LEFT again to (2,3), then UP twice. That's three moves to reach the apple. Alternatively, moving UP first to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP. That's four moves. So moving left first seems better.\n\nAlternatively, maybe moving UP first. Let's see. From (4,3), moving UP to (4,4). Then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Wait, same as before. Hmm.\n\nWait, maybe the Manhattan distance is the same regardless of the path. So the direction choice now depends on which path is safer. Since the enemy snake is at (8,2), which is far away, maybe not a threat. So perhaps moving left first is better.\n\nAlternatively, moving towards (3,7). Let's see. (3,7) is at x=3, y=7. From (4,3), moving left to (3,3), then up four times. That's a longer path. But maybe that's another option. But (3,7) is further away.\n\nAlternatively, the apple at (6,6) is to the right and up. But that's a longer distance. So probably better to go for (2,5) first.\n\nSo the first move should be LEFT towards (3,3), then proceed towards (2,5). But I need to make sure that moving left doesn't lead me into any danger next steps. Since the enemy snake is at (8,2), which is far away, and there's no other snakes, moving left is safe.\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But moving left first would get me closer to the apple in the same number of steps.\n\nWait, from (4,3), moving left to (3,3) is one step. Then moving left again to (2,3), then up to (2,4), then up to (2,5). So three steps. Alternatively, moving up first, then left, then left, then up. Also three steps. So same number of steps. But maybe moving left first allows me to get closer to the apple's x-coordinate earlier.\n\nAlternatively, maybe moving left first is better. Let's think about possible apples. Also, after eating an apple, the snake grows. So if I can reach an apple in the fewest moves, that's better. But in this case, the first move doesn't land on an apple. So whichever path gets me to the apple in the fewest steps.\n\nAlternatively, maybe there's another apple that's reachable in fewer steps. Let's check the apple at (3,7). From (4,3), moving left to (3,3), then up four times. That's five moves. Not as good as the (2,5) apple.\n\nThe apple at (9,1) and (9,2) are on the far right. Probably not worth going there now. The apple at (6,6) is up and right. So moving right and up. But that's a longer path.\n\nSo the best bet is to go for (2,5). So first move left to (3,3), then left to (2,3), then up twice. But I need to make sure that the path is safe. Are there any obstacles in that path?\n\nFrom (3,3), next move left to (2,3). Then up to (2,4), then up to (2,5). Are any of those positions occupied by other snakes or walls? The enemy snake is at (8,2), so no. The board state shows that at (2,5) there's an apple. So that's safe.\n\nAnother consideration: when moving towards the apple, I need to make sure that after eating it, I don't get stuck. But since the snake grows when eating an apple, but the body is only the head right now (since the snake's body is empty except for the current position?), wait, the snake's body is empty. Wait, the problem says \"Your snake ID: 1 which is currently positioned at (4,3)\". The enemy snake's body is at [], so their body is just the head. So my snake's body is also just the head. So when I eat an apple, I grow by one segment. So after eating the apple, my body will be two segments. So I need to make sure that after moving, I don't run into myself. But since I'm just the head now, moving in any direction is safe except if I reverse direction. Wait, but the last move information says direction: None. So this is the first move. So there's no previous direction. So I can move any direction without worrying about reversing into myself.\n\nSo moving left is safe. Then next move left again, then up. So the first move should be LEFT to (3,3). That's the first step towards the apple at (2,5).\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Same as moving left first. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving LEFT first is better because it's a straight path towards the apple's x-coordinate. But I need to check if there are any other apples along the way. For example, moving left to (3,3), then up to (3,4), then up to (3,5), then up to (3,6), then up to (3,7) to get that apple. But that's a longer path. But maybe after getting (2,5), I can go for (3,7). But that's a future consideration.\n\nAlternatively, maybe moving UP first allows me to reach (3,7) faster. But (3,7) is further away. So probably better to go for the closer apple.\n\nSo the best move is LEFT to (3,3), then proceed towards (2,5). So the first move should be LEFT.\n\nWait, but let me double-check. If I move LEFT to (3,3), that's safe. Then next move LEFT to (2,3). Then UP to (2,4). Then UP to (2,5) to eat the apple. That's three moves. So after three moves, I can get the apple. That's good.\n\nAlternatively, if I move UP first, then LEFT twice and UP once. Same number of moves. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving UP first allows me to have more options. For example, after moving UP to (4,4), I can then go LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But also, from (4,4), I could go RIGHT towards the apple at (6,6) if that's possible. But that's a longer path. So maybe moving UP first gives more flexibility.\n\nBut since the closest apple is (2,5), moving LEFT first seems more direct. So I think LEFT is the best first move.\n\nAnother thing to consider: the enemy snake is at (8,2). They might be moving towards the apples at (9,1) or (9,2). So they might move right or up. But since they are at (8,2), moving right would take them to (9,2) which is an apple. So they might go there. But that's on the other side of the board, so not a threat to me right now.\n\nSo the immediate danger is minimal. So I can focus on getting the closest apple.\n\nTherefore, the best move is LEFT to (3,3).\n</think>\n\nStrategy: Head towards the closest apple at (2,5) by moving left first. Next turn, continue moving left then up to reach the apple. \n\nDirection: LEFT"
-          },
-          "2": {
-            "move": "RIGHT",
-            "rationale": "To determine the best next move, I'll consider the current positions of the apples, the enemy snake, and my own snake. \n\nFirst, I notice that there's an apple at (9, 1) and another at (9, 2), both of which are close to my current position at (8, 2). However, since my snake is already at (8, 2), moving right to (9, 2) would allow me to eat the apple and gain a point. \n\nAdditionally, I should keep an eye on the enemy snake at (4, 3) to avoid potential collisions. But for now, it seems far enough away that I don't need to worry about it immediately.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions.\n\nConsidering these factors, my next move should be to eat the apple at (9, 2).\n\nNext move: RIGHT"
-          }
+        "alive": {
+          "1": true,
+          "2": true
         },
-        {
-          "1": {
-            "move": "LEFT",
-            "rationale": "<think>\nOkay, let's analyze the current situation again. My snake is at (3,3) after moving left last turn. The apples are still at (6,6), (9,1), (2,5), (3,7), (8,6). The enemy snake #2 is at (9,2) with a body part at (8,2). \n\nPossible moves from (3,3) are UP to (3,4), DOWN to (3,2), LEFT to (2,3), or RIGHT to (4,3). Need to check for safety and proximity to apples.\n\nThe closest apple is still (2,5). From (3,3), moving LEFT to (2,3) gets me closer. Then next move UP to (2,4), then UP to (2,5). All these positions are safe as there are no snakes or walls in the path. \n\nAlternatively, moving UP from (3,3) to (3,4) could also be a step towards (3,7), but that's further. The enemy snake is at (9,2), which is far away, so no immediate threat. \n\nChecking each direction:\n- LEFT to (2,3): Safe, no obstacles.\n- UP to (3,4): Safe, no apples here.\n- DOWN to (3,2): Safe but moves away from the target apple.\n- RIGHT to (4,3): Back to previous position, not helpful.\n\nBest move is LEFT to continue towards (2,5). This path is direct and safe. Next turn, plan to move UP twice to reach the apple.\n</think>\n\nDirection: LEFT"
-          },
-          "2": {
-            "move": "DOWN",
-            "rationale": "Let's analyze the current situation. I'm currently at position (9, 2) and I've just eaten an apple. The nearest apples to me are at (6, 6), (9, 1), (2, 5), (3, 7), and (8, 6). Since I'm already at the rightmost edge of the board, moving right is not an option.\n\nI notice that the apple at (9, 1) is just below me, so moving down could be a good option to eat that apple. However, I should also consider the positions of the other apples and the enemy snake to plan my next few moves.\n\nThe enemy snake is currently at (3, 3), which is relatively far away from me. I'll keep an eye on it, but for now, it doesn't seem like an immediate threat.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions. I'll try to move towards the apple at (9, 1) first, and then consider moving towards the other apples.\n\nConsidering these factors, my next move should be to move down to eat the apple at (9, 1).\n\nNext move: DOWN"
-          }
+        "scores": {
+          "1": 0,
+          "2": 0
         }
-      ]
+      },
+      "moves": {
+        "1": {
+          "move": "LEFT",
+          "rationale": "<think>\nOkay, let's see. I need to figure out the best move for my snake here. The board is 10x10, and my snake is at (4,3). The apples are at (6,6), (9,1), (2,5), (3,7), (9,2). The enemy snake is at (8,2) with an empty body, so it's just the head.\n\nFirst, I should check the possible directions I can move. From (4,3), the possible moves are UP to (4,4), DOWN to (4,2), LEFT to (3,3), or RIGHT to (5,3). I need to make sure I don't hit any walls, other snakes, or myself.\n\nLooking at the board state, the enemy snake is at (8,2) and there's an apple at (9,2). Wait, the board shows that at position (9,2) there's an apple and snake 2's body? Wait, the enemy snake positions say snake #2 is at (8,2) with body at [], so their body is just that position. So (8,2) is the head. The apple at (9,2) is next to them. So if I move towards that area, maybe I can avoid collision.\n\nBut my snake is at (4,3). Let's look at the apples. The closest apples are (2,5) and (3,7). (3,7) is up and to the left. From (4,3), moving left would take me to (3,3), then up towards (3,4), etc. But (3,7) is higher up. Alternatively, (2,5) is to the left and up. Let's see the path.\n\nIf I go LEFT to (3,3), then maybe up towards (3,4), (3,5), etc. But (2,5) is at x=2, y=5. So from (3,3), moving left again to (2,3), then up to (2,4), (2,5). That's two moves left and two up. But maybe there's a shorter path.\n\nAlternatively, moving UP from (4,3) to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Hmm. But maybe there's a better way.\n\nWait, but the enemy snake is at (8,2). So they might be moving towards the apple at (9,2) or (9,1). But that's on the other side of the board. So maybe I don't need to worry about them immediately.\n\nI need to check if any of the possible moves would cause me to hit a wall or another snake. Let's check each direction:\n\n- UP: (4,4). Is that a valid spot? The board shows at row 3 (y=3) there's the snake at (4,3). Row 4 (y=4) is empty. So moving up to (4,4) is safe. No apples there, so no growth.\n\n- DOWN: (4,2). That's within the board. No snakes there. Safe. But no apple either.\n\n- LEFT: (3,3). Also within the board. No snakes there. Safe. No apple here.\n\n- RIGHT: (5,3). Safe, no obstacles. No apple here either.\n\nSo all four directions are safe. Now, which direction gets me closer to an apple?\n\nThe apples are at (6,6), (9,1), (2,5), (3,7), (9,2). Let's calculate the Manhattan distance from (4,3) to each:\n\n- (6,6): |6-4| + |6-3| = 2 + 3 = 5\n- (9,1): 5 + 2 = 7\n- (2,5): 2 + 2 = 4\n- (3,7): 1 +4=5\n- (9,2):5 +1=6\n\nSo the closest are (2,5) at distance 4 and (3,7) at 5. Let's aim for (2,5) first.\n\nTo get to (2,5) from (4,3), the path would be moving left twice and up twice. So first move left to (3,3), then left to (2,3), then up to (2,4), then up to (2,5). But maybe there's a way to approach it more efficiently. Alternatively, moving up first then left.\n\nAlternatively, moving up from (4,3) to (4,4), then left to (3,4), left to (2,4), then up to (2,5). That's three moves. But maybe there's a better path.\n\nAlternatively, moving left first to (3,3), then up to (3,4), then left to (2,4), then up to (2,5). Also three moves. Either way, the first step would be left or up.\n\nBut since all initial moves are safe, which direction gives the best path towards the nearest apple?\n\nIf I move LEFT to (3,3), then next move could be LEFT again to (2,3), then UP twice. That's three moves to reach the apple. Alternatively, moving UP first to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP. That's four moves. So moving left first seems better.\n\nAlternatively, maybe moving UP first. Let's see. From (4,3), moving UP to (4,4). Then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Wait, same as before. Hmm.\n\nWait, maybe the Manhattan distance is the same regardless of the path. So the direction choice now depends on which path is safer. Since the enemy snake is at (8,2), which is far away, maybe not a threat. So perhaps moving left first is better.\n\nAlternatively, moving towards (3,7). Let's see. (3,7) is at x=3, y=7. From (4,3), moving left to (3,3), then up four times. That's a longer path. But maybe that's another option. But (3,7) is further away.\n\nAlternatively, the apple at (6,6) is to the right and up. But that's a longer distance. So probably better to go for (2,5) first.\n\nSo the first move should be LEFT towards (3,3), then proceed towards (2,5). But I need to make sure that moving left doesn't lead me into any danger next steps. Since the enemy snake is at (8,2), which is far away, and there's no other snakes, moving left is safe.\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But moving left first would get me closer to the apple in the same number of steps.\n\nWait, from (4,3), moving left to (3,3) is one step. Then moving left again to (2,3), then up to (2,4), then up to (2,5). So three steps. Alternatively, moving up first, then left, then left, then up. Also three steps. So same number of steps. But maybe moving left first allows me to get closer to the apple's x-coordinate earlier.\n\nAlternatively, maybe moving left first is better. Let's think about possible apples. Also, after eating an apple, the snake grows. So if I can reach an apple in the fewest moves, that's better. But in this case, the first move doesn't land on an apple. So whichever path gets me to the apple in the fewest steps.\n\nAlternatively, maybe there's another apple that's reachable in fewer steps. Let's check the apple at (3,7). From (4,3), moving left to (3,3), then up four times. That's five moves. Not as good as the (2,5) apple.\n\nThe apple at (9,1) and (9,2) are on the far right. Probably not worth going there now. The apple at (6,6) is up and right. So moving right and up. But that's a longer path.\n\nSo the best bet is to go for (2,5). So first move left to (3,3), then left to (2,3), then up twice. But I need to make sure that the path is safe. Are there any obstacles in that path?\n\nFrom (3,3), next move left to (2,3). Then up to (2,4), then up to (2,5). Are any of those positions occupied by other snakes or walls? The enemy snake is at (8,2), so no. The board state shows that at (2,5) there's an apple. So that's safe.\n\nAnother consideration: when moving towards the apple, I need to make sure that after eating it, I don't get stuck. But since the snake grows when eating an apple, but the body is only the head right now (since the snake's body is empty except for the current position?), wait, the snake's body is empty. Wait, the problem says \"Your snake ID: 1 which is currently positioned at (4,3)\". The enemy snake's body is at [], so their body is just the head. So my snake's body is also just the head. So when I eat an apple, I grow by one segment. So after eating the apple, my body will be two segments. So I need to make sure that after moving, I don't run into myself. But since I'm just the head now, moving in any direction is safe except if I reverse direction. Wait, but the last move information says direction: None. So this is the first move. So there's no previous direction. So I can move any direction without worrying about reversing into myself.\n\nSo moving left is safe. Then next move left again, then up. So the first move should be LEFT to (3,3). That's the first step towards the apple at (2,5).\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Same as moving left first. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving LEFT first is better because it's a straight path towards the apple's x-coordinate. But I need to check if there are any other apples along the way. For example, moving left to (3,3), then up to (3,4), then up to (3,5), then up to (3,6), then up to (3,7) to get that apple. But that's a longer path. But maybe after getting (2,5), I can go for (3,7). But that's a future consideration.\n\nAlternatively, maybe moving UP first allows me to reach (3,7) faster. But (3,7) is further away. So probably better to go for the closer apple.\n\nSo the best move is LEFT to (3,3), then proceed towards (2,5). So the first move should be LEFT.\n\nWait, but let me double-check. If I move LEFT to (3,3), that's safe. Then next move LEFT to (2,3). Then UP to (2,4). Then UP to (2,5) to eat the apple. That's three moves. So after three moves, I can get the apple. That's good.\n\nAlternatively, if I move UP first, then LEFT twice and UP once. Same number of moves. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving UP first allows me to have more options. For example, after moving UP to (4,4), I can then go LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But also, from (4,4), I could go RIGHT towards the apple at (6,6) if that's possible. But that's a longer path. So maybe moving UP first gives more flexibility.\n\nBut since the closest apple is (2,5), moving LEFT first seems more direct. So I think LEFT is the best first move.\n\nAnother thing to consider: the enemy snake is at (8,2). They might be moving towards the apples at (9,1) or (9,2). So they might move right or up. But since they are at (8,2), moving right would take them to (9,2) which is an apple. So they might go there. But that's on the other side of the board, so not a threat to me right now.\n\nSo the immediate danger is minimal. So I can focus on getting the closest apple.\n\nTherefore, the best move is LEFT to (3,3).\n</think>\n\nStrategy: Head towards the closest apple at (2,5) by moving left first. Next turn, continue moving left then up to reach the apple. \n\nDirection: LEFT"
+        },
+        "2": {
+          "move": "RIGHT",
+          "rationale": "To determine the best next move, I'll consider the current positions of the apples, the enemy snake, and my own snake. \n\nFirst, I notice that there's an apple at (9, 1) and another at (9, 2), both of which are close to my current position at (8, 2). However, since my snake is already at (8, 2), moving right to (9, 2) would allow me to eat the apple and gain a point. \n\nAdditionally, I should keep an eye on the enemy snake at (4, 3) to avoid potential collisions. But for now, it seems far enough away that I don't need to worry about it immediately.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions.\n\nConsidering these factors, my next move should be to eat the apple at (9, 2).\n\nNext move: RIGHT"
+        }
+      }
     },
     {
-      "round_number": 2,
-      "snake_positions": {
-        "1": [
-          [
-            2,
-            3
+      "round": 1,
+      "state": {
+        "snakes": {
+          "1": [
+            [
+              3,
+              3
+            ]
+          ],
+          "2": [
+            [
+              9,
+              2
+            ],
+            [
+              8,
+              2
+            ]
           ]
-        ],
-        "2": [
+        },
+        "apples": [
+          [
+            6,
+            6
+          ],
           [
             9,
             1
           ],
           [
-            9,
-            2
+            2,
+            5
+          ],
+          [
+            3,
+            7
           ],
           [
             8,
-            2
+            6
           ]
-        ]
-      },
-      "alive": {
-        "1": true,
-        "2": true
-      },
-      "scores": {
-        "1": 0,
-        "2": 2
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          6,
-          6
         ],
-        [
-          2,
-          5
-        ],
-        [
-          3,
-          7
-        ],
-        [
-          8,
-          6
-        ],
-        [
-          6,
-          8
-        ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "LEFT",
-            "rationale": "<think>\nOkay, let's see. I need to figure out the best move for my snake here. The board is 10x10, and my snake is at (4,3). The apples are at (6,6), (9,1), (2,5), (3,7), (9,2). The enemy snake is at (8,2) with an empty body, so it's just the head.\n\nFirst, I should check the possible directions I can move. From (4,3), the possible moves are UP to (4,4), DOWN to (4,2), LEFT to (3,3), or RIGHT to (5,3). I need to make sure I don't hit any walls, other snakes, or myself.\n\nLooking at the board state, the enemy snake is at (8,2) and there's an apple at (9,2). Wait, the board shows that at position (9,2) there's an apple and snake 2's body? Wait, the enemy snake positions say snake #2 is at (8,2) with body at [], so their body is just that position. So (8,2) is the head. The apple at (9,2) is next to them. So if I move towards that area, maybe I can avoid collision.\n\nBut my snake is at (4,3). Let's look at the apples. The closest apples are (2,5) and (3,7). (3,7) is up and to the left. From (4,3), moving left would take me to (3,3), then up towards (3,4), etc. But (3,7) is higher up. Alternatively, (2,5) is to the left and up. Let's see the path.\n\nIf I go LEFT to (3,3), then maybe up towards (3,4), (3,5), etc. But (2,5) is at x=2, y=5. So from (3,3), moving left again to (2,3), then up to (2,4), (2,5). That's two moves left and two up. But maybe there's a shorter path.\n\nAlternatively, moving UP from (4,3) to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Hmm. But maybe there's a better way.\n\nWait, but the enemy snake is at (8,2). So they might be moving towards the apple at (9,2) or (9,1). But that's on the other side of the board. So maybe I don't need to worry about them immediately.\n\nI need to check if any of the possible moves would cause me to hit a wall or another snake. Let's check each direction:\n\n- UP: (4,4). Is that a valid spot? The board shows at row 3 (y=3) there's the snake at (4,3). Row 4 (y=4) is empty. So moving up to (4,4) is safe. No apples there, so no growth.\n\n- DOWN: (4,2). That's within the board. No snakes there. Safe. But no apple either.\n\n- LEFT: (3,3). Also within the board. No snakes there. Safe. No apple here.\n\n- RIGHT: (5,3). Safe, no obstacles. No apple here either.\n\nSo all four directions are safe. Now, which direction gets me closer to an apple?\n\nThe apples are at (6,6), (9,1), (2,5), (3,7), (9,2). Let's calculate the Manhattan distance from (4,3) to each:\n\n- (6,6): |6-4| + |6-3| = 2 + 3 = 5\n- (9,1): 5 + 2 = 7\n- (2,5): 2 + 2 = 4\n- (3,7): 1 +4=5\n- (9,2):5 +1=6\n\nSo the closest are (2,5) at distance 4 and (3,7) at 5. Let's aim for (2,5) first.\n\nTo get to (2,5) from (4,3), the path would be moving left twice and up twice. So first move left to (3,3), then left to (2,3), then up to (2,4), then up to (2,5). But maybe there's a way to approach it more efficiently. Alternatively, moving up first then left.\n\nAlternatively, moving up from (4,3) to (4,4), then left to (3,4), left to (2,4), then up to (2,5). That's three moves. But maybe there's a better path.\n\nAlternatively, moving left first to (3,3), then up to (3,4), then left to (2,4), then up to (2,5). Also three moves. Either way, the first step would be left or up.\n\nBut since all initial moves are safe, which direction gives the best path towards the nearest apple?\n\nIf I move LEFT to (3,3), then next move could be LEFT again to (2,3), then UP twice. That's three moves to reach the apple. Alternatively, moving UP first to (4,4), then LEFT to (3,4), then LEFT to (2,4), then UP. That's four moves. So moving left first seems better.\n\nAlternatively, maybe moving UP first. Let's see. From (4,3), moving UP to (4,4). Then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Wait, same as before. Hmm.\n\nWait, maybe the Manhattan distance is the same regardless of the path. So the direction choice now depends on which path is safer. Since the enemy snake is at (8,2), which is far away, maybe not a threat. So perhaps moving left first is better.\n\nAlternatively, moving towards (3,7). Let's see. (3,7) is at x=3, y=7. From (4,3), moving left to (3,3), then up four times. That's a longer path. But maybe that's another option. But (3,7) is further away.\n\nAlternatively, the apple at (6,6) is to the right and up. But that's a longer distance. So probably better to go for (2,5) first.\n\nSo the first move should be LEFT towards (3,3), then proceed towards (2,5). But I need to make sure that moving left doesn't lead me into any danger next steps. Since the enemy snake is at (8,2), which is far away, and there's no other snakes, moving left is safe.\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But moving left first would get me closer to the apple in the same number of steps.\n\nWait, from (4,3), moving left to (3,3) is one step. Then moving left again to (2,3), then up to (2,4), then up to (2,5). So three steps. Alternatively, moving up first, then left, then left, then up. Also three steps. So same number of steps. But maybe moving left first allows me to get closer to the apple's x-coordinate earlier.\n\nAlternatively, maybe moving left first is better. Let's think about possible apples. Also, after eating an apple, the snake grows. So if I can reach an apple in the fewest moves, that's better. But in this case, the first move doesn't land on an apple. So whichever path gets me to the apple in the fewest steps.\n\nAlternatively, maybe there's another apple that's reachable in fewer steps. Let's check the apple at (3,7). From (4,3), moving left to (3,3), then up four times. That's five moves. Not as good as the (2,5) apple.\n\nThe apple at (9,1) and (9,2) are on the far right. Probably not worth going there now. The apple at (6,6) is up and right. So moving right and up. But that's a longer path.\n\nSo the best bet is to go for (2,5). So first move left to (3,3), then left to (2,3), then up twice. But I need to make sure that the path is safe. Are there any obstacles in that path?\n\nFrom (3,3), next move left to (2,3). Then up to (2,4), then up to (2,5). Are any of those positions occupied by other snakes or walls? The enemy snake is at (8,2), so no. The board state shows that at (2,5) there's an apple. So that's safe.\n\nAnother consideration: when moving towards the apple, I need to make sure that after eating it, I don't get stuck. But since the snake grows when eating an apple, but the body is only the head right now (since the snake's body is empty except for the current position?), wait, the snake's body is empty. Wait, the problem says \"Your snake ID: 1 which is currently positioned at (4,3)\". The enemy snake's body is at [], so their body is just the head. So my snake's body is also just the head. So when I eat an apple, I grow by one segment. So after eating the apple, my body will be two segments. So I need to make sure that after moving, I don't run into myself. But since I'm just the head now, moving in any direction is safe except if I reverse direction. Wait, but the last move information says direction: None. So this is the first move. So there's no previous direction. So I can move any direction without worrying about reversing into myself.\n\nSo moving left is safe. Then next move left again, then up. So the first move should be LEFT to (3,3). That's the first step towards the apple at (2,5).\n\nAlternatively, maybe moving UP first. Let's see. If I move UP to (4,4), then next move could be LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. Same as moving left first. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving LEFT first is better because it's a straight path towards the apple's x-coordinate. But I need to check if there are any other apples along the way. For example, moving left to (3,3), then up to (3,4), then up to (3,5), then up to (3,6), then up to (3,7) to get that apple. But that's a longer path. But maybe after getting (2,5), I can go for (3,7). But that's a future consideration.\n\nAlternatively, maybe moving UP first allows me to reach (3,7) faster. But (3,7) is further away. So probably better to go for the closer apple.\n\nSo the best move is LEFT to (3,3), then proceed towards (2,5). So the first move should be LEFT.\n\nWait, but let me double-check. If I move LEFT to (3,3), that's safe. Then next move LEFT to (2,3). Then UP to (2,4). Then UP to (2,5) to eat the apple. That's three moves. So after three moves, I can get the apple. That's good.\n\nAlternatively, if I move UP first, then LEFT twice and UP once. Same number of moves. But maybe the path is safer. Hmm.\n\nAlternatively, maybe moving UP first allows me to have more options. For example, after moving UP to (4,4), I can then go LEFT to (3,4), then LEFT to (2,4), then UP to (2,5). That's three moves. But also, from (4,4), I could go RIGHT towards the apple at (6,6) if that's possible. But that's a longer path. So maybe moving UP first gives more flexibility.\n\nBut since the closest apple is (2,5), moving LEFT first seems more direct. So I think LEFT is the best first move.\n\nAnother thing to consider: the enemy snake is at (8,2). They might be moving towards the apples at (9,1) or (9,2). So they might move right or up. But since they are at (8,2), moving right would take them to (9,2) which is an apple. So they might go there. But that's on the other side of the board, so not a threat to me right now.\n\nSo the immediate danger is minimal. So I can focus on getting the closest apple.\n\nTherefore, the best move is LEFT to (3,3).\n</think>\n\nStrategy: Head towards the closest apple at (2,5) by moving left first. Next turn, continue moving left then up to reach the apple. \n\nDirection: LEFT"
-          },
-          "2": {
-            "move": "RIGHT",
-            "rationale": "To determine the best next move, I'll consider the current positions of the apples, the enemy snake, and my own snake. \n\nFirst, I notice that there's an apple at (9, 1) and another at (9, 2), both of which are close to my current position at (8, 2). However, since my snake is already at (8, 2), moving right to (9, 2) would allow me to eat the apple and gain a point. \n\nAdditionally, I should keep an eye on the enemy snake at (4, 3) to avoid potential collisions. But for now, it seems far enough away that I don't need to worry about it immediately.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions.\n\nConsidering these factors, my next move should be to eat the apple at (9, 2).\n\nNext move: RIGHT"
-          }
+        "alive": {
+          "1": true,
+          "2": true
         },
-        {
-          "1": {
-            "move": "LEFT",
-            "rationale": "<think>\nOkay, let's analyze the current situation again. My snake is at (3,3) after moving left last turn. The apples are still at (6,6), (9,1), (2,5), (3,7), (8,6). The enemy snake #2 is at (9,2) with a body part at (8,2). \n\nPossible moves from (3,3) are UP to (3,4), DOWN to (3,2), LEFT to (2,3), or RIGHT to (4,3). Need to check for safety and proximity to apples.\n\nThe closest apple is still (2,5). From (3,3), moving LEFT to (2,3) gets me closer. Then next move UP to (2,4), then UP to (2,5). All these positions are safe as there are no snakes or walls in the path. \n\nAlternatively, moving UP from (3,3) to (3,4) could also be a step towards (3,7), but that's further. The enemy snake is at (9,2), which is far away, so no immediate threat. \n\nChecking each direction:\n- LEFT to (2,3): Safe, no obstacles.\n- UP to (3,4): Safe, no apples here.\n- DOWN to (3,2): Safe but moves away from the target apple.\n- RIGHT to (4,3): Back to previous position, not helpful.\n\nBest move is LEFT to continue towards (2,5). This path is direct and safe. Next turn, plan to move UP twice to reach the apple.\n</think>\n\nDirection: LEFT"
-          },
-          "2": {
-            "move": "DOWN",
-            "rationale": "Let's analyze the current situation. I'm currently at position (9, 2) and I've just eaten an apple. The nearest apples to me are at (6, 6), (9, 1), (2, 5), (3, 7), and (8, 6). Since I'm already at the rightmost edge of the board, moving right is not an option.\n\nI notice that the apple at (9, 1) is just below me, so moving down could be a good option to eat that apple. However, I should also consider the positions of the other apples and the enemy snake to plan my next few moves.\n\nThe enemy snake is currently at (3, 3), which is relatively far away from me. I'll keep an eye on it, but for now, it doesn't seem like an immediate threat.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions. I'll try to move towards the apple at (9, 1) first, and then consider moving towards the other apples.\n\nConsidering these factors, my next move should be to move down to eat the apple at (9, 1).\n\nNext move: DOWN"
-          }
+        "scores": {
+          "1": 0,
+          "2": 1
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "LEFT",
+          "rationale": "<think>\nOkay, let's analyze the current situation again. My snake is at (3,3) after moving left last turn. The apples are still at (6,6), (9,1), (2,5), (3,7), (8,6). The enemy snake #2 is at (9,2) with a body part at (8,2). \n\nPossible moves from (3,3) are UP to (3,4), DOWN to (3,2), LEFT to (2,3), or RIGHT to (4,3). Need to check for safety and proximity to apples.\n\nThe closest apple is still (2,5). From (3,3), moving LEFT to (2,3) gets me closer. Then next move UP to (2,4), then UP to (2,5). All these positions are safe as there are no snakes or walls in the path. \n\nAlternatively, moving UP from (3,3) to (3,4) could also be a step towards (3,7), but that's further. The enemy snake is at (9,2), which is far away, so no immediate threat. \n\nChecking each direction:\n- LEFT to (2,3): Safe, no obstacles.\n- UP to (3,4): Safe, no apples here.\n- DOWN to (3,2): Safe but moves away from the target apple.\n- RIGHT to (4,3): Back to previous position, not helpful.\n\nBest move is LEFT to continue towards (2,5). This path is direct and safe. Next turn, plan to move UP twice to reach the apple.\n</think>\n\nDirection: LEFT"
         },
+        "2": {
+          "move": "DOWN",
+          "rationale": "Let's analyze the current situation. I'm currently at position (9, 2) and I've just eaten an apple. The nearest apples to me are at (6, 6), (9, 1), (2, 5), (3, 7), and (8, 6). Since I'm already at the rightmost edge of the board, moving right is not an option.\n\nI notice that the apple at (9, 1) is just below me, so moving down could be a good option to eat that apple. However, I should also consider the positions of the other apples and the enemy snake to plan my next few moves.\n\nThe enemy snake is currently at (3, 3), which is relatively far away from me. I'll keep an eye on it, but for now, it doesn't seem like an immediate threat.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions. I'll try to move towards the apple at (9, 1) first, and then consider moving towards the other apples.\n\nConsidering these factors, my next move should be to move down to eat the apple at (9, 1).\n\nNext move: DOWN"
+        }
+      }
+    },
+    {
+      "round": 2,
+      "state": {
+        "snakes": {
+          "1": [
+            [
+              2,
+              3
+            ]
+          ],
+          "2": [
+            [
+              9,
+              1
+            ],
+            [
+              9,
+              2
+            ],
+            [
+              8,
+              2
+            ]
+          ]
+        },
+        "apples": [
+          [
+            6,
+            6
+          ],
+          [
+            2,
+            5
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            8,
+            6
+          ],
+          [
+            6,
+            8
+          ]
+        ],
+        "alive": {
+          "1": true,
+          "2": true
+        },
+        "scores": {
+          "1": 0,
+          "2": 2
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "UP",
+          "rationale": "<think>\nOkay, let's see. My snake is currently at (2,3) after moving left last turn. The apples are at (6,6), (2,5), (3,7), (8,6), (6,8). The enemy snake #2 is at (9,1) with a body part at (9,2) and (8,2). \n\nFirst, I need to check possible moves from (2,3). The directions available are UP to (2,4), DOWN to (2,2), LEFT to (1,3), or RIGHT to (3,3). \n\nLooking at the apples, the closest one is (2,5), which is two steps up from my current position. If I move UP twice, I can reach it. But I need to make sure the path is safe.\n\nCheck for obstacles: Moving UP to (2,4) is safe. Then next turn, moving UP again to (2,5) would get the apple. There's no snake or wall in that path. \n\nAlternatively, the apple at (3,7) is further away. Moving towards that would require going right and up, but that's longer and might risk encountering the enemy snake later. \n\nThe enemy snake is at (9,1) and (9,2), which is far from my current position. Their body parts are at (9,2) and (8,2), so moving left to (1,3) would take me away from them. But moving left might not be necessary if I can go for the apple at (2,5).\n\nWait, if I move UP now to (2,4), next turn I can move UP again to (2,5) to get the apple. That seems efficient. Are there any dangers in moving UP? The board state shows that (2,4) is empty. The enemy snake is on the other side. \n\nWhat about moving LEFT to (1,3)? That's safe, but it doesn't help me reach an apple quickly. Moving RIGHT to (3,3) would take me back where I was, which isn't useful. DOWN to (2,2) moves away from the apples. \n\nSo the best move is UP towards the apple at (2,5). Next turn, I can continue UP to collect it. Need to make sure that after eating the apple, I don't run into myself or other snakes. But since I'm growing, the tail will follow, so the path should stay clear. \n\nTherefore, the direction should be UP.\n</think>\n\nUP"
+        },
+        "2": {
+          "move": "UP",
+          "rationale": "Let's analyze the current situation. I'm currently at position (9, 1) and I've just moved down. The nearest apples to me are at (6, 6), (2, 5), (3, 7), (8, 6), and (6, 8). Since I'm already at the bottom edge of the board, moving down is not an option.\n\nI notice that the apples at (2, 5) and (6, 6) are relatively close to me, but I need to move up and left to reach them. The enemy snake is currently at (2, 3), which is still relatively far away from me. I'll keep an eye on it, but for now, it doesn't seem like an immediate threat.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions. I'll try to move towards the apple at (2, 5) or (6, 6) first.\n\nConsidering these factors, I think moving up would be a good option to start heading towards the apples. This will also give me more flexibility to move left or right in the next turns.\n\nMy strategy for the next turn is to continue moving up and then decide whether to move left or right to reach the nearest apple.\n\nNext move: UP"
+        }
+      },
+      "events": [
         {
-          "1": {
-            "move": "UP",
-            "rationale": "<think>\nOkay, let's see. My snake is currently at (2,3) after moving left last turn. The apples are at (6,6), (2,5), (3,7), (8,6), (6,8). The enemy snake #2 is at (9,1) with a body part at (9,2) and (8,2). \n\nFirst, I need to check possible moves from (2,3). The directions available are UP to (2,4), DOWN to (2,2), LEFT to (1,3), or RIGHT to (3,3). \n\nLooking at the apples, the closest one is (2,5), which is two steps up from my current position. If I move UP twice, I can reach it. But I need to make sure the path is safe.\n\nCheck for obstacles: Moving UP to (2,4) is safe. Then next turn, moving UP again to (2,5) would get the apple. There's no snake or wall in that path. \n\nAlternatively, the apple at (3,7) is further away. Moving towards that would require going right and up, but that's longer and might risk encountering the enemy snake later. \n\nThe enemy snake is at (9,1) and (9,2), which is far from my current position. Their body parts are at (9,2) and (8,2), so moving left to (1,3) would take me away from them. But moving left might not be necessary if I can go for the apple at (2,5).\n\nWait, if I move UP now to (2,4), next turn I can move UP again to (2,5) to get the apple. That seems efficient. Are there any dangers in moving UP? The board state shows that (2,4) is empty. The enemy snake is on the other side. \n\nWhat about moving LEFT to (1,3)? That's safe, but it doesn't help me reach an apple quickly. Moving RIGHT to (3,3) would take me back where I was, which isn't useful. DOWN to (2,2) moves away from the apples. \n\nSo the best move is UP towards the apple at (2,5). Next turn, I can continue UP to collect it. Need to make sure that after eating the apple, I don't run into myself or other snakes. But since I'm growing, the tail will follow, so the path should stay clear. \n\nTherefore, the direction should be UP.\n</think>\n\nUP"
-          },
-          "2": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation. I'm currently at position (9, 1) and I've just moved down. The nearest apples to me are at (6, 6), (2, 5), (3, 7), (8, 6), and (6, 8). Since I'm already at the bottom edge of the board, moving down is not an option.\n\nI notice that the apples at (2, 5) and (6, 6) are relatively close to me, but I need to move up and left to reach them. The enemy snake is currently at (2, 3), which is still relatively far away from me. I'll keep an eye on it, but for now, it doesn't seem like an immediate threat.\n\nMy strategy for the next few turns will be to prioritize eating the nearby apples to grow my snake and gain points, while also being mindful of the enemy snake's position to avoid collisions. I'll try to move towards the apple at (2, 5) or (6, 6) first.\n\nConsidering these factors, I think moving up would be a good option to start heading towards the apples. This will also give me more flexibility to move left or right in the next turns.\n\nMy strategy for the next turn is to continue moving up and then decide whether to move left or right to reach the nearest apple.\n\nNext move: UP"
-          }
+          "type": "death",
+          "player_id": "2",
+          "reason": "body_collision"
         }
       ]
     },
     {
-      "round_number": 2,
-      "snake_positions": {
-        "1": [
-          [
-            2,
-            3
+      "round": 2,
+      "state": {
+        "snakes": {
+          "1": [
+            [
+              2,
+              3
+            ]
+          ],
+          "2": [
+            [
+              9,
+              1
+            ],
+            [
+              9,
+              2
+            ],
+            [
+              8,
+              2
+            ]
           ]
-        ],
-        "2": [
+        },
+        "apples": [
           [
-            9,
-            1
+            6,
+            6
           ],
           [
-            9,
-            2
+            2,
+            5
+          ],
+          [
+            3,
+            7
           ],
           [
             8,
-            2
+            6
+          ],
+          [
+            6,
+            8
           ]
-        ]
+        ],
+        "alive": {
+          "1": true,
+          "2": false
+        },
+        "scores": {
+          "1": 0,
+          "2": 2
+        }
       },
-      "alive": {
-        "1": true,
-        "2": false
-      },
-      "scores": {
-        "1": 0,
-        "2": 2
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          6,
-          6
-        ],
-        [
-          2,
-          5
-        ],
-        [
-          3,
-          7
-        ],
-        [
-          8,
-          6
-        ],
-        [
-          6,
-          8
-        ]
-      ],
-      "move_history": []
+      "moves": null,
+      "events": [
+        {
+          "type": "death",
+          "player_id": "2",
+          "reason": "body_collision"
+        }
+      ]
     }
   ]
 }

@@ -1,267 +1,299 @@
 {
-  "metadata": {
-    "game_id": "23603477-9557-4525-8ded-a708b61520cd",
-    "start_time": "2025-11-15T13:23:22.265886",
-    "end_time": "2025-11-15T13:23:26.780295",
-    "models": {
-      "0": "LFM2-2.6B",
-      "1": "LFM2-8B-A1B"
-    },
-    "game_result": {
-      "1": "lost",
-      "0": "won"
-    },
-    "final_scores": {
-      "0": 0,
-      "1": 0
-    },
-    "death_info": {
-      "1": {
-        "reason": "wall",
-        "round": 1
-      }
-    },
+  "version": 1,
+  "game": {
+    "id": "23603477-9557-4525-8ded-a708b61520cd",
+    "started_at": "2025-11-15T13:23:22.265886",
+    "ended_at": "2025-11-15T13:23:26.780295",
+    "game_type": "ladder",
     "max_rounds": 100,
-    "actual_rounds": 2,
-    "total_cost": 0.00025265,
-    "player_costs": {
-      "0": 0.00012105,
-      "1": 0.0001316
+    "rounds_played": 2,
+    "board": {
+      "width": 10,
+      "height": 10
     }
   },
-  "rounds": [
-    {
-      "round_number": 0,
-      "snake_positions": {
-        "0": [
-          [
-            0,
-            7
-          ]
-        ],
-        "1": [
-          [
-            0,
-            9
-          ]
-        ]
+  "players": {
+    "0": {
+      "model_id": "0",
+      "name": "LFM2-2.6B",
+      "result": "won",
+      "final_score": 0,
+      "death": null,
+      "totals": {
+        "input_tokens": 2218,
+        "output_tokens": 698,
+        "cost": 0.00012105
+      }
+    },
+    "1": {
+      "model_id": "1",
+      "name": "LFM2-8B-A1B",
+      "result": "lost",
+      "final_score": 0,
+      "death": {
+        "reason": "wall",
+        "round": 1
       },
-      "alive": {
-        "0": true,
-        "1": true
-      },
-      "scores": {
-        "0": 0,
-        "1": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          5,
-          8
-        ],
-        [
-          3,
-          7
-        ],
+      "totals": {
+        "input_tokens": 2348,
+        "output_tokens": 777,
+        "cost": 0.0001316
+      }
+    }
+  },
+  "totals": {
+    "cost": 0.00025265,
+    "input_tokens": 4566,
+    "output_tokens": 1475
+  },
+  "initial_state": {
+    "snakes": {
+      "0": [
         [
           0,
-          5
-        ],
-        [
-          9,
           7
-        ],
-        [
-          2,
-          3
         ]
       ],
-      "move_history": [
+      "1": [
+        [
+          0,
+          9
+        ]
+      ]
+    },
+    "apples": [
+      [
+        5,
+        8
+      ],
+      [
+        3,
+        7
+      ],
+      [
+        0,
+        5
+      ],
+      [
+        9,
+        7
+      ],
+      [
+        2,
+        3
+      ]
+    ],
+    "alive": {
+      "0": true,
+      "1": true
+    },
+    "scores": {
+      "0": 0,
+      "1": 0
+    }
+  },
+  "frames": [
+    {
+      "round": 0,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              0,
+              7
+            ]
+          ],
+          "1": [
+            [
+              0,
+              9
+            ]
+          ]
+        },
+        "apples": [
+          [
+            5,
+            8
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            2,
+            3
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "RIGHT",
+          "rationale": "First, I analyze the current board and position:  \n- Head of snake 1 is at (0, 9), the top-left corner.  \n- One apple is at (5, 8), one at (3, 7), etc.  \n- Enemy snake 0 is at (0, 7), right adjacent (head-on vertically), but since the snake starts at (0, 9) and grows down, moving straight up from (0, 9) will land on (0, 8), (0, 7) \u2014 a head-on collision with the enemy snake. This collision results in a game over if I move directly to (0, 7).\n\nBut my last move was not recorded \u2014 so I must decide cautiously. The enemy block at (0,7) blocks a direct upward move. Since my snake starts at (0,9), I need an alternative path.\n\nLooking at nearby apples and no immediate hazards:  \n- Right and down are blocked by enemy or wall.  \nThe closest viable apple is at (3, 7), which is southeast of current head. That\u2019s one practical advancement. But moving straight right or down risks collision.\n\nStrategy:  \n1. Avoid immediate threat \u2014 don\u2019t move into (0,7).  \n2. Head must progress toward a safe apple path.  \nSince (0,7) is occupied and unsafe, move diagonally toward the apple at (3,7) \u2014 this suggests moving **RIGHT** and **UP** toward it.  \nBut constrained by coordinates, moving directly right increases x, increasing y modestly up doesn\u2019t reach (3,7) in one move.\n\nThus, move **RIGHT** \u2014 step toward (3,7) by easing movement up slightly while progressing right.  \nFocus: Grow safely.\n\nI decide:  \n**RIGHT** \u2014 towards the nearby apple, setting up safe growth without immediate conflict.  \nMy strategy: continue toward apple at (3,7) without risking self-collision.  \nNext move: **RIGHT**",
+          "input_tokens": 496,
+          "output_tokens": 433,
+          "cost": 6.81e-05
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Let's assess the situation:\n\n- **Current Position (Snake #0):** Head at (0,7), no body.\n- **Nearby Apples:** (5,8), (3,7), (0,5)\n- **Enemy Snake #1:** Head at (0,9). The threat is minimal here since moving down would approach the edge and hitting the enemy would require moving left or right, but snake #0 has space to retreat.\n- **Board Position:** Space is around the top-left area (0,7) to (2,3).\n\n### Current Analysis:\n- Moving **LEFT** would go out of bounds (x=-1), which is invalid.\n- Moving **RIGHT** to (1,7) is safe and opens space for eating apples or avoiding the enemy.\n- Up (to (0,6)) is safe but risky for no gain immediately.\n- Down (to (0,8)) could approach (5,8), but that's a long shot, and I'd rather conserve movement energy.\n- There are no immediate threats from the environment or enemy snake based on the board state.\n\nI want to grow and gain points. **RIGHT** gives the best chance to either reach (3,7) or (5,8).\n\n**Next move: RIGHT**.\n\nUpdating the board state mentally:  \nAfter moving RIGHT to (1,7), check for apple on (5,8) or (3,7):  \n- (5,8) isn't reached, (3,7) might become accessible next.\n\n**Strategy:** Move RIGHT toward moderate risk with visible apple potential. I'll prioritize scanning right for more apples.\n\n**Next move: RIGHT.**",
+          "input_tokens": 496,
+          "output_tokens": 366,
+          "cost": 6.14e-05
+        }
+      }
+    },
+    {
+      "round": 1,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              1,
+              7
+            ]
+          ],
+          "1": [
+            [
+              1,
+              9
+            ]
+          ]
+        },
+        "apples": [
+          [
+            5,
+            8
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            0,
+            5
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            2,
+            3
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "UP",
+          "rationale": "My head is at (1, 9), currently adjacent to the enemy snake at (0,7)\u2014a direct up move there would be fatal. Moving right is safer to approach the apple at (3, 7) without collision.  \n\n**About to RIGHT** to advance toward the nearest viable apple while avoiding the blocked path.  \nNext step: **UP**, to move toward (0,8), reducing distance to (0,7) enemy\u2014and the nearby apple (3,7)\u2014without invading enemy space. Growth toward (3,7) with UP progress avoids immediate danger and maintains safe positioning.  \n\n**Decided next move: UP**  \nStrategy: Move UP to (0, 8), setting up a smarter diagonal path toward the apple at (3,7) while respecting enemy positioning.",
+          "input_tokens": 926,
+          "output_tokens": 172,
+          "cost": 6.35e-05
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Elephant\u2014thoughtfully:  \n- RIGHT leads me toward (3,7) and (5,8), both apple-rich spots. Moving current x from 1 to 2 is safe and avoids unnecessary backtracking.  \n- Right has clear path, and (5,8) doesn't require a diagonal; space exists to maneuver. There's no immediate threat from the enemy snake at (0,9) in this direction.  \n- I\u2019ll prioritize sliding toward (3,7) first for safer control and easier access to the nearby (5,8) apple cluster.  \n\nStrategy: RIGHT first to position for (3,7), then scan nicely toward (5,8) if possible. Yielding space avoids conflict.  \n\nNext move: **RIGHT**.",
+          "input_tokens": 861,
+          "output_tokens": 166,
+          "cost": 5.965e-05
+        }
+      },
+      "events": [
         {
-          "1": {
-            "move": "RIGHT",
-            "rationale": "First, I analyze the current board and position:  \n- Head of snake 1 is at (0, 9), the top-left corner.  \n- One apple is at (5, 8), one at (3, 7), etc.  \n- Enemy snake 0 is at (0, 7), right adjacent (head-on vertically), but since the snake starts at (0, 9) and grows down, moving straight up from (0, 9) will land on (0, 8), (0, 7) \u2014 a head-on collision with the enemy snake. This collision results in a game over if I move directly to (0, 7).\n\nBut my last move was not recorded \u2014 so I must decide cautiously. The enemy block at (0,7) blocks a direct upward move. Since my snake starts at (0,9), I need an alternative path.\n\nLooking at nearby apples and no immediate hazards:  \n- Right and down are blocked by enemy or wall.  \nThe closest viable apple is at (3, 7), which is southeast of current head. That\u2019s one practical advancement. But moving straight right or down risks collision.\n\nStrategy:  \n1. Avoid immediate threat \u2014 don\u2019t move into (0,7).  \n2. Head must progress toward a safe apple path.  \nSince (0,7) is occupied and unsafe, move diagonally toward the apple at (3,7) \u2014 this suggests moving **RIGHT** and **UP** toward it.  \nBut constrained by coordinates, moving directly right increases x, increasing y modestly up doesn\u2019t reach (3,7) in one move.\n\nThus, move **RIGHT** \u2014 step toward (3,7) by easing movement up slightly while progressing right.  \nFocus: Grow safely.\n\nI decide:  \n**RIGHT** \u2014 towards the nearby apple, setting up safe growth without immediate conflict.  \nMy strategy: continue toward apple at (3,7) without risking self-collision.  \nNext move: **RIGHT**",
-            "input_tokens": 496,
-            "output_tokens": 433,
-            "cost": 6.81e-05
-          },
-          "0": {
-            "move": "RIGHT",
-            "rationale": "Let's assess the situation:\n\n- **Current Position (Snake #0):** Head at (0,7), no body.\n- **Nearby Apples:** (5,8), (3,7), (0,5)\n- **Enemy Snake #1:** Head at (0,9). The threat is minimal here since moving down would approach the edge and hitting the enemy would require moving left or right, but snake #0 has space to retreat.\n- **Board Position:** Space is around the top-left area (0,7) to (2,3).\n\n### Current Analysis:\n- Moving **LEFT** would go out of bounds (x=-1), which is invalid.\n- Moving **RIGHT** to (1,7) is safe and opens space for eating apples or avoiding the enemy.\n- Up (to (0,6)) is safe but risky for no gain immediately.\n- Down (to (0,8)) could approach (5,8), but that's a long shot, and I'd rather conserve movement energy.\n- There are no immediate threats from the environment or enemy snake based on the board state.\n\nI want to grow and gain points. **RIGHT** gives the best chance to either reach (3,7) or (5,8).\n\n**Next move: RIGHT**.\n\nUpdating the board state mentally:  \nAfter moving RIGHT to (1,7), check for apple on (5,8) or (3,7):  \n- (5,8) isn't reached, (3,7) might become accessible next.\n\n**Strategy:** Move RIGHT toward moderate risk with visible apple potential. I'll prioritize scanning right for more apples.\n\n**Next move: RIGHT.**",
-            "input_tokens": 496,
-            "output_tokens": 366,
-            "cost": 6.14e-05
-          }
+          "type": "death",
+          "player_id": "1",
+          "reason": "wall"
         }
       ]
     },
     {
-      "round_number": 1,
-      "snake_positions": {
-        "0": [
-          [
-            1,
-            7
+      "round": 2,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              1,
+              7
+            ]
+          ],
+          "1": [
+            [
+              1,
+              9
+            ]
           ]
-        ],
-        "1": [
-          [
-            1,
-            9
-          ]
-        ]
-      },
-      "alive": {
-        "0": true,
-        "1": true
-      },
-      "scores": {
-        "0": 0,
-        "1": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          5,
-          8
-        ],
-        [
-          3,
-          7
-        ],
-        [
-          0,
-          5
-        ],
-        [
-          9,
-          7
-        ],
-        [
-          2,
-          3
-        ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "RIGHT",
-            "rationale": "First, I analyze the current board and position:  \n- Head of snake 1 is at (0, 9), the top-left corner.  \n- One apple is at (5, 8), one at (3, 7), etc.  \n- Enemy snake 0 is at (0, 7), right adjacent (head-on vertically), but since the snake starts at (0, 9) and grows down, moving straight up from (0, 9) will land on (0, 8), (0, 7) \u2014 a head-on collision with the enemy snake. This collision results in a game over if I move directly to (0, 7).\n\nBut my last move was not recorded \u2014 so I must decide cautiously. The enemy block at (0,7) blocks a direct upward move. Since my snake starts at (0,9), I need an alternative path.\n\nLooking at nearby apples and no immediate hazards:  \n- Right and down are blocked by enemy or wall.  \nThe closest viable apple is at (3, 7), which is southeast of current head. That\u2019s one practical advancement. But moving straight right or down risks collision.\n\nStrategy:  \n1. Avoid immediate threat \u2014 don\u2019t move into (0,7).  \n2. Head must progress toward a safe apple path.  \nSince (0,7) is occupied and unsafe, move diagonally toward the apple at (3,7) \u2014 this suggests moving **RIGHT** and **UP** toward it.  \nBut constrained by coordinates, moving directly right increases x, increasing y modestly up doesn\u2019t reach (3,7) in one move.\n\nThus, move **RIGHT** \u2014 step toward (3,7) by easing movement up slightly while progressing right.  \nFocus: Grow safely.\n\nI decide:  \n**RIGHT** \u2014 towards the nearby apple, setting up safe growth without immediate conflict.  \nMy strategy: continue toward apple at (3,7) without risking self-collision.  \nNext move: **RIGHT**",
-            "input_tokens": 496,
-            "output_tokens": 433,
-            "cost": 6.81e-05
-          },
-          "0": {
-            "move": "RIGHT",
-            "rationale": "Let's assess the situation:\n\n- **Current Position (Snake #0):** Head at (0,7), no body.\n- **Nearby Apples:** (5,8), (3,7), (0,5)\n- **Enemy Snake #1:** Head at (0,9). The threat is minimal here since moving down would approach the edge and hitting the enemy would require moving left or right, but snake #0 has space to retreat.\n- **Board Position:** Space is around the top-left area (0,7) to (2,3).\n\n### Current Analysis:\n- Moving **LEFT** would go out of bounds (x=-1), which is invalid.\n- Moving **RIGHT** to (1,7) is safe and opens space for eating apples or avoiding the enemy.\n- Up (to (0,6)) is safe but risky for no gain immediately.\n- Down (to (0,8)) could approach (5,8), but that's a long shot, and I'd rather conserve movement energy.\n- There are no immediate threats from the environment or enemy snake based on the board state.\n\nI want to grow and gain points. **RIGHT** gives the best chance to either reach (3,7) or (5,8).\n\n**Next move: RIGHT**.\n\nUpdating the board state mentally:  \nAfter moving RIGHT to (1,7), check for apple on (5,8) or (3,7):  \n- (5,8) isn't reached, (3,7) might become accessible next.\n\n**Strategy:** Move RIGHT toward moderate risk with visible apple potential. I'll prioritize scanning right for more apples.\n\n**Next move: RIGHT.**",
-            "input_tokens": 496,
-            "output_tokens": 366,
-            "cost": 6.14e-05
-          }
         },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "My head is at (1, 9), currently adjacent to the enemy snake at (0,7)\u2014a direct up move there would be fatal. Moving right is safer to approach the apple at (3, 7) without collision.  \n\n**About to RIGHT** to advance toward the nearest viable apple while avoiding the blocked path.  \nNext step: **UP**, to move toward (0,8), reducing distance to (0,7) enemy\u2014and the nearby apple (3,7)\u2014without invading enemy space. Growth toward (3,7) with UP progress avoids immediate danger and maintains safe positioning.  \n\n**Decided next move: UP**  \nStrategy: Move UP to (0, 8), setting up a smarter diagonal path toward the apple at (3,7) while respecting enemy positioning.",
-            "input_tokens": 926,
-            "output_tokens": 172,
-            "cost": 6.35e-05
-          },
-          "0": {
-            "move": "RIGHT",
-            "rationale": "Elephant\u2014thoughtfully:  \n- RIGHT leads me toward (3,7) and (5,8), both apple-rich spots. Moving current x from 1 to 2 is safe and avoids unnecessary backtracking.  \n- Right has clear path, and (5,8) doesn't require a diagonal; space exists to maneuver. There's no immediate threat from the enemy snake at (0,9) in this direction.  \n- I\u2019ll prioritize sliding toward (3,7) first for safer control and easier access to the nearby (5,8) apple cluster.  \n\nStrategy: RIGHT first to position for (3,7), then scan nicely toward (5,8) if possible. Yielding space avoids conflict.  \n\nNext move: **RIGHT**.",
-            "input_tokens": 861,
-            "output_tokens": 166,
-            "cost": 5.965e-05
-          }
-        }
-      ]
-    },
-    {
-      "round_number": 2,
-      "snake_positions": {
-        "0": [
+        "apples": [
           [
-            1,
+            5,
+            8
+          ],
+          [
+            3,
             7
-          ]
-        ],
-        "1": [
+          ],
           [
-            1,
-            9
+            0,
+            5
+          ],
+          [
+            9,
+            7
+          ],
+          [
+            2,
+            3
           ]
-        ]
-      },
-      "alive": {
-        "0": true,
-        "1": false
-      },
-      "scores": {
-        "0": 0,
-        "1": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          5,
-          8
         ],
-        [
-          3,
-          7
-        ],
-        [
-          0,
-          5
-        ],
-        [
-          9,
-          7
-        ],
-        [
-          2,
-          3
-        ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "RIGHT",
-            "rationale": "First, I analyze the current board and position:  \n- Head of snake 1 is at (0, 9), the top-left corner.  \n- One apple is at (5, 8), one at (3, 7), etc.  \n- Enemy snake 0 is at (0, 7), right adjacent (head-on vertically), but since the snake starts at (0, 9) and grows down, moving straight up from (0, 9) will land on (0, 8), (0, 7) \u2014 a head-on collision with the enemy snake. This collision results in a game over if I move directly to (0, 7).\n\nBut my last move was not recorded \u2014 so I must decide cautiously. The enemy block at (0,7) blocks a direct upward move. Since my snake starts at (0,9), I need an alternative path.\n\nLooking at nearby apples and no immediate hazards:  \n- Right and down are blocked by enemy or wall.  \nThe closest viable apple is at (3, 7), which is southeast of current head. That\u2019s one practical advancement. But moving straight right or down risks collision.\n\nStrategy:  \n1. Avoid immediate threat \u2014 don\u2019t move into (0,7).  \n2. Head must progress toward a safe apple path.  \nSince (0,7) is occupied and unsafe, move diagonally toward the apple at (3,7) \u2014 this suggests moving **RIGHT** and **UP** toward it.  \nBut constrained by coordinates, moving directly right increases x, increasing y modestly up doesn\u2019t reach (3,7) in one move.\n\nThus, move **RIGHT** \u2014 step toward (3,7) by easing movement up slightly while progressing right.  \nFocus: Grow safely.\n\nI decide:  \n**RIGHT** \u2014 towards the nearby apple, setting up safe growth without immediate conflict.  \nMy strategy: continue toward apple at (3,7) without risking self-collision.  \nNext move: **RIGHT**",
-            "input_tokens": 496,
-            "output_tokens": 433,
-            "cost": 6.81e-05
-          },
-          "0": {
-            "move": "RIGHT",
-            "rationale": "Let's assess the situation:\n\n- **Current Position (Snake #0):** Head at (0,7), no body.\n- **Nearby Apples:** (5,8), (3,7), (0,5)\n- **Enemy Snake #1:** Head at (0,9). The threat is minimal here since moving down would approach the edge and hitting the enemy would require moving left or right, but snake #0 has space to retreat.\n- **Board Position:** Space is around the top-left area (0,7) to (2,3).\n\n### Current Analysis:\n- Moving **LEFT** would go out of bounds (x=-1), which is invalid.\n- Moving **RIGHT** to (1,7) is safe and opens space for eating apples or avoiding the enemy.\n- Up (to (0,6)) is safe but risky for no gain immediately.\n- Down (to (0,8)) could approach (5,8), but that's a long shot, and I'd rather conserve movement energy.\n- There are no immediate threats from the environment or enemy snake based on the board state.\n\nI want to grow and gain points. **RIGHT** gives the best chance to either reach (3,7) or (5,8).\n\n**Next move: RIGHT**.\n\nUpdating the board state mentally:  \nAfter moving RIGHT to (1,7), check for apple on (5,8) or (3,7):  \n- (5,8) isn't reached, (3,7) might become accessible next.\n\n**Strategy:** Move RIGHT toward moderate risk with visible apple potential. I'll prioritize scanning right for more apples.\n\n**Next move: RIGHT.**",
-            "input_tokens": 496,
-            "output_tokens": 366,
-            "cost": 6.14e-05
-          }
+        "alive": {
+          "0": true,
+          "1": false
         },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "My head is at (1, 9), currently adjacent to the enemy snake at (0,7)\u2014a direct up move there would be fatal. Moving right is safer to approach the apple at (3, 7) without collision.  \n\n**About to RIGHT** to advance toward the nearest viable apple while avoiding the blocked path.  \nNext step: **UP**, to move toward (0,8), reducing distance to (0,7) enemy\u2014and the nearby apple (3,7)\u2014without invading enemy space. Growth toward (3,7) with UP progress avoids immediate danger and maintains safe positioning.  \n\n**Decided next move: UP**  \nStrategy: Move UP to (0, 8), setting up a smarter diagonal path toward the apple at (3,7) while respecting enemy positioning.",
-            "input_tokens": 926,
-            "output_tokens": 172,
-            "cost": 6.35e-05
-          },
-          "0": {
-            "move": "RIGHT",
-            "rationale": "Elephant\u2014thoughtfully:  \n- RIGHT leads me toward (3,7) and (5,8), both apple-rich spots. Moving current x from 1 to 2 is safe and avoids unnecessary backtracking.  \n- Right has clear path, and (5,8) doesn't require a diagonal; space exists to maneuver. There's no immediate threat from the enemy snake at (0,9) in this direction.  \n- I\u2019ll prioritize sliding toward (3,7) first for safer control and easier access to the nearby (5,8) apple cluster.  \n\nStrategy: RIGHT first to position for (3,7), then scan nicely toward (5,8) if possible. Yielding space avoids conflict.  \n\nNext move: **RIGHT**.",
-            "input_tokens": 861,
-            "output_tokens": 166,
-            "cost": 5.965e-05
-          }
+        "scores": {
+          "0": 0,
+          "1": 0
         }
-      ]
+      },
+      "moves": {
+        "1": {
+          "move": "UP",
+          "rationale": "My head is at (1, 9), currently adjacent to the enemy snake at (0,7)\u2014a direct up move there would be fatal. Moving right is safer to approach the apple at (3, 7) without collision.  \n\n**About to RIGHT** to advance toward the nearest viable apple while avoiding the blocked path.  \nNext step: **UP**, to move toward (0,8), reducing distance to (0,7) enemy\u2014and the nearby apple (3,7)\u2014without invading enemy space. Growth toward (3,7) with UP progress avoids immediate danger and maintains safe positioning.  \n\n**Decided next move: UP**  \nStrategy: Move UP to (0, 8), setting up a smarter diagonal path toward the apple at (3,7) while respecting enemy positioning.",
+          "input_tokens": 926,
+          "output_tokens": 172,
+          "cost": 6.35e-05
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Elephant\u2014thoughtfully:  \n- RIGHT leads me toward (3,7) and (5,8), both apple-rich spots. Moving current x from 1 to 2 is safe and avoids unnecessary backtracking.  \n- Right has clear path, and (5,8) doesn't require a diagonal; space exists to maneuver. There's no immediate threat from the enemy snake at (0,9) in this direction.  \n- I\u2019ll prioritize sliding toward (3,7) first for safer control and easier access to the nearby (5,8) apple cluster.  \n\nStrategy: RIGHT first to position for (3,7), then scan nicely toward (5,8) if possible. Yielding space avoids conflict.  \n\nNext move: **RIGHT**.",
+          "input_tokens": 861,
+          "output_tokens": 166,
+          "cost": 5.965e-05
+        }
+      }
     }
   ]
 }

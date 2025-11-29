@@ -1,668 +1,502 @@
 {
-  "metadata": {
-    "game_id": "b8a7afd0-0ab8-4cf4-bcd3-7ffb7fc61d61",
-    "start_time": "2025-11-15T20:10:32.074206",
-    "end_time": "2025-11-15T20:11:29.533588",
-    "models": {
-      "0": "Microsoft: Phi 4",
-      "1": "Qwen2.5 Coder 32B Instruct"
-    },
-    "game_result": {
-      "0": "lost",
-      "1": "won"
-    },
-    "final_scores": {
-      "0": 0,
-      "1": 1
-    },
-    "death_info": {
-      "0": {
-        "reason": "wall",
-        "round": 4
-      }
-    },
+  "version": 1,
+  "game": {
+    "id": "b8a7afd0-0ab8-4cf4-bcd3-7ffb7fc61d61",
+    "started_at": "2025-11-15T20:10:32.074206",
+    "ended_at": "2025-11-15T20:11:29.533588",
+    "game_type": "ladder",
     "max_rounds": 100,
-    "actual_rounds": 5,
-    "total_cost": 0.00123134,
-    "player_costs": {
-      "0": 0.00060198,
-      "1": 0.00062936
+    "rounds_played": 5,
+    "board": {
+      "width": 10,
+      "height": 10
     }
   },
-  "rounds": [
-    {
-      "round_number": 0,
-      "snake_positions": {
-        "0": [
-          [
-            2,
-            5
-          ]
-        ],
-        "1": [
-          [
-            7,
-            4
-          ]
-        ]
+  "players": {
+    "0": {
+      "model_id": "0",
+      "name": "Microsoft: Phi 4",
+      "result": "lost",
+      "final_score": 0,
+      "death": {
+        "reason": "wall",
+        "round": 4
       },
-      "alive": {
-        "0": true,
-        "1": true
-      },
-      "scores": {
-        "0": 0,
-        "1": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
+      "totals": {
+        "input_tokens": 5263,
+        "output_tokens": 2957,
+        "cost": 0.00060198
+      }
+    },
+    "1": {
+      "model_id": "1",
+      "name": "Qwen2.5 Coder 32B Instruct",
+      "result": "won",
+      "final_score": 1,
+      "death": null,
+      "totals": {
+        "input_tokens": 5689,
+        "output_tokens": 3017,
+        "cost": 0.00062936
+      }
+    }
+  },
+  "totals": {
+    "cost": 0.00123134,
+    "input_tokens": 10952,
+    "output_tokens": 5974
+  },
+  "initial_state": {
+    "snakes": {
+      "0": [
         [
-          8,
-          0
-        ],
-        [
-          7,
-          8
-        ],
-        [
-          1,
-          3
-        ],
-        [
-          5,
-          9
-        ],
-        [
-          3,
-          7
+          2,
+          5
         ]
       ],
-      "move_history": [
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "<think>\nOkay, let me try to figure out the best move for my snake here. The head is at (7,4) right now, and there are no other bodies in the way. The board is 10x10 with apples at (8,0), (7,8), (1,3), (5,9), and (3,7). My goal is to collect as many apples as possible without dying.\n\nFirst, I need to look at the possible directions I can move: up, down, left, right. Let's check each direction for obstacles and apples.\n\nStarting with up (increasing y-coordinate). Moving up from (7,4) would take me to (7,5). That square is empty as per the board state. Then check if there's an apple there\u2014nope. What about further up? Let's see, the apple at (7,8) is two steps up. If I go up now, I can keep moving up towards that apple. But maybe there's a closer apple.\n\nLooking right (increasing x to 8,4). The board shows at (8,4) is empty. But there's an apple at (8,0) which is far down. Not sure if that's the best path yet.\n\nLeft (x-1 to 6,4). That's empty. But maybe there's a better direction.\n\nDown (y-1 to 7,3). Wait, the apple at (3,7) is (x=3, y=7), but moving down would decrease y. Wait, my current position is (7,4). If I move down, that's to (7,3). There's an apple at (1,3), which is x=1, y=3. Not sure if that's in the way. But maybe moving down now would take me towards some apples?\n\nBut looking at the apples, the closest ones might be (7,8) which is up, (3,7) which is to the left and up, or (5,9) which is up and left. Hmm.\n\nLet me map the distances. From (7,4):\n\n- To (7,8): distance is 4 steps up (y difference is 4).\n- To (5,9): x difference 2 left, y difference 5 up. Total moves? Maybe a diagonal path, but need to move in steps.\n- To (3,7): x difference 4 left, y difference 3 up. Also a bit away.\n- (1,3): x difference 6 left, y difference -1 (down 1). But that's moving down a bit.\n- (8,0): x+1, y-4. But that's moving right and down a lot.\n\nSo the closest apple seems to be (7,8) directly up. If I move up now to (7,5), that's a step towards it. Let me check if moving up is safe. The board state: looking at row 4 (original head at (7,4)), moving up to y=5. The board's row 5 (y=5) shows that there's a 0 at (2,5) which is snake 0's head. But I'm moving to (7,5), which is not occupied. So it's safe. Then continuing up steps would take me towards the apple at (7,8). Once I get there, I can collect that apple, grow, and then maybe go for another one.\n\nAlternatively, maybe there's a way to intercept another apple faster. Let me check. If I move left to (6,4), then up to (6,5) and so on. But the apple at (5,9) is further up. Let me see how many moves would be needed. But since each move only steps once, I need to plan.\n\nAnother consideration: enemy snake #0 is at (2,5). Since it's a snake, unless it moves towards me, my path up towards (7,8) shouldn't intersect with it. So that's probably safe.\n\nSo the immediate next move should be UP to (7,5). That's safe and heads towards the apple up there. Let's confirm the board state again for that cell. The board state rows: row 4 is y=4. The head is there. Moving up to y=5. Looking at row 5, the board shows \". . 0 . . . . . . .\", which is at x=2. So (7,5) is empty. Safe to move.\n\nTherefore, moving UP is the correct choice here. It starts moving towards an apple and avoids collisions. After that, continue moving up until reaching the apple at (7,8), then figure next steps. Maybe after eating that apple, the next target could be (5,9) by moving left and up, or maybe another one.\n</think>\n\nI need to move up to approach the apple at (7,8). This path is clear of obstacles and enemies. \n\nNext move: UP",
-            "input_tokens": 472,
-            "output_tokens": 1061,
-            "cost": 0.00018864
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To determine the optimal move for my snake, I need to evaluate my current position, the location of the apples, and the potential threats, such as the enemy snake.\n\n### Current Board Analysis:\n- **My Position:** Head at (2, 5)\n- **Apples:** (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n- **Enemy Snake:** Head at (7, 4)\n\n### Strategic Evaluation:\n1. **Immediate Apples:**\n   - The closest apple is at (3, 7). To reach this apple, I have the following path options:\n     - Move UP to (2, 6)\n     - Move UP to (2, 7)\n     - Move RIGHT to (3, 7)\n\n2. **Distance Calculation:**\n   - Moving UP from (2, 5) to (2, 6), then to (2, 7), and finally RIGHT to (3, 7) is a 3-step path.\n   - Moving RIGHT to (3, 5) and then UP twice to (3, 7) is also a 3-step path.\n\n3. **Potential Threats:**\n   - The enemy snake at (7, 4) is not an immediate threat, as it is far from my current position and potential path to the apple at (3, 7).\n\n4. **Wall Consideration:**\n   - Moving UP from (2, 5) to (2, 6) keeps me within the board's boundaries.\n\n5. **Future Planning:**\n   - After reaching (3, 7), I can consider the apple at (5, 9) as the next target, which will require further planning for a safe path.\n\n### Decision:\nGiven the analysis, the optimal move is to proceed towards the closest apple at (3, 7). The safest and shortest path involves moving UP first.\n\n**Next Move:** UP\n\nThis move sets me on a path to gain points by reaching the nearest apple while avoiding immediate threats. After reaching (3, 7), I will reassess the board to plan the next strategic move towards the apple at (5, 9).",
-            "input_tokens": 469,
-            "output_tokens": 465,
-            "cost": 9.324000000000001e-05
-          }
-        }
-      ]
-    },
-    {
-      "round_number": 1,
-      "snake_positions": {
-        "0": [
-          [
-            2,
-            6
-          ]
-        ],
-        "1": [
-          [
-            7,
-            5
-          ]
-        ]
-      },
-      "alive": {
-        "0": true,
-        "1": true
-      },
-      "scores": {
-        "0": 0,
-        "1": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          8,
-          0
-        ],
+      "1": [
         [
           7,
-          8
-        ],
-        [
-          1,
-          3
-        ],
-        [
-          5,
-          9
-        ],
-        [
-          3,
-          7
+          4
         ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "<think>\nOkay, let me try to figure out the best move for my snake here. The head is at (7,4) right now, and there are no other bodies in the way. The board is 10x10 with apples at (8,0), (7,8), (1,3), (5,9), and (3,7). My goal is to collect as many apples as possible without dying.\n\nFirst, I need to look at the possible directions I can move: up, down, left, right. Let's check each direction for obstacles and apples.\n\nStarting with up (increasing y-coordinate). Moving up from (7,4) would take me to (7,5). That square is empty as per the board state. Then check if there's an apple there\u2014nope. What about further up? Let's see, the apple at (7,8) is two steps up. If I go up now, I can keep moving up towards that apple. But maybe there's a closer apple.\n\nLooking right (increasing x to 8,4). The board shows at (8,4) is empty. But there's an apple at (8,0) which is far down. Not sure if that's the best path yet.\n\nLeft (x-1 to 6,4). That's empty. But maybe there's a better direction.\n\nDown (y-1 to 7,3). Wait, the apple at (3,7) is (x=3, y=7), but moving down would decrease y. Wait, my current position is (7,4). If I move down, that's to (7,3). There's an apple at (1,3), which is x=1, y=3. Not sure if that's in the way. But maybe moving down now would take me towards some apples?\n\nBut looking at the apples, the closest ones might be (7,8) which is up, (3,7) which is to the left and up, or (5,9) which is up and left. Hmm.\n\nLet me map the distances. From (7,4):\n\n- To (7,8): distance is 4 steps up (y difference is 4).\n- To (5,9): x difference 2 left, y difference 5 up. Total moves? Maybe a diagonal path, but need to move in steps.\n- To (3,7): x difference 4 left, y difference 3 up. Also a bit away.\n- (1,3): x difference 6 left, y difference -1 (down 1). But that's moving down a bit.\n- (8,0): x+1, y-4. But that's moving right and down a lot.\n\nSo the closest apple seems to be (7,8) directly up. If I move up now to (7,5), that's a step towards it. Let me check if moving up is safe. The board state: looking at row 4 (original head at (7,4)), moving up to y=5. The board's row 5 (y=5) shows that there's a 0 at (2,5) which is snake 0's head. But I'm moving to (7,5), which is not occupied. So it's safe. Then continuing up steps would take me towards the apple at (7,8). Once I get there, I can collect that apple, grow, and then maybe go for another one.\n\nAlternatively, maybe there's a way to intercept another apple faster. Let me check. If I move left to (6,4), then up to (6,5) and so on. But the apple at (5,9) is further up. Let me see how many moves would be needed. But since each move only steps once, I need to plan.\n\nAnother consideration: enemy snake #0 is at (2,5). Since it's a snake, unless it moves towards me, my path up towards (7,8) shouldn't intersect with it. So that's probably safe.\n\nSo the immediate next move should be UP to (7,5). That's safe and heads towards the apple up there. Let's confirm the board state again for that cell. The board state rows: row 4 is y=4. The head is there. Moving up to y=5. Looking at row 5, the board shows \". . 0 . . . . . . .\", which is at x=2. So (7,5) is empty. Safe to move.\n\nTherefore, moving UP is the correct choice here. It starts moving towards an apple and avoids collisions. After that, continue moving up until reaching the apple at (7,8), then figure next steps. Maybe after eating that apple, the next target could be (5,9) by moving left and up, or maybe another one.\n</think>\n\nI need to move up to approach the apple at (7,8). This path is clear of obstacles and enemies. \n\nNext move: UP",
-            "input_tokens": 472,
-            "output_tokens": 1061,
-            "cost": 0.00018864
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To determine the optimal move for my snake, I need to evaluate my current position, the location of the apples, and the potential threats, such as the enemy snake.\n\n### Current Board Analysis:\n- **My Position:** Head at (2, 5)\n- **Apples:** (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n- **Enemy Snake:** Head at (7, 4)\n\n### Strategic Evaluation:\n1. **Immediate Apples:**\n   - The closest apple is at (3, 7). To reach this apple, I have the following path options:\n     - Move UP to (2, 6)\n     - Move UP to (2, 7)\n     - Move RIGHT to (3, 7)\n\n2. **Distance Calculation:**\n   - Moving UP from (2, 5) to (2, 6), then to (2, 7), and finally RIGHT to (3, 7) is a 3-step path.\n   - Moving RIGHT to (3, 5) and then UP twice to (3, 7) is also a 3-step path.\n\n3. **Potential Threats:**\n   - The enemy snake at (7, 4) is not an immediate threat, as it is far from my current position and potential path to the apple at (3, 7).\n\n4. **Wall Consideration:**\n   - Moving UP from (2, 5) to (2, 6) keeps me within the board's boundaries.\n\n5. **Future Planning:**\n   - After reaching (3, 7), I can consider the apple at (5, 9) as the next target, which will require further planning for a safe path.\n\n### Decision:\nGiven the analysis, the optimal move is to proceed towards the closest apple at (3, 7). The safest and shortest path involves moving UP first.\n\n**Next Move:** UP\n\nThis move sets me on a path to gain points by reaching the nearest apple while avoiding immediate threats. After reaching (3, 7), I will reassess the board to plan the next strategic move towards the apple at (5, 9).",
-            "input_tokens": 469,
-            "output_tokens": 465,
-            "cost": 9.324000000000001e-05
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the situation thoroughly before deciding the next move. Here's a summary of the current state:\n\n- Snake #1 (Your snake):\n  - Head: (7, 5)\n  - Body: None\n\n- Snake #0 (Enemy snake):\n  - Head: (2, 6)\n  - Body: None\n\n- Apples:\n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n**Current Situation and Analysis:**\n\n- **Your snake** is at (7, 5) and your last move was **UP**. After moving up, your snake's new position is (7, 6).\n- The **close-by apples** are:\n  - Apple at (7, 8): 2 moves away.\n  - Apple at (5, 9): 4 moves diagonally or a bit more if moving row by row.\n  - Apple at (3, 7): 3 moves diagonally or a bit more if moving row by row.\n  - Apple at (1, 3): Too far in a diagonal direction and would require moving multiple steps away.\n  - Apple at (8, 0): Too far to the right and below.\n- **Enemy Snake #0**: Currently at (2, 6) with no body, meaning it can potentially move diagonally, up, or down, but it is not close to your position at (7, 6).\n\n**Strategic Considerations:**\n\n1. **Moving UP** to (7, 7):\n   - This path keeps you aiming for the apple at (7, 8) in one more move, making it the nearest and easiest apple to reach currently.\n   - No chance of collision with the enemy snake if it follows its current pattern, as the enemy is at (2, 6), and moving up brings you closer to the top, away from the enemy's position.\n\n2. **Alternative Routes**:\n   - Moving LEFT or RIGHT won't be efficient as it will result in a longer path to any apple.\n   - Moving DOWN is not strategic as it would move you away from the nearest apple (7,8).\n\nGiven this analysis, moving UP is the best strategic move as it directly leads you towards the nearest apple with minimal risk of collision.\n\n**Strategy for Next Turn:**\n- Aim for the apple at (7, 8) first. After eating it, reassess your position on the board, the remaining apples, and the potential positions of the enemy snake.\n- Look for opportunities to gain points efficiently without risking collisions.\n\n**Next Move:**\nUP",
-            "input_tokens": 1534,
-            "output_tokens": 561,
-            "cost": 0.00015112
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To maximize my chances of survival and score points quickly, I need to carefully plan my next moves considering the apples' locations, my current position, and the anticipated movements of the enemy snake.\n\n### Rationale:\n\n1. **Current Position and Apples:**\n   - My head is currently at (2, 5).\n   - Apples are located at (3, 7), (5, 9), (7, 8), (1, 3), and (8, 0).\n\n2. **Immediate Threats and Path Safety:**\n   - There is no immediate threat from another snake or walls since my head is at (2, 5).\n   - However, moving directly to the nearest apple at (3, 7) might put a path close to enemy snake at (7, 5) (currently at (7, 4)), a future threat.\n\n forcing future threats.\n\n3. **Safely Navigating and Point Accumulation:**\n   - Move RIGHT from (2, 5) to (2, 6). This move places me safely on a path that avoids immediate threats and aligns towards the North-East quadrant where apples are located at (5, 9) and (7, 8).\n   - This direction will then bring me to (2, 6), where moving DOWN could lead to (3, 6), and eventually upwards to (3, 7) avoids enemy head positioning at (7, 5).\n\n4. **Long-Term Planning and Optimal Path:**\n   - The direct path of moving RIGHT to (2, 6) ensures I avoid going backwards or hitting walls, setting me a strategic move arriving vertically to (3, 6).\n   - After the next turn sees stable paths, reroute then towards the apple at (3, 7) after moving to (3, 6) via UP, without encountering the enemy snake (7, 5).\n\n5. **Snake Growth Consideration:**\n   - As moving onto apples leads to growth, prioritize leading towards (5, 9) after an MOVE to (3, 7). This means following movements towards (5, 9) after securing the safer distance.\n\n**NEXT MOVE:** RIGHT\n\nAfter moving RIGHT, positioning my head at (2, 6), I will reassess for a future safe move vertically upwards to reach (3, 6) and then proceed towards",
-            "input_tokens": 932,
-            "output_tokens": 500,
-            "cost": 0.00012592
-          }
-        }
       ]
     },
-    {
-      "round_number": 2,
-      "snake_positions": {
-        "0": [
-          [
-            2,
-            7
-          ]
-        ],
-        "1": [
-          [
-            7,
-            6
-          ]
-        ]
-      },
-      "alive": {
-        "0": true,
-        "1": true
-      },
-      "scores": {
-        "0": 0,
-        "1": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          8,
-          0
-        ],
-        [
-          7,
-          8
-        ],
-        [
-          1,
-          3
-        ],
-        [
-          5,
-          9
-        ],
-        [
-          3,
-          7
-        ]
+    "apples": [
+      [
+        8,
+        0
       ],
-      "move_history": [
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "<think>\nOkay, let me try to figure out the best move for my snake here. The head is at (7,4) right now, and there are no other bodies in the way. The board is 10x10 with apples at (8,0), (7,8), (1,3), (5,9), and (3,7). My goal is to collect as many apples as possible without dying.\n\nFirst, I need to look at the possible directions I can move: up, down, left, right. Let's check each direction for obstacles and apples.\n\nStarting with up (increasing y-coordinate). Moving up from (7,4) would take me to (7,5). That square is empty as per the board state. Then check if there's an apple there\u2014nope. What about further up? Let's see, the apple at (7,8) is two steps up. If I go up now, I can keep moving up towards that apple. But maybe there's a closer apple.\n\nLooking right (increasing x to 8,4). The board shows at (8,4) is empty. But there's an apple at (8,0) which is far down. Not sure if that's the best path yet.\n\nLeft (x-1 to 6,4). That's empty. But maybe there's a better direction.\n\nDown (y-1 to 7,3). Wait, the apple at (3,7) is (x=3, y=7), but moving down would decrease y. Wait, my current position is (7,4). If I move down, that's to (7,3). There's an apple at (1,3), which is x=1, y=3. Not sure if that's in the way. But maybe moving down now would take me towards some apples?\n\nBut looking at the apples, the closest ones might be (7,8) which is up, (3,7) which is to the left and up, or (5,9) which is up and left. Hmm.\n\nLet me map the distances. From (7,4):\n\n- To (7,8): distance is 4 steps up (y difference is 4).\n- To (5,9): x difference 2 left, y difference 5 up. Total moves? Maybe a diagonal path, but need to move in steps.\n- To (3,7): x difference 4 left, y difference 3 up. Also a bit away.\n- (1,3): x difference 6 left, y difference -1 (down 1). But that's moving down a bit.\n- (8,0): x+1, y-4. But that's moving right and down a lot.\n\nSo the closest apple seems to be (7,8) directly up. If I move up now to (7,5), that's a step towards it. Let me check if moving up is safe. The board state: looking at row 4 (original head at (7,4)), moving up to y=5. The board's row 5 (y=5) shows that there's a 0 at (2,5) which is snake 0's head. But I'm moving to (7,5), which is not occupied. So it's safe. Then continuing up steps would take me towards the apple at (7,8). Once I get there, I can collect that apple, grow, and then maybe go for another one.\n\nAlternatively, maybe there's a way to intercept another apple faster. Let me check. If I move left to (6,4), then up to (6,5) and so on. But the apple at (5,9) is further up. Let me see how many moves would be needed. But since each move only steps once, I need to plan.\n\nAnother consideration: enemy snake #0 is at (2,5). Since it's a snake, unless it moves towards me, my path up towards (7,8) shouldn't intersect with it. So that's probably safe.\n\nSo the immediate next move should be UP to (7,5). That's safe and heads towards the apple up there. Let's confirm the board state again for that cell. The board state rows: row 4 is y=4. The head is there. Moving up to y=5. Looking at row 5, the board shows \". . 0 . . . . . . .\", which is at x=2. So (7,5) is empty. Safe to move.\n\nTherefore, moving UP is the correct choice here. It starts moving towards an apple and avoids collisions. After that, continue moving up until reaching the apple at (7,8), then figure next steps. Maybe after eating that apple, the next target could be (5,9) by moving left and up, or maybe another one.\n</think>\n\nI need to move up to approach the apple at (7,8). This path is clear of obstacles and enemies. \n\nNext move: UP",
-            "input_tokens": 472,
-            "output_tokens": 1061,
-            "cost": 0.00018864
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To determine the optimal move for my snake, I need to evaluate my current position, the location of the apples, and the potential threats, such as the enemy snake.\n\n### Current Board Analysis:\n- **My Position:** Head at (2, 5)\n- **Apples:** (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n- **Enemy Snake:** Head at (7, 4)\n\n### Strategic Evaluation:\n1. **Immediate Apples:**\n   - The closest apple is at (3, 7). To reach this apple, I have the following path options:\n     - Move UP to (2, 6)\n     - Move UP to (2, 7)\n     - Move RIGHT to (3, 7)\n\n2. **Distance Calculation:**\n   - Moving UP from (2, 5) to (2, 6), then to (2, 7), and finally RIGHT to (3, 7) is a 3-step path.\n   - Moving RIGHT to (3, 5) and then UP twice to (3, 7) is also a 3-step path.\n\n3. **Potential Threats:**\n   - The enemy snake at (7, 4) is not an immediate threat, as it is far from my current position and potential path to the apple at (3, 7).\n\n4. **Wall Consideration:**\n   - Moving UP from (2, 5) to (2, 6) keeps me within the board's boundaries.\n\n5. **Future Planning:**\n   - After reaching (3, 7), I can consider the apple at (5, 9) as the next target, which will require further planning for a safe path.\n\n### Decision:\nGiven the analysis, the optimal move is to proceed towards the closest apple at (3, 7). The safest and shortest path involves moving UP first.\n\n**Next Move:** UP\n\nThis move sets me on a path to gain points by reaching the nearest apple while avoiding immediate threats. After reaching (3, 7), I will reassess the board to plan the next strategic move towards the apple at (5, 9).",
-            "input_tokens": 469,
-            "output_tokens": 465,
-            "cost": 9.324000000000001e-05
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the situation thoroughly before deciding the next move. Here's a summary of the current state:\n\n- Snake #1 (Your snake):\n  - Head: (7, 5)\n  - Body: None\n\n- Snake #0 (Enemy snake):\n  - Head: (2, 6)\n  - Body: None\n\n- Apples:\n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n**Current Situation and Analysis:**\n\n- **Your snake** is at (7, 5) and your last move was **UP**. After moving up, your snake's new position is (7, 6).\n- The **close-by apples** are:\n  - Apple at (7, 8): 2 moves away.\n  - Apple at (5, 9): 4 moves diagonally or a bit more if moving row by row.\n  - Apple at (3, 7): 3 moves diagonally or a bit more if moving row by row.\n  - Apple at (1, 3): Too far in a diagonal direction and would require moving multiple steps away.\n  - Apple at (8, 0): Too far to the right and below.\n- **Enemy Snake #0**: Currently at (2, 6) with no body, meaning it can potentially move diagonally, up, or down, but it is not close to your position at (7, 6).\n\n**Strategic Considerations:**\n\n1. **Moving UP** to (7, 7):\n   - This path keeps you aiming for the apple at (7, 8) in one more move, making it the nearest and easiest apple to reach currently.\n   - No chance of collision with the enemy snake if it follows its current pattern, as the enemy is at (2, 6), and moving up brings you closer to the top, away from the enemy's position.\n\n2. **Alternative Routes**:\n   - Moving LEFT or RIGHT won't be efficient as it will result in a longer path to any apple.\n   - Moving DOWN is not strategic as it would move you away from the nearest apple (7,8).\n\nGiven this analysis, moving UP is the best strategic move as it directly leads you towards the nearest apple with minimal risk of collision.\n\n**Strategy for Next Turn:**\n- Aim for the apple at (7, 8) first. After eating it, reassess your position on the board, the remaining apples, and the potential positions of the enemy snake.\n- Look for opportunities to gain points efficiently without risking collisions.\n\n**Next Move:**\nUP",
-            "input_tokens": 1534,
-            "output_tokens": 561,
-            "cost": 0.00015112
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To maximize my chances of survival and score points quickly, I need to carefully plan my next moves considering the apples' locations, my current position, and the anticipated movements of the enemy snake.\n\n### Rationale:\n\n1. **Current Position and Apples:**\n   - My head is currently at (2, 5).\n   - Apples are located at (3, 7), (5, 9), (7, 8), (1, 3), and (8, 0).\n\n2. **Immediate Threats and Path Safety:**\n   - There is no immediate threat from another snake or walls since my head is at (2, 5).\n   - However, moving directly to the nearest apple at (3, 7) might put a path close to enemy snake at (7, 5) (currently at (7, 4)), a future threat.\n\n forcing future threats.\n\n3. **Safely Navigating and Point Accumulation:**\n   - Move RIGHT from (2, 5) to (2, 6). This move places me safely on a path that avoids immediate threats and aligns towards the North-East quadrant where apples are located at (5, 9) and (7, 8).\n   - This direction will then bring me to (2, 6), where moving DOWN could lead to (3, 6), and eventually upwards to (3, 7) avoids enemy head positioning at (7, 5).\n\n4. **Long-Term Planning and Optimal Path:**\n   - The direct path of moving RIGHT to (2, 6) ensures I avoid going backwards or hitting walls, setting me a strategic move arriving vertically to (3, 6).\n   - After the next turn sees stable paths, reroute then towards the apple at (3, 7) after moving to (3, 6) via UP, without encountering the enemy snake (7, 5).\n\n5. **Snake Growth Consideration:**\n   - As moving onto apples leads to growth, prioritize leading towards (5, 9) after an MOVE to (3, 7). This means following movements towards (5, 9) after securing the safer distance.\n\n**NEXT MOVE:** RIGHT\n\nAfter moving RIGHT, positioning my head at (2, 6), I will reassess for a future safe move vertically upwards to reach (3, 6) and then proceed towards",
-            "input_tokens": 932,
-            "output_tokens": 500,
-            "cost": 0.00012592
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation again before making the next move:\n\n- **Your Snake**: Head at (7, 6).\n- **Enemy Snake**: Head at (2, 7).\n- **Apples**: \n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n### Analysis:\n\n1. **Apples Closest to Your Snake**:\n    - **Apple at (7, 8)**: Just one move (UP) away.\n    - **Apple at (5, 9)**: Needs 4 moves.\n    - **Apple at (3, 7)**: Needs 3 moves.\n    - **Apple at (1, 3)**: Needs 7 moves.\n    - **Apple at (8, 0)**: Needs 12 moves.\n\n2. **Path Clear of Obstacles**:\n    - Moving UP to (7, 7) doesn\u2019t block any of your current paths and positions you well to capture the nearest apple.\n    - The enemy snake is at (2, 7). Moving UP also allows you to create distance from it, reducing the immediate risk of collision since your distances are far apart.\n\n3. **Future Movements**:\n    - Once you capture the apple at (7, 8), reassess the board. The next nearest apples could be (5, 9) or (3, 7). Keeping a path clear and avoiding unnecessary turns can help in capturing multiple apples in succession.\n    - Avoid unnecessary movements that might result in collisions either with the walls or with the enemy snake.\n\n### Strategy for Next Turn:\n- **MOVE UP**: This move places your snake head at (7, 7), exactly one move away from the nearest apple at (7, 8). This is an optimal choice to maximize the chances of gaining a point efficiently and safeguarding against immediate collisions with the opponent.\n\nNext Move: UP",
-            "input_tokens": 1031,
-            "output_tokens": 416,
-            "cost": 0.0001078
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's assess the current board situation and determine the best course of action for the next move:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 7)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 6)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . . . . . . A . .\n7 . . 0 A . . . . . .\n6 . . . . . . . 1 . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - Head at (2, 7). The snake is \"head-only\" without any body segments, which provides a lot of spatial freedom.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), directly above your current position. This apple can be reached with a single move and would give you 1 point, allowing you to grow.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is currently at (7, 6). There are no immediate threats from enemy snake or walls if we go up towards (3, 7).\n   - Moving in any other direction will not get you closer to an apple immediately.\n\n4. **Strategic Considerations:**\n   - By moving UP, we secure an apple to grow and increase our score to 1.\n   - Additional future strategy involves considering the other apples for longer-term navigation plans, but first acquiring the nearest one is beneficial.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearby apple, grow the snake, and gain",
-            "input_tokens": 968,
-            "output_tokens": 500,
-            "cost": 0.00012807999999999998
-          }
-        }
-      ]
-    },
-    {
-      "round_number": 3,
-      "snake_positions": {
-        "0": [
-          [
-            2,
-            8
-          ]
-        ],
-        "1": [
-          [
-            7,
-            7
-          ]
-        ]
-      },
-      "alive": {
-        "0": true,
-        "1": true
-      },
-      "scores": {
-        "0": 0,
-        "1": 0
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          8,
-          0
-        ],
-        [
-          7,
-          8
-        ],
-        [
-          1,
-          3
-        ],
-        [
-          5,
-          9
-        ],
-        [
-          3,
-          7
-        ]
+      [
+        7,
+        8
       ],
-      "move_history": [
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "<think>\nOkay, let me try to figure out the best move for my snake here. The head is at (7,4) right now, and there are no other bodies in the way. The board is 10x10 with apples at (8,0), (7,8), (1,3), (5,9), and (3,7). My goal is to collect as many apples as possible without dying.\n\nFirst, I need to look at the possible directions I can move: up, down, left, right. Let's check each direction for obstacles and apples.\n\nStarting with up (increasing y-coordinate). Moving up from (7,4) would take me to (7,5). That square is empty as per the board state. Then check if there's an apple there\u2014nope. What about further up? Let's see, the apple at (7,8) is two steps up. If I go up now, I can keep moving up towards that apple. But maybe there's a closer apple.\n\nLooking right (increasing x to 8,4). The board shows at (8,4) is empty. But there's an apple at (8,0) which is far down. Not sure if that's the best path yet.\n\nLeft (x-1 to 6,4). That's empty. But maybe there's a better direction.\n\nDown (y-1 to 7,3). Wait, the apple at (3,7) is (x=3, y=7), but moving down would decrease y. Wait, my current position is (7,4). If I move down, that's to (7,3). There's an apple at (1,3), which is x=1, y=3. Not sure if that's in the way. But maybe moving down now would take me towards some apples?\n\nBut looking at the apples, the closest ones might be (7,8) which is up, (3,7) which is to the left and up, or (5,9) which is up and left. Hmm.\n\nLet me map the distances. From (7,4):\n\n- To (7,8): distance is 4 steps up (y difference is 4).\n- To (5,9): x difference 2 left, y difference 5 up. Total moves? Maybe a diagonal path, but need to move in steps.\n- To (3,7): x difference 4 left, y difference 3 up. Also a bit away.\n- (1,3): x difference 6 left, y difference -1 (down 1). But that's moving down a bit.\n- (8,0): x+1, y-4. But that's moving right and down a lot.\n\nSo the closest apple seems to be (7,8) directly up. If I move up now to (7,5), that's a step towards it. Let me check if moving up is safe. The board state: looking at row 4 (original head at (7,4)), moving up to y=5. The board's row 5 (y=5) shows that there's a 0 at (2,5) which is snake 0's head. But I'm moving to (7,5), which is not occupied. So it's safe. Then continuing up steps would take me towards the apple at (7,8). Once I get there, I can collect that apple, grow, and then maybe go for another one.\n\nAlternatively, maybe there's a way to intercept another apple faster. Let me check. If I move left to (6,4), then up to (6,5) and so on. But the apple at (5,9) is further up. Let me see how many moves would be needed. But since each move only steps once, I need to plan.\n\nAnother consideration: enemy snake #0 is at (2,5). Since it's a snake, unless it moves towards me, my path up towards (7,8) shouldn't intersect with it. So that's probably safe.\n\nSo the immediate next move should be UP to (7,5). That's safe and heads towards the apple up there. Let's confirm the board state again for that cell. The board state rows: row 4 is y=4. The head is there. Moving up to y=5. Looking at row 5, the board shows \". . 0 . . . . . . .\", which is at x=2. So (7,5) is empty. Safe to move.\n\nTherefore, moving UP is the correct choice here. It starts moving towards an apple and avoids collisions. After that, continue moving up until reaching the apple at (7,8), then figure next steps. Maybe after eating that apple, the next target could be (5,9) by moving left and up, or maybe another one.\n</think>\n\nI need to move up to approach the apple at (7,8). This path is clear of obstacles and enemies. \n\nNext move: UP",
-            "input_tokens": 472,
-            "output_tokens": 1061,
-            "cost": 0.00018864
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To determine the optimal move for my snake, I need to evaluate my current position, the location of the apples, and the potential threats, such as the enemy snake.\n\n### Current Board Analysis:\n- **My Position:** Head at (2, 5)\n- **Apples:** (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n- **Enemy Snake:** Head at (7, 4)\n\n### Strategic Evaluation:\n1. **Immediate Apples:**\n   - The closest apple is at (3, 7). To reach this apple, I have the following path options:\n     - Move UP to (2, 6)\n     - Move UP to (2, 7)\n     - Move RIGHT to (3, 7)\n\n2. **Distance Calculation:**\n   - Moving UP from (2, 5) to (2, 6), then to (2, 7), and finally RIGHT to (3, 7) is a 3-step path.\n   - Moving RIGHT to (3, 5) and then UP twice to (3, 7) is also a 3-step path.\n\n3. **Potential Threats:**\n   - The enemy snake at (7, 4) is not an immediate threat, as it is far from my current position and potential path to the apple at (3, 7).\n\n4. **Wall Consideration:**\n   - Moving UP from (2, 5) to (2, 6) keeps me within the board's boundaries.\n\n5. **Future Planning:**\n   - After reaching (3, 7), I can consider the apple at (5, 9) as the next target, which will require further planning for a safe path.\n\n### Decision:\nGiven the analysis, the optimal move is to proceed towards the closest apple at (3, 7). The safest and shortest path involves moving UP first.\n\n**Next Move:** UP\n\nThis move sets me on a path to gain points by reaching the nearest apple while avoiding immediate threats. After reaching (3, 7), I will reassess the board to plan the next strategic move towards the apple at (5, 9).",
-            "input_tokens": 469,
-            "output_tokens": 465,
-            "cost": 9.324000000000001e-05
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the situation thoroughly before deciding the next move. Here's a summary of the current state:\n\n- Snake #1 (Your snake):\n  - Head: (7, 5)\n  - Body: None\n\n- Snake #0 (Enemy snake):\n  - Head: (2, 6)\n  - Body: None\n\n- Apples:\n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n**Current Situation and Analysis:**\n\n- **Your snake** is at (7, 5) and your last move was **UP**. After moving up, your snake's new position is (7, 6).\n- The **close-by apples** are:\n  - Apple at (7, 8): 2 moves away.\n  - Apple at (5, 9): 4 moves diagonally or a bit more if moving row by row.\n  - Apple at (3, 7): 3 moves diagonally or a bit more if moving row by row.\n  - Apple at (1, 3): Too far in a diagonal direction and would require moving multiple steps away.\n  - Apple at (8, 0): Too far to the right and below.\n- **Enemy Snake #0**: Currently at (2, 6) with no body, meaning it can potentially move diagonally, up, or down, but it is not close to your position at (7, 6).\n\n**Strategic Considerations:**\n\n1. **Moving UP** to (7, 7):\n   - This path keeps you aiming for the apple at (7, 8) in one more move, making it the nearest and easiest apple to reach currently.\n   - No chance of collision with the enemy snake if it follows its current pattern, as the enemy is at (2, 6), and moving up brings you closer to the top, away from the enemy's position.\n\n2. **Alternative Routes**:\n   - Moving LEFT or RIGHT won't be efficient as it will result in a longer path to any apple.\n   - Moving DOWN is not strategic as it would move you away from the nearest apple (7,8).\n\nGiven this analysis, moving UP is the best strategic move as it directly leads you towards the nearest apple with minimal risk of collision.\n\n**Strategy for Next Turn:**\n- Aim for the apple at (7, 8) first. After eating it, reassess your position on the board, the remaining apples, and the potential positions of the enemy snake.\n- Look for opportunities to gain points efficiently without risking collisions.\n\n**Next Move:**\nUP",
-            "input_tokens": 1534,
-            "output_tokens": 561,
-            "cost": 0.00015112
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To maximize my chances of survival and score points quickly, I need to carefully plan my next moves considering the apples' locations, my current position, and the anticipated movements of the enemy snake.\n\n### Rationale:\n\n1. **Current Position and Apples:**\n   - My head is currently at (2, 5).\n   - Apples are located at (3, 7), (5, 9), (7, 8), (1, 3), and (8, 0).\n\n2. **Immediate Threats and Path Safety:**\n   - There is no immediate threat from another snake or walls since my head is at (2, 5).\n   - However, moving directly to the nearest apple at (3, 7) might put a path close to enemy snake at (7, 5) (currently at (7, 4)), a future threat.\n\n forcing future threats.\n\n3. **Safely Navigating and Point Accumulation:**\n   - Move RIGHT from (2, 5) to (2, 6). This move places me safely on a path that avoids immediate threats and aligns towards the North-East quadrant where apples are located at (5, 9) and (7, 8).\n   - This direction will then bring me to (2, 6), where moving DOWN could lead to (3, 6), and eventually upwards to (3, 7) avoids enemy head positioning at (7, 5).\n\n4. **Long-Term Planning and Optimal Path:**\n   - The direct path of moving RIGHT to (2, 6) ensures I avoid going backwards or hitting walls, setting me a strategic move arriving vertically to (3, 6).\n   - After the next turn sees stable paths, reroute then towards the apple at (3, 7) after moving to (3, 6) via UP, without encountering the enemy snake (7, 5).\n\n5. **Snake Growth Consideration:**\n   - As moving onto apples leads to growth, prioritize leading towards (5, 9) after an MOVE to (3, 7). This means following movements towards (5, 9) after securing the safer distance.\n\n**NEXT MOVE:** RIGHT\n\nAfter moving RIGHT, positioning my head at (2, 6), I will reassess for a future safe move vertically upwards to reach (3, 6) and then proceed towards",
-            "input_tokens": 932,
-            "output_tokens": 500,
-            "cost": 0.00012592
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation again before making the next move:\n\n- **Your Snake**: Head at (7, 6).\n- **Enemy Snake**: Head at (2, 7).\n- **Apples**: \n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n### Analysis:\n\n1. **Apples Closest to Your Snake**:\n    - **Apple at (7, 8)**: Just one move (UP) away.\n    - **Apple at (5, 9)**: Needs 4 moves.\n    - **Apple at (3, 7)**: Needs 3 moves.\n    - **Apple at (1, 3)**: Needs 7 moves.\n    - **Apple at (8, 0)**: Needs 12 moves.\n\n2. **Path Clear of Obstacles**:\n    - Moving UP to (7, 7) doesn\u2019t block any of your current paths and positions you well to capture the nearest apple.\n    - The enemy snake is at (2, 7). Moving UP also allows you to create distance from it, reducing the immediate risk of collision since your distances are far apart.\n\n3. **Future Movements**:\n    - Once you capture the apple at (7, 8), reassess the board. The next nearest apples could be (5, 9) or (3, 7). Keeping a path clear and avoiding unnecessary turns can help in capturing multiple apples in succession.\n    - Avoid unnecessary movements that might result in collisions either with the walls or with the enemy snake.\n\n### Strategy for Next Turn:\n- **MOVE UP**: This move places your snake head at (7, 7), exactly one move away from the nearest apple at (7, 8). This is an optimal choice to maximize the chances of gaining a point efficiently and safeguarding against immediate collisions with the opponent.\n\nNext Move: UP",
-            "input_tokens": 1031,
-            "output_tokens": 416,
-            "cost": 0.0001078
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's assess the current board situation and determine the best course of action for the next move:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 7)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 6)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . . . . . . A . .\n7 . . 0 A . . . . . .\n6 . . . . . . . 1 . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - Head at (2, 7). The snake is \"head-only\" without any body segments, which provides a lot of spatial freedom.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), directly above your current position. This apple can be reached with a single move and would give you 1 point, allowing you to grow.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is currently at (7, 6). There are no immediate threats from enemy snake or walls if we go up towards (3, 7).\n   - Moving in any other direction will not get you closer to an apple immediately.\n\n4. **Strategic Considerations:**\n   - By moving UP, we secure an apple to grow and increase our score to 1.\n   - Additional future strategy involves considering the other apples for longer-term navigation plans, but first acquiring the nearest one is beneficial.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearby apple, grow the snake, and gain",
-            "input_tokens": 968,
-            "output_tokens": 500,
-            "cost": 0.00012807999999999998
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation again strategically:\n\n1. **Current Position**:\n    - Your Snake Head: (7, 7)\n    - Enemy Snake Head: (2, 8)\n    - Your Snake Body: None\n    \n2. **Apples**:\n    - (8, 0)\n    - (7, 8)\n    - (1, 3)\n    - (5, 9)\n    - (3, 7)\n    \n### Analysis:\n\n1. **Closest Apple**:\n    - **Apple at (7, 8)**: Only 1 move (UP) away.\n    - **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n    - **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n    - **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n    - **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n2. **Immediate Threats**:\n    - The enemy snake at (2, 8) is not an immediate threat since the shortest collision path is not an immediate probability (at least not in 1-2 moves).\n\n3. **Board Dynamics**:\n    - Moving UP to (7, 8) is the shortest path to an apple, which increases your score efficiently.\n    - The position after picking up the apple at (7, 8) will be (7, 8). From this new position, the next nearest apples can be assessed.\n\n### Strategy for the Next Turn:\n- **MOVE UP**: This aligns with the objective of capturing the nearest apple efficiently and quickly to maximize points.\n\n### Plan:\n- After moving UP, reassess the board for the next closest apple, ensuring to avoid obstacles such as walls or other snakes.\n  \nNext Move: UP",
-            "input_tokens": 886,
-            "output_tokens": 409,
-            "cost": 0.00010088
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 8)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 7)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . 0 . . . . A . .\n7 . . . A . . . 1 . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 8). Being head-only allows flexibility without immediate collision risks.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), one move UP from the current position.\n   - Moving UP provides a straightforward path to gain 1 point by growing the snake.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is at (7, 7), which poses no immediate threat to the upward path towards the apple at (3, 7).\n\n4. **Strategic Considerations:**\n   - Securing the apple at (3, 7) is optimal for short-term growth and score increment.\n   - Once the apple is consumed and the snake grows, plan subsequent moves to secure additional points while avoiding potential threats from enemy snakes.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearest apple, grow the snake, and earn a point. This move maintains flexibility and minimizes immediate risk.\n\n**Next Move: UP**",
-            "input_tokens": 968,
-            "output_tokens": 492,
-            "cost": 0.00012696000000000002
-          }
-        }
+      [
+        1,
+        3
+      ],
+      [
+        5,
+        9
+      ],
+      [
+        3,
+        7
       ]
+    ],
+    "alive": {
+      "0": true,
+      "1": true
     },
+    "scores": {
+      "0": 0,
+      "1": 0
+    }
+  },
+  "frames": [
     {
-      "round_number": 4,
-      "snake_positions": {
-        "0": [
-          [
-            2,
-            9
+      "round": 0,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              2,
+              5
+            ]
+          ],
+          "1": [
+            [
+              7,
+              4
+            ]
           ]
-        ],
-        "1": [
+        },
+        "apples": [
+          [
+            8,
+            0
+          ],
           [
             7,
             8
           ],
           [
-            7,
+            1,
+            3
+          ],
+          [
+            5,
+            9
+          ],
+          [
+            3,
             7
           ]
-        ]
-      },
-      "alive": {
-        "0": true,
-        "1": true
-      },
-      "scores": {
-        "0": 0,
-        "1": 1
-      },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          8,
-          0
         ],
-        [
-          1,
-          3
-        ],
-        [
-          5,
-          9
-        ],
-        [
-          3,
-          7
-        ],
-        [
-          1,
-          0
-        ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "<think>\nOkay, let me try to figure out the best move for my snake here. The head is at (7,4) right now, and there are no other bodies in the way. The board is 10x10 with apples at (8,0), (7,8), (1,3), (5,9), and (3,7). My goal is to collect as many apples as possible without dying.\n\nFirst, I need to look at the possible directions I can move: up, down, left, right. Let's check each direction for obstacles and apples.\n\nStarting with up (increasing y-coordinate). Moving up from (7,4) would take me to (7,5). That square is empty as per the board state. Then check if there's an apple there\u2014nope. What about further up? Let's see, the apple at (7,8) is two steps up. If I go up now, I can keep moving up towards that apple. But maybe there's a closer apple.\n\nLooking right (increasing x to 8,4). The board shows at (8,4) is empty. But there's an apple at (8,0) which is far down. Not sure if that's the best path yet.\n\nLeft (x-1 to 6,4). That's empty. But maybe there's a better direction.\n\nDown (y-1 to 7,3). Wait, the apple at (3,7) is (x=3, y=7), but moving down would decrease y. Wait, my current position is (7,4). If I move down, that's to (7,3). There's an apple at (1,3), which is x=1, y=3. Not sure if that's in the way. But maybe moving down now would take me towards some apples?\n\nBut looking at the apples, the closest ones might be (7,8) which is up, (3,7) which is to the left and up, or (5,9) which is up and left. Hmm.\n\nLet me map the distances. From (7,4):\n\n- To (7,8): distance is 4 steps up (y difference is 4).\n- To (5,9): x difference 2 left, y difference 5 up. Total moves? Maybe a diagonal path, but need to move in steps.\n- To (3,7): x difference 4 left, y difference 3 up. Also a bit away.\n- (1,3): x difference 6 left, y difference -1 (down 1). But that's moving down a bit.\n- (8,0): x+1, y-4. But that's moving right and down a lot.\n\nSo the closest apple seems to be (7,8) directly up. If I move up now to (7,5), that's a step towards it. Let me check if moving up is safe. The board state: looking at row 4 (original head at (7,4)), moving up to y=5. The board's row 5 (y=5) shows that there's a 0 at (2,5) which is snake 0's head. But I'm moving to (7,5), which is not occupied. So it's safe. Then continuing up steps would take me towards the apple at (7,8). Once I get there, I can collect that apple, grow, and then maybe go for another one.\n\nAlternatively, maybe there's a way to intercept another apple faster. Let me check. If I move left to (6,4), then up to (6,5) and so on. But the apple at (5,9) is further up. Let me see how many moves would be needed. But since each move only steps once, I need to plan.\n\nAnother consideration: enemy snake #0 is at (2,5). Since it's a snake, unless it moves towards me, my path up towards (7,8) shouldn't intersect with it. So that's probably safe.\n\nSo the immediate next move should be UP to (7,5). That's safe and heads towards the apple up there. Let's confirm the board state again for that cell. The board state rows: row 4 is y=4. The head is there. Moving up to y=5. Looking at row 5, the board shows \". . 0 . . . . . . .\", which is at x=2. So (7,5) is empty. Safe to move.\n\nTherefore, moving UP is the correct choice here. It starts moving towards an apple and avoids collisions. After that, continue moving up until reaching the apple at (7,8), then figure next steps. Maybe after eating that apple, the next target could be (5,9) by moving left and up, or maybe another one.\n</think>\n\nI need to move up to approach the apple at (7,8). This path is clear of obstacles and enemies. \n\nNext move: UP",
-            "input_tokens": 472,
-            "output_tokens": 1061,
-            "cost": 0.00018864
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To determine the optimal move for my snake, I need to evaluate my current position, the location of the apples, and the potential threats, such as the enemy snake.\n\n### Current Board Analysis:\n- **My Position:** Head at (2, 5)\n- **Apples:** (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n- **Enemy Snake:** Head at (7, 4)\n\n### Strategic Evaluation:\n1. **Immediate Apples:**\n   - The closest apple is at (3, 7). To reach this apple, I have the following path options:\n     - Move UP to (2, 6)\n     - Move UP to (2, 7)\n     - Move RIGHT to (3, 7)\n\n2. **Distance Calculation:**\n   - Moving UP from (2, 5) to (2, 6), then to (2, 7), and finally RIGHT to (3, 7) is a 3-step path.\n   - Moving RIGHT to (3, 5) and then UP twice to (3, 7) is also a 3-step path.\n\n3. **Potential Threats:**\n   - The enemy snake at (7, 4) is not an immediate threat, as it is far from my current position and potential path to the apple at (3, 7).\n\n4. **Wall Consideration:**\n   - Moving UP from (2, 5) to (2, 6) keeps me within the board's boundaries.\n\n5. **Future Planning:**\n   - After reaching (3, 7), I can consider the apple at (5, 9) as the next target, which will require further planning for a safe path.\n\n### Decision:\nGiven the analysis, the optimal move is to proceed towards the closest apple at (3, 7). The safest and shortest path involves moving UP first.\n\n**Next Move:** UP\n\nThis move sets me on a path to gain points by reaching the nearest apple while avoiding immediate threats. After reaching (3, 7), I will reassess the board to plan the next strategic move towards the apple at (5, 9).",
-            "input_tokens": 469,
-            "output_tokens": 465,
-            "cost": 9.324000000000001e-05
-          }
+        "alive": {
+          "0": true,
+          "1": true
         },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the situation thoroughly before deciding the next move. Here's a summary of the current state:\n\n- Snake #1 (Your snake):\n  - Head: (7, 5)\n  - Body: None\n\n- Snake #0 (Enemy snake):\n  - Head: (2, 6)\n  - Body: None\n\n- Apples:\n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n**Current Situation and Analysis:**\n\n- **Your snake** is at (7, 5) and your last move was **UP**. After moving up, your snake's new position is (7, 6).\n- The **close-by apples** are:\n  - Apple at (7, 8): 2 moves away.\n  - Apple at (5, 9): 4 moves diagonally or a bit more if moving row by row.\n  - Apple at (3, 7): 3 moves diagonally or a bit more if moving row by row.\n  - Apple at (1, 3): Too far in a diagonal direction and would require moving multiple steps away.\n  - Apple at (8, 0): Too far to the right and below.\n- **Enemy Snake #0**: Currently at (2, 6) with no body, meaning it can potentially move diagonally, up, or down, but it is not close to your position at (7, 6).\n\n**Strategic Considerations:**\n\n1. **Moving UP** to (7, 7):\n   - This path keeps you aiming for the apple at (7, 8) in one more move, making it the nearest and easiest apple to reach currently.\n   - No chance of collision with the enemy snake if it follows its current pattern, as the enemy is at (2, 6), and moving up brings you closer to the top, away from the enemy's position.\n\n2. **Alternative Routes**:\n   - Moving LEFT or RIGHT won't be efficient as it will result in a longer path to any apple.\n   - Moving DOWN is not strategic as it would move you away from the nearest apple (7,8).\n\nGiven this analysis, moving UP is the best strategic move as it directly leads you towards the nearest apple with minimal risk of collision.\n\n**Strategy for Next Turn:**\n- Aim for the apple at (7, 8) first. After eating it, reassess your position on the board, the remaining apples, and the potential positions of the enemy snake.\n- Look for opportunities to gain points efficiently without risking collisions.\n\n**Next Move:**\nUP",
-            "input_tokens": 1534,
-            "output_tokens": 561,
-            "cost": 0.00015112
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To maximize my chances of survival and score points quickly, I need to carefully plan my next moves considering the apples' locations, my current position, and the anticipated movements of the enemy snake.\n\n### Rationale:\n\n1. **Current Position and Apples:**\n   - My head is currently at (2, 5).\n   - Apples are located at (3, 7), (5, 9), (7, 8), (1, 3), and (8, 0).\n\n2. **Immediate Threats and Path Safety:**\n   - There is no immediate threat from another snake or walls since my head is at (2, 5).\n   - However, moving directly to the nearest apple at (3, 7) might put a path close to enemy snake at (7, 5) (currently at (7, 4)), a future threat.\n\n forcing future threats.\n\n3. **Safely Navigating and Point Accumulation:**\n   - Move RIGHT from (2, 5) to (2, 6). This move places me safely on a path that avoids immediate threats and aligns towards the North-East quadrant where apples are located at (5, 9) and (7, 8).\n   - This direction will then bring me to (2, 6), where moving DOWN could lead to (3, 6), and eventually upwards to (3, 7) avoids enemy head positioning at (7, 5).\n\n4. **Long-Term Planning and Optimal Path:**\n   - The direct path of moving RIGHT to (2, 6) ensures I avoid going backwards or hitting walls, setting me a strategic move arriving vertically to (3, 6).\n   - After the next turn sees stable paths, reroute then towards the apple at (3, 7) after moving to (3, 6) via UP, without encountering the enemy snake (7, 5).\n\n5. **Snake Growth Consideration:**\n   - As moving onto apples leads to growth, prioritize leading towards (5, 9) after an MOVE to (3, 7). This means following movements towards (5, 9) after securing the safer distance.\n\n**NEXT MOVE:** RIGHT\n\nAfter moving RIGHT, positioning my head at (2, 6), I will reassess for a future safe move vertically upwards to reach (3, 6) and then proceed towards",
-            "input_tokens": 932,
-            "output_tokens": 500,
-            "cost": 0.00012592
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation again before making the next move:\n\n- **Your Snake**: Head at (7, 6).\n- **Enemy Snake**: Head at (2, 7).\n- **Apples**: \n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n### Analysis:\n\n1. **Apples Closest to Your Snake**:\n    - **Apple at (7, 8)**: Just one move (UP) away.\n    - **Apple at (5, 9)**: Needs 4 moves.\n    - **Apple at (3, 7)**: Needs 3 moves.\n    - **Apple at (1, 3)**: Needs 7 moves.\n    - **Apple at (8, 0)**: Needs 12 moves.\n\n2. **Path Clear of Obstacles**:\n    - Moving UP to (7, 7) doesn\u2019t block any of your current paths and positions you well to capture the nearest apple.\n    - The enemy snake is at (2, 7). Moving UP also allows you to create distance from it, reducing the immediate risk of collision since your distances are far apart.\n\n3. **Future Movements**:\n    - Once you capture the apple at (7, 8), reassess the board. The next nearest apples could be (5, 9) or (3, 7). Keeping a path clear and avoiding unnecessary turns can help in capturing multiple apples in succession.\n    - Avoid unnecessary movements that might result in collisions either with the walls or with the enemy snake.\n\n### Strategy for Next Turn:\n- **MOVE UP**: This move places your snake head at (7, 7), exactly one move away from the nearest apple at (7, 8). This is an optimal choice to maximize the chances of gaining a point efficiently and safeguarding against immediate collisions with the opponent.\n\nNext Move: UP",
-            "input_tokens": 1031,
-            "output_tokens": 416,
-            "cost": 0.0001078
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's assess the current board situation and determine the best course of action for the next move:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 7)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 6)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . . . . . . A . .\n7 . . 0 A . . . . . .\n6 . . . . . . . 1 . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - Head at (2, 7). The snake is \"head-only\" without any body segments, which provides a lot of spatial freedom.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), directly above your current position. This apple can be reached with a single move and would give you 1 point, allowing you to grow.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is currently at (7, 6). There are no immediate threats from enemy snake or walls if we go up towards (3, 7).\n   - Moving in any other direction will not get you closer to an apple immediately.\n\n4. **Strategic Considerations:**\n   - By moving UP, we secure an apple to grow and increase our score to 1.\n   - Additional future strategy involves considering the other apples for longer-term navigation plans, but first acquiring the nearest one is beneficial.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearby apple, grow the snake, and gain",
-            "input_tokens": 968,
-            "output_tokens": 500,
-            "cost": 0.00012807999999999998
-          }
-        },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation again strategically:\n\n1. **Current Position**:\n    - Your Snake Head: (7, 7)\n    - Enemy Snake Head: (2, 8)\n    - Your Snake Body: None\n    \n2. **Apples**:\n    - (8, 0)\n    - (7, 8)\n    - (1, 3)\n    - (5, 9)\n    - (3, 7)\n    \n### Analysis:\n\n1. **Closest Apple**:\n    - **Apple at (7, 8)**: Only 1 move (UP) away.\n    - **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n    - **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n    - **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n    - **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n2. **Immediate Threats**:\n    - The enemy snake at (2, 8) is not an immediate threat since the shortest collision path is not an immediate probability (at least not in 1-2 moves).\n\n3. **Board Dynamics**:\n    - Moving UP to (7, 8) is the shortest path to an apple, which increases your score efficiently.\n    - The position after picking up the apple at (7, 8) will be (7, 8). From this new position, the next nearest apples can be assessed.\n\n### Strategy for the Next Turn:\n- **MOVE UP**: This aligns with the objective of capturing the nearest apple efficiently and quickly to maximize points.\n\n### Plan:\n- After moving UP, reassess the board for the next closest apple, ensuring to avoid obstacles such as walls or other snakes.\n  \nNext Move: UP",
-            "input_tokens": 886,
-            "output_tokens": 409,
-            "cost": 0.00010088
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 8)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 7)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . 0 . . . . A . .\n7 . . . A . . . 1 . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 8). Being head-only allows flexibility without immediate collision risks.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), one move UP from the current position.\n   - Moving UP provides a straightforward path to gain 1 point by growing the snake.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is at (7, 7), which poses no immediate threat to the upward path towards the apple at (3, 7).\n\n4. **Strategic Considerations:**\n   - Securing the apple at (3, 7) is optimal for short-term growth and score increment.\n   - Once the apple is consumed and the snake grows, plan subsequent moves to secure additional points while avoiding potential threats from enemy snakes.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearest apple, grow the snake, and earn a point. This move maintains flexibility and minimizes immediate risk.\n\n**Next Move: UP**",
-            "input_tokens": 968,
-            "output_tokens": 492,
-            "cost": 0.00012696000000000002
-          }
-        },
-        {
-          "1": {
-            "move": "LEFT",
-            "rationale": "Let's reassess the board situation after moving UP:\n\n### Current Position:\n- Your Snake Head: (7, 8)\n- Enemy Snake Head: (2, 9)\n- Apples: (8, 0), (1, 3), (5, 9), (3, 7), (7, 8) (previously at (7, 7), now eaten)\n- Your Snake Body: [(7, 7)]\n\n### New Closest Apples:\n- **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n- **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n- **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n- **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n### Enemy Snake and Safety:\n- The enemy snake is still not an immediate threat as it's far enough to be assessed later.\n\n### Strategy for the Next Turn:\n- **MOVE LEFT**: The next best move is to go LEFT towards the apple at (3, 7).\n\n### Plan:\n- After moving LEFT, reassess the board to capture the nearest apple efficiently and avoid any obstacles.\n\nDecided next move: LEFT",
-            "input_tokens": 883,
-            "output_tokens": 285,
-            "cost": 8.092e-05
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 9)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (1, 3), (5, 9), (3, 7), (1, 0)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 8)\n  - Body: [(7, 7)]\n\n### Board Visualization:\n```\n9 . . 0 . . A . . . .\n8 . . . . . . . 1 . .\n7 . . . A . . . T . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . A . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 9), which is near the top of the board. Being at the edge limits some movement directions (no UP move).\n\n2. **Immediate Apples:**\n   - The nearest apple is now at (3, 7), and it can be reached in three moves: UP, LEFT, and LEFT.\n   - Another apple is at (5, 9), directly above and reachable in one move (UP).\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake is directly below; moving down would lead to a collision.\n   - The edge of the board restricts movement UP.\n\n4. **Strategic Considerations:**\n   - The apple at (5, 9) is the most accessible without maneuvering around other obstacles.\n   - Collecting the apple at (5, 9) directly increases length and score with minimal risk.\n   - Moving UP from (2, 9) to (2, 8) is safer than other directions and aligns with reaching (5, 9) in the subsequent moves",
-            "input_tokens": 963,
-            "output_tokens": 500,
-            "cost": 0.00012778
-          }
+        "scores": {
+          "0": 0,
+          "1": 0
         }
-      ]
+      },
+      "moves": {
+        "1": {
+          "move": "UP",
+          "rationale": "<think>\nOkay, let me try to figure out the best move for my snake here. The head is at (7,4) right now, and there are no other bodies in the way. The board is 10x10 with apples at (8,0), (7,8), (1,3), (5,9), and (3,7). My goal is to collect as many apples as possible without dying.\n\nFirst, I need to look at the possible directions I can move: up, down, left, right. Let's check each direction for obstacles and apples.\n\nStarting with up (increasing y-coordinate). Moving up from (7,4) would take me to (7,5). That square is empty as per the board state. Then check if there's an apple there\u2014nope. What about further up? Let's see, the apple at (7,8) is two steps up. If I go up now, I can keep moving up towards that apple. But maybe there's a closer apple.\n\nLooking right (increasing x to 8,4). The board shows at (8,4) is empty. But there's an apple at (8,0) which is far down. Not sure if that's the best path yet.\n\nLeft (x-1 to 6,4). That's empty. But maybe there's a better direction.\n\nDown (y-1 to 7,3). Wait, the apple at (3,7) is (x=3, y=7), but moving down would decrease y. Wait, my current position is (7,4). If I move down, that's to (7,3). There's an apple at (1,3), which is x=1, y=3. Not sure if that's in the way. But maybe moving down now would take me towards some apples?\n\nBut looking at the apples, the closest ones might be (7,8) which is up, (3,7) which is to the left and up, or (5,9) which is up and left. Hmm.\n\nLet me map the distances. From (7,4):\n\n- To (7,8): distance is 4 steps up (y difference is 4).\n- To (5,9): x difference 2 left, y difference 5 up. Total moves? Maybe a diagonal path, but need to move in steps.\n- To (3,7): x difference 4 left, y difference 3 up. Also a bit away.\n- (1,3): x difference 6 left, y difference -1 (down 1). But that's moving down a bit.\n- (8,0): x+1, y-4. But that's moving right and down a lot.\n\nSo the closest apple seems to be (7,8) directly up. If I move up now to (7,5), that's a step towards it. Let me check if moving up is safe. The board state: looking at row 4 (original head at (7,4)), moving up to y=5. The board's row 5 (y=5) shows that there's a 0 at (2,5) which is snake 0's head. But I'm moving to (7,5), which is not occupied. So it's safe. Then continuing up steps would take me towards the apple at (7,8). Once I get there, I can collect that apple, grow, and then maybe go for another one.\n\nAlternatively, maybe there's a way to intercept another apple faster. Let me check. If I move left to (6,4), then up to (6,5) and so on. But the apple at (5,9) is further up. Let me see how many moves would be needed. But since each move only steps once, I need to plan.\n\nAnother consideration: enemy snake #0 is at (2,5). Since it's a snake, unless it moves towards me, my path up towards (7,8) shouldn't intersect with it. So that's probably safe.\n\nSo the immediate next move should be UP to (7,5). That's safe and heads towards the apple up there. Let's confirm the board state again for that cell. The board state rows: row 4 is y=4. The head is there. Moving up to y=5. Looking at row 5, the board shows \". . 0 . . . . . . .\", which is at x=2. So (7,5) is empty. Safe to move.\n\nTherefore, moving UP is the correct choice here. It starts moving towards an apple and avoids collisions. After that, continue moving up until reaching the apple at (7,8), then figure next steps. Maybe after eating that apple, the next target could be (5,9) by moving left and up, or maybe another one.\n</think>\n\nI need to move up to approach the apple at (7,8). This path is clear of obstacles and enemies. \n\nNext move: UP",
+          "input_tokens": 472,
+          "output_tokens": 1061,
+          "cost": 0.00018864
+        },
+        "0": {
+          "move": "UP",
+          "rationale": "To determine the optimal move for my snake, I need to evaluate my current position, the location of the apples, and the potential threats, such as the enemy snake.\n\n### Current Board Analysis:\n- **My Position:** Head at (2, 5)\n- **Apples:** (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n- **Enemy Snake:** Head at (7, 4)\n\n### Strategic Evaluation:\n1. **Immediate Apples:**\n   - The closest apple is at (3, 7). To reach this apple, I have the following path options:\n     - Move UP to (2, 6)\n     - Move UP to (2, 7)\n     - Move RIGHT to (3, 7)\n\n2. **Distance Calculation:**\n   - Moving UP from (2, 5) to (2, 6), then to (2, 7), and finally RIGHT to (3, 7) is a 3-step path.\n   - Moving RIGHT to (3, 5) and then UP twice to (3, 7) is also a 3-step path.\n\n3. **Potential Threats:**\n   - The enemy snake at (7, 4) is not an immediate threat, as it is far from my current position and potential path to the apple at (3, 7).\n\n4. **Wall Consideration:**\n   - Moving UP from (2, 5) to (2, 6) keeps me within the board's boundaries.\n\n5. **Future Planning:**\n   - After reaching (3, 7), I can consider the apple at (5, 9) as the next target, which will require further planning for a safe path.\n\n### Decision:\nGiven the analysis, the optimal move is to proceed towards the closest apple at (3, 7). The safest and shortest path involves moving UP first.\n\n**Next Move:** UP\n\nThis move sets me on a path to gain points by reaching the nearest apple while avoiding immediate threats. After reaching (3, 7), I will reassess the board to plan the next strategic move towards the apple at (5, 9).",
+          "input_tokens": 469,
+          "output_tokens": 465,
+          "cost": 9.324000000000001e-05
+        }
+      }
     },
     {
-      "round_number": 5,
-      "snake_positions": {
-        "0": [
-          [
-            2,
-            9
+      "round": 1,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              2,
+              6
+            ]
+          ],
+          "1": [
+            [
+              7,
+              5
+            ]
           ]
-        ],
-        "1": [
+        },
+        "apples": [
+          [
+            8,
+            0
+          ],
           [
             7,
             8
           ],
           [
-            7,
+            1,
+            3
+          ],
+          [
+            5,
+            9
+          ],
+          [
+            3,
             7
           ]
-        ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
       },
-      "alive": {
-        "0": false,
-        "1": true
+      "moves": {
+        "1": {
+          "move": "UP",
+          "rationale": "Let's analyze the situation thoroughly before deciding the next move. Here's a summary of the current state:\n\n- Snake #1 (Your snake):\n  - Head: (7, 5)\n  - Body: None\n\n- Snake #0 (Enemy snake):\n  - Head: (2, 6)\n  - Body: None\n\n- Apples:\n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n**Current Situation and Analysis:**\n\n- **Your snake** is at (7, 5) and your last move was **UP**. After moving up, your snake's new position is (7, 6).\n- The **close-by apples** are:\n  - Apple at (7, 8): 2 moves away.\n  - Apple at (5, 9): 4 moves diagonally or a bit more if moving row by row.\n  - Apple at (3, 7): 3 moves diagonally or a bit more if moving row by row.\n  - Apple at (1, 3): Too far in a diagonal direction and would require moving multiple steps away.\n  - Apple at (8, 0): Too far to the right and below.\n- **Enemy Snake #0**: Currently at (2, 6) with no body, meaning it can potentially move diagonally, up, or down, but it is not close to your position at (7, 6).\n\n**Strategic Considerations:**\n\n1. **Moving UP** to (7, 7):\n   - This path keeps you aiming for the apple at (7, 8) in one more move, making it the nearest and easiest apple to reach currently.\n   - No chance of collision with the enemy snake if it follows its current pattern, as the enemy is at (2, 6), and moving up brings you closer to the top, away from the enemy's position.\n\n2. **Alternative Routes**:\n   - Moving LEFT or RIGHT won't be efficient as it will result in a longer path to any apple.\n   - Moving DOWN is not strategic as it would move you away from the nearest apple (7,8).\n\nGiven this analysis, moving UP is the best strategic move as it directly leads you towards the nearest apple with minimal risk of collision.\n\n**Strategy for Next Turn:**\n- Aim for the apple at (7, 8) first. After eating it, reassess your position on the board, the remaining apples, and the potential positions of the enemy snake.\n- Look for opportunities to gain points efficiently without risking collisions.\n\n**Next Move:**\nUP",
+          "input_tokens": 1534,
+          "output_tokens": 561,
+          "cost": 0.00015112
+        },
+        "0": {
+          "move": "UP",
+          "rationale": "To maximize my chances of survival and score points quickly, I need to carefully plan my next moves considering the apples' locations, my current position, and the anticipated movements of the enemy snake.\n\n### Rationale:\n\n1. **Current Position and Apples:**\n   - My head is currently at (2, 5).\n   - Apples are located at (3, 7), (5, 9), (7, 8), (1, 3), and (8, 0).\n\n2. **Immediate Threats and Path Safety:**\n   - There is no immediate threat from another snake or walls since my head is at (2, 5).\n   - However, moving directly to the nearest apple at (3, 7) might put a path close to enemy snake at (7, 5) (currently at (7, 4)), a future threat.\n\n forcing future threats.\n\n3. **Safely Navigating and Point Accumulation:**\n   - Move RIGHT from (2, 5) to (2, 6). This move places me safely on a path that avoids immediate threats and aligns towards the North-East quadrant where apples are located at (5, 9) and (7, 8).\n   - This direction will then bring me to (2, 6), where moving DOWN could lead to (3, 6), and eventually upwards to (3, 7) avoids enemy head positioning at (7, 5).\n\n4. **Long-Term Planning and Optimal Path:**\n   - The direct path of moving RIGHT to (2, 6) ensures I avoid going backwards or hitting walls, setting me a strategic move arriving vertically to (3, 6).\n   - After the next turn sees stable paths, reroute then towards the apple at (3, 7) after moving to (3, 6) via UP, without encountering the enemy snake (7, 5).\n\n5. **Snake Growth Consideration:**\n   - As moving onto apples leads to growth, prioritize leading towards (5, 9) after an MOVE to (3, 7). This means following movements towards (5, 9) after securing the safer distance.\n\n**NEXT MOVE:** RIGHT\n\nAfter moving RIGHT, positioning my head at (2, 6), I will reassess for a future safe move vertically upwards to reach (3, 6) and then proceed towards",
+          "input_tokens": 932,
+          "output_tokens": 500,
+          "cost": 0.00012592
+        }
+      }
+    },
+    {
+      "round": 2,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              2,
+              7
+            ]
+          ],
+          "1": [
+            [
+              7,
+              6
+            ]
+          ]
+        },
+        "apples": [
+          [
+            8,
+            0
+          ],
+          [
+            7,
+            8
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            5,
+            9
+          ],
+          [
+            3,
+            7
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
       },
-      "scores": {
-        "0": 0,
-        "1": 1
+      "moves": {
+        "1": {
+          "move": "UP",
+          "rationale": "Let's analyze the current situation again before making the next move:\n\n- **Your Snake**: Head at (7, 6).\n- **Enemy Snake**: Head at (2, 7).\n- **Apples**: \n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n### Analysis:\n\n1. **Apples Closest to Your Snake**:\n    - **Apple at (7, 8)**: Just one move (UP) away.\n    - **Apple at (5, 9)**: Needs 4 moves.\n    - **Apple at (3, 7)**: Needs 3 moves.\n    - **Apple at (1, 3)**: Needs 7 moves.\n    - **Apple at (8, 0)**: Needs 12 moves.\n\n2. **Path Clear of Obstacles**:\n    - Moving UP to (7, 7) doesn\u2019t block any of your current paths and positions you well to capture the nearest apple.\n    - The enemy snake is at (2, 7). Moving UP also allows you to create distance from it, reducing the immediate risk of collision since your distances are far apart.\n\n3. **Future Movements**:\n    - Once you capture the apple at (7, 8), reassess the board. The next nearest apples could be (5, 9) or (3, 7). Keeping a path clear and avoiding unnecessary turns can help in capturing multiple apples in succession.\n    - Avoid unnecessary movements that might result in collisions either with the walls or with the enemy snake.\n\n### Strategy for Next Turn:\n- **MOVE UP**: This move places your snake head at (7, 7), exactly one move away from the nearest apple at (7, 8). This is an optimal choice to maximize the chances of gaining a point efficiently and safeguarding against immediate collisions with the opponent.\n\nNext Move: UP",
+          "input_tokens": 1031,
+          "output_tokens": 416,
+          "cost": 0.0001078
+        },
+        "0": {
+          "move": "UP",
+          "rationale": "Let's assess the current board situation and determine the best course of action for the next move:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 7)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 6)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . . . . . . A . .\n7 . . 0 A . . . . . .\n6 . . . . . . . 1 . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - Head at (2, 7). The snake is \"head-only\" without any body segments, which provides a lot of spatial freedom.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), directly above your current position. This apple can be reached with a single move and would give you 1 point, allowing you to grow.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is currently at (7, 6). There are no immediate threats from enemy snake or walls if we go up towards (3, 7).\n   - Moving in any other direction will not get you closer to an apple immediately.\n\n4. **Strategic Considerations:**\n   - By moving UP, we secure an apple to grow and increase our score to 1.\n   - Additional future strategy involves considering the other apples for longer-term navigation plans, but first acquiring the nearest one is beneficial.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearby apple, grow the snake, and gain",
+          "input_tokens": 968,
+          "output_tokens": 500,
+          "cost": 0.00012807999999999998
+        }
+      }
+    },
+    {
+      "round": 3,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              2,
+              8
+            ]
+          ],
+          "1": [
+            [
+              7,
+              7
+            ]
+          ]
+        },
+        "apples": [
+          [
+            8,
+            0
+          ],
+          [
+            7,
+            8
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            5,
+            9
+          ],
+          [
+            3,
+            7
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
       },
-      "width": 10,
-      "height": 10,
-      "apples": [
-        [
-          8,
-          0
-        ],
-        [
-          1,
-          3
-        ],
-        [
-          5,
-          9
-        ],
-        [
-          3,
-          7
-        ],
-        [
-          1,
-          0
-        ]
-      ],
-      "move_history": [
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "<think>\nOkay, let me try to figure out the best move for my snake here. The head is at (7,4) right now, and there are no other bodies in the way. The board is 10x10 with apples at (8,0), (7,8), (1,3), (5,9), and (3,7). My goal is to collect as many apples as possible without dying.\n\nFirst, I need to look at the possible directions I can move: up, down, left, right. Let's check each direction for obstacles and apples.\n\nStarting with up (increasing y-coordinate). Moving up from (7,4) would take me to (7,5). That square is empty as per the board state. Then check if there's an apple there\u2014nope. What about further up? Let's see, the apple at (7,8) is two steps up. If I go up now, I can keep moving up towards that apple. But maybe there's a closer apple.\n\nLooking right (increasing x to 8,4). The board shows at (8,4) is empty. But there's an apple at (8,0) which is far down. Not sure if that's the best path yet.\n\nLeft (x-1 to 6,4). That's empty. But maybe there's a better direction.\n\nDown (y-1 to 7,3). Wait, the apple at (3,7) is (x=3, y=7), but moving down would decrease y. Wait, my current position is (7,4). If I move down, that's to (7,3). There's an apple at (1,3), which is x=1, y=3. Not sure if that's in the way. But maybe moving down now would take me towards some apples?\n\nBut looking at the apples, the closest ones might be (7,8) which is up, (3,7) which is to the left and up, or (5,9) which is up and left. Hmm.\n\nLet me map the distances. From (7,4):\n\n- To (7,8): distance is 4 steps up (y difference is 4).\n- To (5,9): x difference 2 left, y difference 5 up. Total moves? Maybe a diagonal path, but need to move in steps.\n- To (3,7): x difference 4 left, y difference 3 up. Also a bit away.\n- (1,3): x difference 6 left, y difference -1 (down 1). But that's moving down a bit.\n- (8,0): x+1, y-4. But that's moving right and down a lot.\n\nSo the closest apple seems to be (7,8) directly up. If I move up now to (7,5), that's a step towards it. Let me check if moving up is safe. The board state: looking at row 4 (original head at (7,4)), moving up to y=5. The board's row 5 (y=5) shows that there's a 0 at (2,5) which is snake 0's head. But I'm moving to (7,5), which is not occupied. So it's safe. Then continuing up steps would take me towards the apple at (7,8). Once I get there, I can collect that apple, grow, and then maybe go for another one.\n\nAlternatively, maybe there's a way to intercept another apple faster. Let me check. If I move left to (6,4), then up to (6,5) and so on. But the apple at (5,9) is further up. Let me see how many moves would be needed. But since each move only steps once, I need to plan.\n\nAnother consideration: enemy snake #0 is at (2,5). Since it's a snake, unless it moves towards me, my path up towards (7,8) shouldn't intersect with it. So that's probably safe.\n\nSo the immediate next move should be UP to (7,5). That's safe and heads towards the apple up there. Let's confirm the board state again for that cell. The board state rows: row 4 is y=4. The head is there. Moving up to y=5. Looking at row 5, the board shows \". . 0 . . . . . . .\", which is at x=2. So (7,5) is empty. Safe to move.\n\nTherefore, moving UP is the correct choice here. It starts moving towards an apple and avoids collisions. After that, continue moving up until reaching the apple at (7,8), then figure next steps. Maybe after eating that apple, the next target could be (5,9) by moving left and up, or maybe another one.\n</think>\n\nI need to move up to approach the apple at (7,8). This path is clear of obstacles and enemies. \n\nNext move: UP",
-            "input_tokens": 472,
-            "output_tokens": 1061,
-            "cost": 0.00018864
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To determine the optimal move for my snake, I need to evaluate my current position, the location of the apples, and the potential threats, such as the enemy snake.\n\n### Current Board Analysis:\n- **My Position:** Head at (2, 5)\n- **Apples:** (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n- **Enemy Snake:** Head at (7, 4)\n\n### Strategic Evaluation:\n1. **Immediate Apples:**\n   - The closest apple is at (3, 7). To reach this apple, I have the following path options:\n     - Move UP to (2, 6)\n     - Move UP to (2, 7)\n     - Move RIGHT to (3, 7)\n\n2. **Distance Calculation:**\n   - Moving UP from (2, 5) to (2, 6), then to (2, 7), and finally RIGHT to (3, 7) is a 3-step path.\n   - Moving RIGHT to (3, 5) and then UP twice to (3, 7) is also a 3-step path.\n\n3. **Potential Threats:**\n   - The enemy snake at (7, 4) is not an immediate threat, as it is far from my current position and potential path to the apple at (3, 7).\n\n4. **Wall Consideration:**\n   - Moving UP from (2, 5) to (2, 6) keeps me within the board's boundaries.\n\n5. **Future Planning:**\n   - After reaching (3, 7), I can consider the apple at (5, 9) as the next target, which will require further planning for a safe path.\n\n### Decision:\nGiven the analysis, the optimal move is to proceed towards the closest apple at (3, 7). The safest and shortest path involves moving UP first.\n\n**Next Move:** UP\n\nThis move sets me on a path to gain points by reaching the nearest apple while avoiding immediate threats. After reaching (3, 7), I will reassess the board to plan the next strategic move towards the apple at (5, 9).",
-            "input_tokens": 469,
-            "output_tokens": 465,
-            "cost": 9.324000000000001e-05
-          }
+      "moves": {
+        "1": {
+          "move": "UP",
+          "rationale": "Let's analyze the current situation again strategically:\n\n1. **Current Position**:\n    - Your Snake Head: (7, 7)\n    - Enemy Snake Head: (2, 8)\n    - Your Snake Body: None\n    \n2. **Apples**:\n    - (8, 0)\n    - (7, 8)\n    - (1, 3)\n    - (5, 9)\n    - (3, 7)\n    \n### Analysis:\n\n1. **Closest Apple**:\n    - **Apple at (7, 8)**: Only 1 move (UP) away.\n    - **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n    - **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n    - **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n    - **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n2. **Immediate Threats**:\n    - The enemy snake at (2, 8) is not an immediate threat since the shortest collision path is not an immediate probability (at least not in 1-2 moves).\n\n3. **Board Dynamics**:\n    - Moving UP to (7, 8) is the shortest path to an apple, which increases your score efficiently.\n    - The position after picking up the apple at (7, 8) will be (7, 8). From this new position, the next nearest apples can be assessed.\n\n### Strategy for the Next Turn:\n- **MOVE UP**: This aligns with the objective of capturing the nearest apple efficiently and quickly to maximize points.\n\n### Plan:\n- After moving UP, reassess the board for the next closest apple, ensuring to avoid obstacles such as walls or other snakes.\n  \nNext Move: UP",
+          "input_tokens": 886,
+          "output_tokens": 409,
+          "cost": 0.00010088
         },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the situation thoroughly before deciding the next move. Here's a summary of the current state:\n\n- Snake #1 (Your snake):\n  - Head: (7, 5)\n  - Body: None\n\n- Snake #0 (Enemy snake):\n  - Head: (2, 6)\n  - Body: None\n\n- Apples:\n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n**Current Situation and Analysis:**\n\n- **Your snake** is at (7, 5) and your last move was **UP**. After moving up, your snake's new position is (7, 6).\n- The **close-by apples** are:\n  - Apple at (7, 8): 2 moves away.\n  - Apple at (5, 9): 4 moves diagonally or a bit more if moving row by row.\n  - Apple at (3, 7): 3 moves diagonally or a bit more if moving row by row.\n  - Apple at (1, 3): Too far in a diagonal direction and would require moving multiple steps away.\n  - Apple at (8, 0): Too far to the right and below.\n- **Enemy Snake #0**: Currently at (2, 6) with no body, meaning it can potentially move diagonally, up, or down, but it is not close to your position at (7, 6).\n\n**Strategic Considerations:**\n\n1. **Moving UP** to (7, 7):\n   - This path keeps you aiming for the apple at (7, 8) in one more move, making it the nearest and easiest apple to reach currently.\n   - No chance of collision with the enemy snake if it follows its current pattern, as the enemy is at (2, 6), and moving up brings you closer to the top, away from the enemy's position.\n\n2. **Alternative Routes**:\n   - Moving LEFT or RIGHT won't be efficient as it will result in a longer path to any apple.\n   - Moving DOWN is not strategic as it would move you away from the nearest apple (7,8).\n\nGiven this analysis, moving UP is the best strategic move as it directly leads you towards the nearest apple with minimal risk of collision.\n\n**Strategy for Next Turn:**\n- Aim for the apple at (7, 8) first. After eating it, reassess your position on the board, the remaining apples, and the potential positions of the enemy snake.\n- Look for opportunities to gain points efficiently without risking collisions.\n\n**Next Move:**\nUP",
-            "input_tokens": 1534,
-            "output_tokens": 561,
-            "cost": 0.00015112
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "To maximize my chances of survival and score points quickly, I need to carefully plan my next moves considering the apples' locations, my current position, and the anticipated movements of the enemy snake.\n\n### Rationale:\n\n1. **Current Position and Apples:**\n   - My head is currently at (2, 5).\n   - Apples are located at (3, 7), (5, 9), (7, 8), (1, 3), and (8, 0).\n\n2. **Immediate Threats and Path Safety:**\n   - There is no immediate threat from another snake or walls since my head is at (2, 5).\n   - However, moving directly to the nearest apple at (3, 7) might put a path close to enemy snake at (7, 5) (currently at (7, 4)), a future threat.\n\n forcing future threats.\n\n3. **Safely Navigating and Point Accumulation:**\n   - Move RIGHT from (2, 5) to (2, 6). This move places me safely on a path that avoids immediate threats and aligns towards the North-East quadrant where apples are located at (5, 9) and (7, 8).\n   - This direction will then bring me to (2, 6), where moving DOWN could lead to (3, 6), and eventually upwards to (3, 7) avoids enemy head positioning at (7, 5).\n\n4. **Long-Term Planning and Optimal Path:**\n   - The direct path of moving RIGHT to (2, 6) ensures I avoid going backwards or hitting walls, setting me a strategic move arriving vertically to (3, 6).\n   - After the next turn sees stable paths, reroute then towards the apple at (3, 7) after moving to (3, 6) via UP, without encountering the enemy snake (7, 5).\n\n5. **Snake Growth Consideration:**\n   - As moving onto apples leads to growth, prioritize leading towards (5, 9) after an MOVE to (3, 7). This means following movements towards (5, 9) after securing the safer distance.\n\n**NEXT MOVE:** RIGHT\n\nAfter moving RIGHT, positioning my head at (2, 6), I will reassess for a future safe move vertically upwards to reach (3, 6) and then proceed towards",
-            "input_tokens": 932,
-            "output_tokens": 500,
-            "cost": 0.00012592
-          }
+        "0": {
+          "move": "UP",
+          "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 8)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 7)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . 0 . . . . A . .\n7 . . . A . . . 1 . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 8). Being head-only allows flexibility without immediate collision risks.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), one move UP from the current position.\n   - Moving UP provides a straightforward path to gain 1 point by growing the snake.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is at (7, 7), which poses no immediate threat to the upward path towards the apple at (3, 7).\n\n4. **Strategic Considerations:**\n   - Securing the apple at (3, 7) is optimal for short-term growth and score increment.\n   - Once the apple is consumed and the snake grows, plan subsequent moves to secure additional points while avoiding potential threats from enemy snakes.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearest apple, grow the snake, and earn a point. This move maintains flexibility and minimizes immediate risk.\n\n**Next Move: UP**",
+          "input_tokens": 968,
+          "output_tokens": 492,
+          "cost": 0.00012696000000000002
+        }
+      }
+    },
+    {
+      "round": 4,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              2,
+              9
+            ]
+          ],
+          "1": [
+            [
+              7,
+              8
+            ],
+            [
+              7,
+              7
+            ]
+          ]
         },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation again before making the next move:\n\n- **Your Snake**: Head at (7, 6).\n- **Enemy Snake**: Head at (2, 7).\n- **Apples**: \n  - (8, 0)\n  - (7, 8)\n  - (1, 3)\n  - (5, 9)\n  - (3, 7)\n\n### Analysis:\n\n1. **Apples Closest to Your Snake**:\n    - **Apple at (7, 8)**: Just one move (UP) away.\n    - **Apple at (5, 9)**: Needs 4 moves.\n    - **Apple at (3, 7)**: Needs 3 moves.\n    - **Apple at (1, 3)**: Needs 7 moves.\n    - **Apple at (8, 0)**: Needs 12 moves.\n\n2. **Path Clear of Obstacles**:\n    - Moving UP to (7, 7) doesn\u2019t block any of your current paths and positions you well to capture the nearest apple.\n    - The enemy snake is at (2, 7). Moving UP also allows you to create distance from it, reducing the immediate risk of collision since your distances are far apart.\n\n3. **Future Movements**:\n    - Once you capture the apple at (7, 8), reassess the board. The next nearest apples could be (5, 9) or (3, 7). Keeping a path clear and avoiding unnecessary turns can help in capturing multiple apples in succession.\n    - Avoid unnecessary movements that might result in collisions either with the walls or with the enemy snake.\n\n### Strategy for Next Turn:\n- **MOVE UP**: This move places your snake head at (7, 7), exactly one move away from the nearest apple at (7, 8). This is an optimal choice to maximize the chances of gaining a point efficiently and safeguarding against immediate collisions with the opponent.\n\nNext Move: UP",
-            "input_tokens": 1031,
-            "output_tokens": 416,
-            "cost": 0.0001078
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's assess the current board situation and determine the best course of action for the next move:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 7)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 6)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . . . . . . A . .\n7 . . 0 A . . . . . .\n6 . . . . . . . 1 . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - Head at (2, 7). The snake is \"head-only\" without any body segments, which provides a lot of spatial freedom.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), directly above your current position. This apple can be reached with a single move and would give you 1 point, allowing you to grow.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is currently at (7, 6). There are no immediate threats from enemy snake or walls if we go up towards (3, 7).\n   - Moving in any other direction will not get you closer to an apple immediately.\n\n4. **Strategic Considerations:**\n   - By moving UP, we secure an apple to grow and increase our score to 1.\n   - Additional future strategy involves considering the other apples for longer-term navigation plans, but first acquiring the nearest one is beneficial.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearby apple, grow the snake, and gain",
-            "input_tokens": 968,
-            "output_tokens": 500,
-            "cost": 0.00012807999999999998
-          }
+        "apples": [
+          [
+            8,
+            0
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            5,
+            9
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
         },
-        {
-          "1": {
-            "move": "UP",
-            "rationale": "Let's analyze the current situation again strategically:\n\n1. **Current Position**:\n    - Your Snake Head: (7, 7)\n    - Enemy Snake Head: (2, 8)\n    - Your Snake Body: None\n    \n2. **Apples**:\n    - (8, 0)\n    - (7, 8)\n    - (1, 3)\n    - (5, 9)\n    - (3, 7)\n    \n### Analysis:\n\n1. **Closest Apple**:\n    - **Apple at (7, 8)**: Only 1 move (UP) away.\n    - **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n    - **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n    - **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n    - **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n2. **Immediate Threats**:\n    - The enemy snake at (2, 8) is not an immediate threat since the shortest collision path is not an immediate probability (at least not in 1-2 moves).\n\n3. **Board Dynamics**:\n    - Moving UP to (7, 8) is the shortest path to an apple, which increases your score efficiently.\n    - The position after picking up the apple at (7, 8) will be (7, 8). From this new position, the next nearest apples can be assessed.\n\n### Strategy for the Next Turn:\n- **MOVE UP**: This aligns with the objective of capturing the nearest apple efficiently and quickly to maximize points.\n\n### Plan:\n- After moving UP, reassess the board for the next closest apple, ensuring to avoid obstacles such as walls or other snakes.\n  \nNext Move: UP",
-            "input_tokens": 886,
-            "output_tokens": 409,
-            "cost": 0.00010088
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 8)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (7, 8), (1, 3), (5, 9), (3, 7)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 7)\n  - Body: None\n\n### Board Visualization:\n```\n9 . . . . . A . . . .\n8 . . 0 . . . . A . .\n7 . . . A . . . 1 . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . . . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 8). Being head-only allows flexibility without immediate collision risks.\n\n2. **Immediate Apples:**\n   - The nearest apple is at (3, 7), one move UP from the current position.\n   - Moving UP provides a straightforward path to gain 1 point by growing the snake.\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake head is at (7, 7), which poses no immediate threat to the upward path towards the apple at (3, 7).\n\n4. **Strategic Considerations:**\n   - Securing the apple at (3, 7) is optimal for short-term growth and score increment.\n   - Once the apple is consumed and the snake grows, plan subsequent moves to secure additional points while avoiding potential threats from enemy snakes.\n\n### Decision and Next Move:\n- Move **UP** to (3, 7) to secure the nearest apple, grow the snake, and earn a point. This move maintains flexibility and minimizes immediate risk.\n\n**Next Move: UP**",
-            "input_tokens": 968,
-            "output_tokens": 492,
-            "cost": 0.00012696000000000002
-          }
+        "scores": {
+          "0": 0,
+          "1": 1
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "LEFT",
+          "rationale": "Let's reassess the board situation after moving UP:\n\n### Current Position:\n- Your Snake Head: (7, 8)\n- Enemy Snake Head: (2, 9)\n- Apples: (8, 0), (1, 3), (5, 9), (3, 7), (7, 8) (previously at (7, 7), now eaten)\n- Your Snake Body: [(7, 7)]\n\n### New Closest Apples:\n- **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n- **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n- **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n- **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n### Enemy Snake and Safety:\n- The enemy snake is still not an immediate threat as it's far enough to be assessed later.\n\n### Strategy for the Next Turn:\n- **MOVE LEFT**: The next best move is to go LEFT towards the apple at (3, 7).\n\n### Plan:\n- After moving LEFT, reassess the board to capture the nearest apple efficiently and avoid any obstacles.\n\nDecided next move: LEFT",
+          "input_tokens": 883,
+          "output_tokens": 285,
+          "cost": 8.092e-05
         },
+        "0": {
+          "move": "UP",
+          "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 9)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (1, 3), (5, 9), (3, 7), (1, 0)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 8)\n  - Body: [(7, 7)]\n\n### Board Visualization:\n```\n9 . . 0 . . A . . . .\n8 . . . . . . . 1 . .\n7 . . . A . . . T . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . A . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 9), which is near the top of the board. Being at the edge limits some movement directions (no UP move).\n\n2. **Immediate Apples:**\n   - The nearest apple is now at (3, 7), and it can be reached in three moves: UP, LEFT, and LEFT.\n   - Another apple is at (5, 9), directly above and reachable in one move (UP).\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake is directly below; moving down would lead to a collision.\n   - The edge of the board restricts movement UP.\n\n4. **Strategic Considerations:**\n   - The apple at (5, 9) is the most accessible without maneuvering around other obstacles.\n   - Collecting the apple at (5, 9) directly increases length and score with minimal risk.\n   - Moving UP from (2, 9) to (2, 8) is safer than other directions and aligns with reaching (5, 9) in the subsequent moves",
+          "input_tokens": 963,
+          "output_tokens": 500,
+          "cost": 0.00012778
+        }
+      },
+      "events": [
         {
-          "1": {
-            "move": "LEFT",
-            "rationale": "Let's reassess the board situation after moving UP:\n\n### Current Position:\n- Your Snake Head: (7, 8)\n- Enemy Snake Head: (2, 9)\n- Apples: (8, 0), (1, 3), (5, 9), (3, 7), (7, 8) (previously at (7, 7), now eaten)\n- Your Snake Body: [(7, 7)]\n\n### New Closest Apples:\n- **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n- **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n- **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n- **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n### Enemy Snake and Safety:\n- The enemy snake is still not an immediate threat as it's far enough to be assessed later.\n\n### Strategy for the Next Turn:\n- **MOVE LEFT**: The next best move is to go LEFT towards the apple at (3, 7).\n\n### Plan:\n- After moving LEFT, reassess the board to capture the nearest apple efficiently and avoid any obstacles.\n\nDecided next move: LEFT",
-            "input_tokens": 883,
-            "output_tokens": 285,
-            "cost": 8.092e-05
-          },
-          "0": {
-            "move": "UP",
-            "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 9)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (1, 3), (5, 9), (3, 7), (1, 0)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 8)\n  - Body: [(7, 7)]\n\n### Board Visualization:\n```\n9 . . 0 . . A . . . .\n8 . . . . . . . 1 . .\n7 . . . A . . . T . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . A . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 9), which is near the top of the board. Being at the edge limits some movement directions (no UP move).\n\n2. **Immediate Apples:**\n   - The nearest apple is now at (3, 7), and it can be reached in three moves: UP, LEFT, and LEFT.\n   - Another apple is at (5, 9), directly above and reachable in one move (UP).\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake is directly below; moving down would lead to a collision.\n   - The edge of the board restricts movement UP.\n\n4. **Strategic Considerations:**\n   - The apple at (5, 9) is the most accessible without maneuvering around other obstacles.\n   - Collecting the apple at (5, 9) directly increases length and score with minimal risk.\n   - Moving UP from (2, 9) to (2, 8) is safer than other directions and aligns with reaching (5, 9) in the subsequent moves",
-            "input_tokens": 963,
-            "output_tokens": 500,
-            "cost": 0.00012778
-          }
+          "type": "death",
+          "player_id": "0",
+          "reason": "wall"
         }
       ]
+    },
+    {
+      "round": 5,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              2,
+              9
+            ]
+          ],
+          "1": [
+            [
+              7,
+              8
+            ],
+            [
+              7,
+              7
+            ]
+          ]
+        },
+        "apples": [
+          [
+            8,
+            0
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            5,
+            9
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "alive": {
+          "0": false,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 1
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "LEFT",
+          "rationale": "Let's reassess the board situation after moving UP:\n\n### Current Position:\n- Your Snake Head: (7, 8)\n- Enemy Snake Head: (2, 9)\n- Apples: (8, 0), (1, 3), (5, 9), (3, 7), (7, 8) (previously at (7, 7), now eaten)\n- Your Snake Body: [(7, 7)]\n\n### New Closest Apples:\n- **Apple at (3, 7)**: 2 moves (LEFT, DOWN).\n- **Apple at (5, 9)**: 3 moves (RIGHT, UP, UP).\n- **Apple at (1, 3)**: 6 moves (DOWN, DOWN, LEFT, LEFT).\n- **Apple at (8, 0)**: 10 moves (RIGHT, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN).\n\n### Enemy Snake and Safety:\n- The enemy snake is still not an immediate threat as it's far enough to be assessed later.\n\n### Strategy for the Next Turn:\n- **MOVE LEFT**: The next best move is to go LEFT towards the apple at (3, 7).\n\n### Plan:\n- After moving LEFT, reassess the board to capture the nearest apple efficiently and avoid any obstacles.\n\nDecided next move: LEFT",
+          "input_tokens": 883,
+          "output_tokens": 285,
+          "cost": 8.092e-05
+        },
+        "0": {
+          "move": "UP",
+          "rationale": "Let's analyze the current board situation and determine the best move for the snake:\n\n### Current Board State:\n- **Your Snake (ID: 0):**\n  - Head: (2, 9)\n  - Body: None\n\n- **Apples:**\n  - Located at coordinates: (8, 0), (1, 3), (5, 9), (3, 7), (1, 0)\n\n- **Enemy Snake (#1):**\n  - Head: (7, 8)\n  - Body: [(7, 7)]\n\n### Board Visualization:\n```\n9 . . 0 . . A . . . .\n8 . . . . . . . 1 . .\n7 . . . A . . . T . .\n6 . . . . . . . . . .\n5 . . . . . . . . . .\n4 . . . . . . . . . .\n3 . A . . . . . . . .\n2 . . . . . . . . . .\n1 . . . . . . . . . .\n0 . A . . . . . . A .\n  0 1 2 3 4 5 6 7 8 9\n```\n\n### Analysis and Rationale:\n\n1. **Current Position:**\n   - The head is currently at (2, 9), which is near the top of the board. Being at the edge limits some movement directions (no UP move).\n\n2. **Immediate Apples:**\n   - The nearest apple is now at (3, 7), and it can be reached in three moves: UP, LEFT, and LEFT.\n   - Another apple is at (5, 9), directly above and reachable in one move (UP).\n\n3. **Threats and Board Boundaries:**\n   - The enemy snake is directly below; moving down would lead to a collision.\n   - The edge of the board restricts movement UP.\n\n4. **Strategic Considerations:**\n   - The apple at (5, 9) is the most accessible without maneuvering around other obstacles.\n   - Collecting the apple at (5, 9) directly increases length and score with minimal risk.\n   - Moving UP from (2, 9) to (2, 8) is safer than other directions and aligns with reaching (5, 9) in the subsequent moves",
+          "input_tokens": 963,
+          "output_tokens": 500,
+          "cost": 0.00012778
+        }
+      }
     }
   ]
 }
