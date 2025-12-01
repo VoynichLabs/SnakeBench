@@ -13,8 +13,9 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List
+from typing import Any, Callable, List, TypeVar
 
+import psycopg2
 import schedule
 
 
@@ -46,13 +47,50 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 logger = logging.getLogger(__name__)
+T = TypeVar("T")
+
+
+def _run_db(action: Callable[[Any, Any], T], *, commit: bool = False, retries: int = 1) -> T:
+    """Execute a DB action with fresh connection management and one retry on OperationalError."""
+    attempt = 0
+    while True:
+        conn = get_connection()
+        cursor = conn.cursor()
+        try:
+            result = action(conn, cursor)
+            if commit:
+                conn.commit()
+            return result
+        except psycopg2.OperationalError:
+            attempt += 1
+            logger.warning(
+                "DB connection dropped; retrying with a fresh connection (%s/%s).",
+                attempt,
+                retries,
+            )
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            if attempt > retries:
+                raise
+            continue
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
+        finally:
+            try:
+                cursor.close()
+            finally:
+                conn.close()
 
 
 def _fetch_stale_game_ids(threshold: datetime) -> List[str]:
     """Return ids of in-progress games that have not updated since threshold."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
+    def _query(_: Any, cursor: Any) -> List[str]:
         cursor.execute(
             """
             SELECT id
@@ -64,8 +102,8 @@ def _fetch_stale_game_ids(threshold: datetime) -> List[str]:
         )
         rows = cursor.fetchall()
         return [row["id"] for row in rows]
-    finally:
-        conn.close()
+
+    return _run_db(_query)
 
 
 def delete_stale_in_progress_games() -> None:
@@ -79,30 +117,30 @@ def delete_stale_in_progress_games() -> None:
         )
         return
 
-    conn = get_connection()
-    cursor = conn.cursor()
-
     try:
-        # Remove participants first to satisfy FK constraints
-        cursor.execute(
-            """
-            DELETE FROM game_participants
-            WHERE game_id = ANY(%s)
-            """,
-            (stale_ids,),
-        )
-        participants_deleted = cursor.rowcount or 0
+        def _delete(_: Any, cursor: Any) -> tuple[int, int]:
+            # Remove participants first to satisfy FK constraints
+            cursor.execute(
+                """
+                DELETE FROM game_participants
+                WHERE game_id = ANY(%s)
+                """,
+                (stale_ids,),
+            )
+            participants_deleted = cursor.rowcount or 0
 
-        cursor.execute(
-            """
-            DELETE FROM games
-            WHERE id = ANY(%s)
-            """,
-            (stale_ids,),
-        )
-        games_deleted = cursor.rowcount or 0
+            cursor.execute(
+                """
+                DELETE FROM games
+                WHERE id = ANY(%s)
+                """,
+                (stale_ids,),
+            )
+            games_deleted = cursor.rowcount or 0
 
-        conn.commit()
+            return participants_deleted, games_deleted
+
+        participants_deleted, games_deleted = _run_db(_delete, commit=True)
         logger.warning(
             "Deleted %s stale in-progress games (participants removed: %s). "
             "Threshold: %s",
@@ -111,11 +149,8 @@ def delete_stale_in_progress_games() -> None:
             threshold.isoformat(),
         )
     except Exception:
-        conn.rollback()
         logger.exception("Failed to delete stale in-progress games")
         raise
-    finally:
-        conn.close()
 
 
 def _validated_openrouter_interval() -> int:
