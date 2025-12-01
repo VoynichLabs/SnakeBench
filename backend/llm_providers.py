@@ -57,8 +57,8 @@ class OpenRouterProvider(LLMProviderInterface):
 
         explicit_headers = self.api_kwargs.pop('extra_headers', None)
         env_headers = {}
-        referer = os.getenv("OPENROUTER_SITE_URL")
-        title = os.getenv("OPENROUTER_SITE_NAME")
+        referer = os.getenv("OPENROUTER_SITE_URL", "https://snakebench.com")
+        title = os.getenv("OPENROUTER_SITE_NAME", "SnakeBench")
         if referer:
             env_headers["HTTP-Referer"] = referer
         if title:
