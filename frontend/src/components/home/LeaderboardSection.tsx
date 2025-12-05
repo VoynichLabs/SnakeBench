@@ -61,7 +61,7 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         winRate: stats.wins + stats.losses > 0
           ? Number(((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1))
           : 0,
-        rating: stats.rating ?? stats.elo ?? 0,
+        rating: stats.rating ?? 0,
       }))
       .filter(item => item.wins + item.losses + item.ties >= 1) // Show all models
       .sort((a, b) => b.rating - a.rating) // Sort by rating
