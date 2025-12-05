@@ -90,8 +90,13 @@ def get_models():
         # Transform to match stats_simple.json format for compatibility
         aggregated_data = {}
         for model in models:
+            rating = model.get("rating")
             aggregated_data[model['name']] = {
-                'elo_rating': model['elo_rating'],
+                'rating': rating,
+                'trueskill_mu': model.get('trueskill_mu'),
+                'trueskill_sigma': model.get('trueskill_sigma'),
+                'trueskill_exposed': model.get('trueskill_exposed'),
+                'elo_rating': model['elo_rating'],  # compatibility alias
                 'wins': model['wins'],
                 'losses': model['losses'],
                 'ties': model['ties'],
@@ -136,11 +141,17 @@ def get_model_details(model_name):
 
         total_games = model['games_played']
 
+        rating = model.get("rating")
+
         return jsonify({
             "totalGames": total_games,
             "model": model,
             "aggregatedData": {
                 model_name: {
+                    'rating': rating,
+                    'trueskill_mu': model.get('trueskill_mu'),
+                    'trueskill_sigma': model.get('trueskill_sigma'),
+                    'trueskill_exposed': model.get('trueskill_exposed'),
                     'elo_rating': model['elo_rating'],
                     'wins': model['wins'],
                     'losses': model['losses'],
@@ -264,11 +275,16 @@ def get_stats():
             # Transform to match stats_simple.json format
             aggregated_data = {}
             for model_data in models:
+                rating = model_data.get('rating')
                 model_name = model_data['name']
                 model_stats = stats_by_model.get(model_name, {'top_score': 0, 'total_cost': 0.0})
                 aggregated_data[model_name] = {
-                    'elo': model_data['elo_rating'],  # Frontend expects 'elo' not 'elo_rating'
-                    'elo_rating': model_data['elo_rating'],  # Keep for backwards compatibility
+                    'rating': rating,
+                    'trueskill_mu': model_data.get('trueskill_mu'),
+                    'trueskill_sigma': model_data.get('trueskill_sigma'),
+                    'trueskill_exposed': model_data.get('trueskill_exposed'),
+                    'elo': rating,  # Backward-compatible key for UI expecting 'elo'
+                    'elo_rating': model_data['elo_rating'],  # Legacy compatibility (scaled alias)
                     'wins': model_data['wins'],
                     'losses': model_data['losses'],
                     'ties': model_data['ties'],
@@ -296,6 +312,7 @@ def get_stats():
             return jsonify({"error": f"Stats for model '{model}' not found."}), 404
 
         total_games = model_data['games_played']
+        rating = model_data.get('rating')
 
         # Get total cost for this model
         conn = get_connection()
@@ -315,8 +332,8 @@ def get_stats():
                 SELECT
                     id,
                     name,
-                    elo_rating,
-                    ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
+                    trueskill_exposed,
+                    ROW_NUMBER() OVER (ORDER BY COALESCE(trueskill_exposed, elo_rating / 50.0) DESC) as rank
                 FROM models
                 WHERE test_status = 'ranked' AND is_active = TRUE
             )
@@ -332,7 +349,7 @@ def get_stats():
                 gp.cost,
                 gp2.score as opponent_score,
                 m2.name as opponent_model,
-                m2.elo_rating as opponent_elo,
+                m2.trueskill_exposed as opponent_rating,
                 rm.rank as opponent_rank
             FROM game_participants gp
             JOIN games g ON gp.game_id = g.id
@@ -357,7 +374,7 @@ def get_stats():
                 'cost': row['cost'],
                 'opponent_score': row['opponent_score'],
                 'opponent_model': row['opponent_model'],
-                'opponent_elo': row['opponent_elo'],
+                'opponent_rating': row['opponent_rating'],
                 'opponent_rank': row['opponent_rank']
             }
 
@@ -377,7 +394,11 @@ def get_stats():
             "totalGames": total_games,
             "aggregatedData": {
                 model: {
-                    'elo': model_data['elo_rating'],  # Frontend expects 'elo' not 'elo_rating'
+                    'rating': rating,
+                    'trueskill_mu': model_data.get('trueskill_mu'),
+                    'trueskill_sigma': model_data.get('trueskill_sigma'),
+                    'trueskill_exposed': model_data.get('trueskill_exposed'),
+                    'elo': rating,
                     'elo_rating': model_data['elo_rating'],
                     'wins': model_data['wins'],
                     'losses': model_data['losses'],

@@ -21,7 +21,8 @@ try:
         insert_game,
         insert_game_participants,
         update_model_aggregates,
-        update_elo_ratings
+        update_elo_ratings,
+        update_trueskill_ratings
     )
     from data_access.live_game import (
         insert_initial_game,
@@ -613,8 +614,17 @@ class SnakeGame:
             # 3. Update model aggregates (wins, losses, ties, apples_eaten, games_played)
             update_model_aggregates(self.game_id)
 
-            # 4. Update ELO ratings using pairwise comparisons (same as elo_tracker.py)
-            update_elo_ratings(self.game_id)
+            # 4. Update ratings (TrueSkill primary, fallback to legacy ELO on error)
+            try:
+                update_trueskill_ratings(self.game_id)
+            except Exception as ts_error:
+                print(f"Warning: TrueSkill update failed for game {self.game_id}: {ts_error}")
+                try:
+                    update_elo_ratings(self.game_id)
+                except Exception as elo_error:
+                    print(f"Warning: Fallback ELO update also failed for game {self.game_id}: {elo_error}")
+            else:
+                print(f"Updated TrueSkill ratings for game {self.game_id}")
 
             print(f"Successfully persisted game {self.game_id} to database")
 

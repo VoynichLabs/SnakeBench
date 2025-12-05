@@ -23,23 +23,28 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from database_postgres import get_connection
+from services.trueskill_engine import (
+    DEFAULT_MU as TS_DEFAULT_MU,
+    DEFAULT_SIGMA as TS_DEFAULT_SIGMA,
+    DEFAULT_BETA as TS_DEFAULT_BETA,
+)
 
 
 # =============================================================================
 # Configuration
 # =============================================================================
 
-# Initial uncertainty for new models (higher = less confident in initial estimate)
-INITIAL_SIGMA = 200.0
+# Initial uncertainty for new models (TrueSkill sigma)
+INITIAL_SIGMA = TS_DEFAULT_SIGMA
 
 # Minimum uncertainty (never go below this even after many games)
-MIN_SIGMA = 50.0
+MIN_SIGMA = 2.0
 
 # Sigma reduction per game (scaled by confidence)
-SIGMA_REDUCTION_PER_GAME = 15.0
+SIGMA_REDUCTION_PER_GAME = 0.8
 
-# Base K-factor for skill updates
-BASE_K = 32.0
+# Base K-factor for skill updates (scaled for TrueSkill units)
+BASE_K = 3.0
 
 # Threshold below which a loss is considered "fluky" and may warrant rematch
 FLUKY_LOSS_THRESHOLD = 0.25
@@ -47,10 +52,10 @@ FLUKY_LOSS_THRESHOLD = 0.25
 # Maximum rematches allowed per opponent
 MAX_REMATCHES = 1
 
-# Interval/search configuration
-INTERVAL_BUFFER = 50.0
-DEFAULT_ELO_LOW = 1200.0
-DEFAULT_ELO_HIGH = 1800.0
+# Interval/search configuration (TrueSkill exposed scale is roughly -20..40)
+INTERVAL_BUFFER = 5.0
+DEFAULT_RATING_LOW = -20.0
+DEFAULT_RATING_HIGH = 40.0
 TYPICAL_MAX_MARGIN = 15.0  # Used to normalize score differentials
 
 
@@ -188,10 +193,10 @@ class SkillEstimate:
     Represents our belief about a model's skill level.
 
     Uses a Gaussian-like distribution:
-    - mu: Mean skill estimate (similar to ELO, starts at 1500)
+    - mu: Mean skill estimate (TrueSkill scale, starts at TS_DEFAULT_MU)
     - sigma: Uncertainty/standard deviation (starts high, decreases with games)
     """
-    mu: float = 1500.0
+    mu: float = TS_DEFAULT_MU
     sigma: float = INITIAL_SIGMA
 
     @property
@@ -222,8 +227,9 @@ class SkillEstimate:
             margin_factor: Multiplier based on score differential and surprise
             norm_margin: Normalized margin (0..1) used for sigma reduction
         """
-        # Expected score based on current estimate
-        expected = 1 / (1 + 10 ** ((opponent_elo - self.mu) / 400))
+        # Expected score based on current estimate using TrueSkill beta as scale.
+        scale = math.sqrt(2) * TS_DEFAULT_BETA
+        expected = 1 / (1 + math.exp(-(self.mu - opponent_elo) / scale))
 
         # Actual score
         if result == 'won':
@@ -234,9 +240,7 @@ class SkillEstimate:
             actual = 0.5
 
         # K-factor scaled by uncertainty and confidence
-        # Higher uncertainty = bigger updates (we're less sure, so new info matters more)
-        # Higher confidence = bigger updates (we trust this result more)
-        k = BASE_K * (self.sigma / 100) * confidence
+        k = BASE_K * (self.sigma / TS_DEFAULT_SIGMA) * confidence
 
         # Update mean skill estimate
         delta = k * margin_factor * (actual - expected)
@@ -278,8 +282,8 @@ class PlacementState:
     opponent_play_counts: Dict[int, int]  # Track how many times each opponent played
     game_history: List[Dict[str, Any]]  # Detailed history for reconstruction
     pending_rematch: Optional[int] = None  # opponent_id if rematch is pending
-    elo_low: float = DEFAULT_ELO_LOW  # Lower bound of current search interval
-    elo_high: float = DEFAULT_ELO_HIGH  # Upper bound of current search interval
+    elo_low: float = DEFAULT_RATING_LOW  # Lower bound of current search interval
+    elo_high: float = DEFAULT_RATING_HIGH  # Upper bound of current search interval
 
     def __post_init__(self):
         if self.opponent_play_counts is None:
@@ -312,8 +316,8 @@ class PlacementState:
             opponent_play_counts=data.get('opponent_play_counts', {}),
             game_history=data.get('game_history', []),
             pending_rematch=data.get('pending_rematch'),
-            elo_low=data.get('elo_low', DEFAULT_ELO_LOW),
-            elo_high=data.get('elo_high', DEFAULT_ELO_HIGH),
+            elo_low=data.get('elo_low', DEFAULT_RATING_LOW),
+            elo_high=data.get('elo_high', DEFAULT_RATING_HIGH),
         )
 
 
@@ -323,10 +327,10 @@ class PlacementState:
 
 def get_ranked_models_by_index() -> List[Tuple[int, str, float, int]]:
     """
-    Get all ranked models sorted by ELO (best to worst).
+    Get all ranked models sorted by conservative TrueSkill (exposed).
 
     Returns:
-        List of tuples (model_id, name, elo_rating, rank_index)
+        List of tuples (model_id, name, rating_exposed, rank_index)
         where rank_index 0 = best, N-1 = worst
     """
     conn = get_connection()
@@ -334,14 +338,14 @@ def get_ranked_models_by_index() -> List[Tuple[int, str, float, int]]:
 
     try:
         cursor.execute("""
-            SELECT id, name, elo_rating
+            SELECT id, name, trueskill_exposed
             FROM models
             WHERE test_status = 'ranked' AND is_active = TRUE
-            ORDER BY elo_rating DESC
+            ORDER BY trueskill_exposed DESC NULLS LAST
         """)
 
         models = cursor.fetchall()
-        return [(m['id'], m['name'], m['elo_rating'], idx)
+        return [(m['id'], m['name'], m.get('trueskill_exposed') or 0.0, idx)
                 for idx, m in enumerate(models)]
 
     finally:
@@ -361,21 +365,21 @@ def init_placement_state(model_id: int, max_games: int = 9) -> PlacementState:
     """
     return PlacementState(
         model_id=model_id,
-        skill=SkillEstimate(mu=1500.0, sigma=INITIAL_SIGMA),
+        skill=SkillEstimate(mu=TS_DEFAULT_MU, sigma=INITIAL_SIGMA),
         games_played=0,
         max_games=max_games,
         opponents_played=set(),
         opponent_play_counts={},
         game_history=[],
         pending_rematch=None,
-        elo_low=DEFAULT_ELO_LOW,
-        elo_high=DEFAULT_ELO_HIGH,
+        elo_low=DEFAULT_RATING_LOW,
+        elo_high=DEFAULT_RATING_HIGH,
     )
 
 
 def calculate_information_gain(
     skill: SkillEstimate,
-    opponent_elo: float,
+    opponent_rating: float,
     opponent_id: int,
     play_count: int
 ) -> float:
@@ -383,13 +387,13 @@ def calculate_information_gain(
     Calculate expected information gain from playing this opponent.
 
     High information gain when:
-    - Opponent ELO is within our uncertainty range
+    - Opponent rating is within our uncertainty range
     - We haven't played this opponent much
     - Our uncertainty is still high
 
     Args:
         skill: Current skill estimate
-        opponent_elo: ELO of potential opponent
+        opponent_rating: rating of potential opponent (trueskill_exposed)
         opponent_id: ID of potential opponent
         play_count: How many times we've played this opponent
 
@@ -401,7 +405,7 @@ def calculate_information_gain(
 
     # How informative is this opponent given our current uncertainty?
     # Best opponents are near our current estimate (challenging but beatable)
-    distance_from_estimate = abs(opponent_elo - skill.mu)
+    distance_from_estimate = abs(opponent_rating - skill.mu)
 
     # Optimal opponent is about 0.5 sigma away
     # (not too easy, not too hard)
@@ -425,19 +429,19 @@ def ensure_interval_bounds(
     ranked_models: Optional[List[Tuple[int, str, float, int]]] = None
 ) -> Tuple[float, float]:
     """
-    Ensure the placement state has ELO interval bounds seeded.
+    Ensure the placement state has rating interval bounds seeded.
 
     If missing, derive from the leaderboard with a small buffer; otherwise
     fall back to sensible defaults.
     """
     if getattr(state, "elo_low", None) is None or getattr(state, "elo_high", None) is None:
         if ranked_models:
-            elos = [m[2] for m in ranked_models]
-            state.elo_low = min(elos) - INTERVAL_BUFFER
-            state.elo_high = max(elos) + INTERVAL_BUFFER
+            ratings = [m[2] for m in ranked_models]
+            state.elo_low = min(ratings) - INTERVAL_BUFFER
+            state.elo_high = max(ratings) + INTERVAL_BUFFER
         else:
-            state.elo_low = DEFAULT_ELO_LOW
-            state.elo_high = DEFAULT_ELO_HIGH
+            state.elo_low = DEFAULT_RATING_LOW
+            state.elo_high = DEFAULT_RATING_HIGH
     return state.elo_low, state.elo_high
 
 
@@ -447,14 +451,14 @@ def window_from_sigma(sigma: float, norm_margin: float) -> float:
 
     Higher sigma -> wider steps; bigger margins widen slightly.
     """
-    base = sigma * 0.6 + 20.0
-    base = clamp(base, 30.0, 120.0)
-    return base + norm_margin * 20.0
+    base = sigma * 1.5 + 2.0
+    base = clamp(base, 4.0, 20.0)
+    return base + norm_margin * 2.0
 
 
 def tighten_interval(
     state: PlacementState,
-    opponent_elo: float,
+    opponent_rating: float,
     result: str,
     norm_margin: float,
     expected: float,
@@ -468,13 +472,13 @@ def tighten_interval(
     step = window_from_sigma(state.skill.sigma, norm_margin)
 
     if result == 'won':
-        state.elo_low = max(state.elo_low, opponent_elo - step)
+        state.elo_low = max(state.elo_low, opponent_rating - step)
     elif result == 'lost':
-        state.elo_high = min(state.elo_high, opponent_elo + step)
+        state.elo_high = min(state.elo_high, opponent_rating + step)
     else:  # tied
         # Only lift the floor on draws vs clearly weaker opponents
-        if opponent_elo < state.skill.mu - 0.5 * state.skill.sigma:
-            state.elo_low = max(state.elo_low, opponent_elo - step / 2)
+        if opponent_rating < state.skill.mu - 0.5 * state.skill.sigma:
+            state.elo_low = max(state.elo_low, opponent_rating - step / 2)
 
     # Guard against inverted bounds
     if state.elo_low > state.elo_high:
@@ -541,7 +545,7 @@ def select_next_opponent_with_reason(
 
     Returns:
         (opponent tuple, debug dict)
-        opponent tuple: (opponent_id, opponent_name, opponent_elo, opponent_rank) or None
+        opponent tuple: (opponent_id, opponent_name, opponent_rating, opponent_rank) or None
         debug dict: selection metadata for logging
     """
     debug: Dict[str, Any] = {}
@@ -578,7 +582,7 @@ def select_next_opponent_with_reason(
         # Rematch opponent not found (maybe deactivated), clear it
         state.pending_rematch = None
 
-    # Choose a target elo: midpoint by default, upper-quartile probe on odd games
+    # Choose a target rating: midpoint by default, upper-quartile probe on odd games
     interval_span = max(0.0, elo_high - elo_low)
     if state.games_played % 2 == 1:
         target_elo = elo_low + 0.75 * interval_span
@@ -631,7 +635,7 @@ def update_placement_state(
             - opponent_score: int
             - my_death_reason: Optional[str]
             - total_rounds: int
-        opponent_elo: ELO of the opponent at match time
+    opponent_elo: rating of the opponent at match time (trueskill_exposed)
     """
     opponent_id = game_result['opponent_id']
     result = game_result['result']
@@ -649,7 +653,8 @@ def update_placement_state(
     ensure_interval_bounds(state)
 
     # Expected vs actual for rating update
-    expected = 1 / (1 + 10 ** ((opponent_elo - state.skill.mu) / 400))
+    scale = math.sqrt(2) * TS_DEFAULT_BETA
+    expected = 1 / (1 + math.exp(-(state.skill.mu - opponent_elo) / scale))
     if result == 'won':
         actual = 1.0
     elif result == 'lost':
@@ -753,7 +758,7 @@ def rebuild_state_from_history(
     Returns:
         Tuple of (reconstructed state, number of completed games)
     """
-    # Create a lookup for opponent ELOs
+    # Create a lookup for opponent ratings
     elo_lookup = {m[0]: m[2] for m in ranked_models}
 
     # Initialize fresh state

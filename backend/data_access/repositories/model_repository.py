@@ -49,7 +49,7 @@ class ModelRepository(BaseRepository):
 
     def get_all(self, active_only: bool = False) -> List[Dict[str, Any]]:
         """
-        Get all models sorted by ELO rating.
+        Get all models sorted by the conservative TrueSkill rating (exposed).
 
         Args:
             active_only: If True, only return active models
@@ -60,10 +60,27 @@ class ModelRepository(BaseRepository):
         with self.read_connection() as (conn, cursor):
             query = """
                 SELECT
-                    id, name, provider, model_slug, is_active, test_status,
-                    elo_rating, wins, losses, ties, apples_eaten, games_played,
-                    pricing_input, pricing_output, max_completion_tokens,
-                    last_played_at, discovered_at
+                    id,
+                    name,
+                    provider,
+                    model_slug,
+                    is_active,
+                    test_status,
+                    elo_rating,
+                    trueskill_mu,
+                    trueskill_sigma,
+                    trueskill_exposed,
+                    trueskill_updated_at,
+                    wins,
+                    losses,
+                    ties,
+                    apples_eaten,
+                    games_played,
+                    pricing_input,
+                    pricing_output,
+                    max_completion_tokens,
+                    last_played_at,
+                    discovered_at
                 FROM models
                 WHERE name != 'Auto Router'
             """
@@ -71,7 +88,7 @@ class ModelRepository(BaseRepository):
             if active_only:
                 query += " AND is_active = TRUE"
 
-            query += " ORDER BY elo_rating DESC"
+            query += " ORDER BY COALESCE(trueskill_exposed, elo_rating / 50.0) DESC"
 
             cursor.execute(query)
 
@@ -94,10 +111,27 @@ class ModelRepository(BaseRepository):
         with self.read_connection() as (conn, cursor):
             cursor.execute("""
                 SELECT
-                    id, name, provider, model_slug, is_active, test_status,
-                    elo_rating, wins, losses, ties, apples_eaten, games_played,
-                    pricing_input, pricing_output, max_completion_tokens,
-                    last_played_at, discovered_at
+                    id,
+                    name,
+                    provider,
+                    model_slug,
+                    is_active,
+                    test_status,
+                    elo_rating,
+                    trueskill_mu,
+                    trueskill_sigma,
+                    trueskill_exposed,
+                    trueskill_updated_at,
+                    wins,
+                    losses,
+                    ties,
+                    apples_eaten,
+                    games_played,
+                    pricing_input,
+                    pricing_output,
+                    max_completion_tokens,
+                    last_played_at,
+                    discovered_at
                 FROM models
                 WHERE name = %s AND name != 'Auto Router'
             """, (model_name,))
@@ -121,10 +155,27 @@ class ModelRepository(BaseRepository):
         with self.read_connection() as (conn, cursor):
             cursor.execute("""
                 SELECT
-                    id, name, provider, model_slug, is_active, test_status,
-                    elo_rating, wins, losses, ties, apples_eaten, games_played,
-                    pricing_input, pricing_output, max_completion_tokens,
-                    last_played_at, discovered_at
+                    id,
+                    name,
+                    provider,
+                    model_slug,
+                    is_active,
+                    test_status,
+                    elo_rating,
+                    trueskill_mu,
+                    trueskill_sigma,
+                    trueskill_exposed,
+                    trueskill_updated_at,
+                    wins,
+                    losses,
+                    ties,
+                    apples_eaten,
+                    games_played,
+                    pricing_input,
+                    pricing_output,
+                    max_completion_tokens,
+                    last_played_at,
+                    discovered_at
                 FROM models
                 WHERE id = %s
             """, (model_id,))
@@ -144,10 +195,10 @@ class ModelRepository(BaseRepository):
         """
         with self.read_connection() as (conn, cursor):
             cursor.execute("""
-                SELECT id, name, elo_rating
+                SELECT id, name, trueskill_exposed, elo_rating
                 FROM models
                 WHERE test_status = 'ranked' AND is_active = TRUE
-                ORDER BY elo_rating DESC
+                ORDER BY COALESCE(trueskill_exposed, elo_rating / 50.0) DESC
             """)
 
             models = []
@@ -156,6 +207,7 @@ class ModelRepository(BaseRepository):
                     'id': row['id'],
                     'name': row['name'],
                     'elo_rating': row['elo_rating'],
+                    'trueskill_exposed': row.get('trueskill_exposed'),
                     'rank_index': idx
                 })
 
@@ -246,6 +298,75 @@ class ModelRepository(BaseRepository):
 
                 print(f"Updated ELO for {names[mid]}: {ratings[mid]:.2f} -> {new_rating:.2f} (delta: {delta:+.2f})")
 
+    def get_participants_with_ratings(self, game_id: str) -> List[Dict[str, Any]]:
+        """
+        Fetch participants for a game with their current TrueSkill values.
+
+        Args:
+            game_id: The game identifier
+
+        Returns:
+            List of participant dicts with model_id, model_name, player_slot,
+            score, result, trueskill_mu, trueskill_sigma, and trueskill_exposed.
+        """
+        with self.read_connection() as (conn, cursor):
+            cursor.execute("""
+                SELECT
+                    gp.model_id,
+                    gp.player_slot,
+                    gp.score,
+                    gp.result,
+                    m.name,
+                    m.trueskill_mu,
+                    m.trueskill_sigma,
+                    m.trueskill_exposed
+                FROM game_participants gp
+                JOIN models m ON gp.model_id = m.id
+                WHERE gp.game_id = %s
+                ORDER BY gp.player_slot
+            """, (game_id,))
+
+            return [
+                {
+                    'model_id': row['model_id'],
+                    'model_name': row['name'],
+                    'player_slot': row['player_slot'],
+                    'score': row['score'],
+                    'result': row['result'],
+                    'trueskill_mu': row.get('trueskill_mu'),
+                    'trueskill_sigma': row.get('trueskill_sigma'),
+                    'trueskill_exposed': row.get('trueskill_exposed'),
+                }
+                for row in cursor.fetchall()
+            ]
+
+    def update_trueskill_batch(self, updates: List[Dict[str, Any]]) -> None:
+        """
+        Persist TrueSkill updates to models and keep the ELO alias in sync.
+
+        Args:
+            updates: List of dicts with keys: model_id, mu, sigma, exposed, display_rating
+        """
+        if not updates:
+            return
+
+        with self.connection() as (conn, cursor):
+            for update in updates:
+                cursor.execute("""
+                    UPDATE models
+                    SET trueskill_mu = %s,
+                        trueskill_sigma = %s,
+                        trueskill_updated_at = CURRENT_TIMESTAMP,
+                        elo_rating = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                """, (
+                    update['mu'],
+                    update['sigma'],
+                    update['display_rating'],
+                    update['model_id']
+                ))
+
     def update_aggregates_for_game(self, game_id: str) -> None:
         """
         Update model aggregate statistics for all participants in a game.
@@ -326,6 +447,10 @@ class ModelRepository(BaseRepository):
             'is_active': row['is_active'],
             'test_status': row['test_status'],
             'elo_rating': row['elo_rating'],
+            'trueskill_mu': row.get('trueskill_mu'),
+            'trueskill_sigma': row.get('trueskill_sigma'),
+            'trueskill_exposed': row.get('trueskill_exposed'),
+            'trueskill_updated_at': row.get('trueskill_updated_at'),
             'wins': row['wins'],
             'losses': row['losses'],
             'ties': row['ties'],
@@ -336,6 +461,9 @@ class ModelRepository(BaseRepository):
             'max_completion_tokens': row['max_completion_tokens'],
             'last_played_at': row['last_played_at'],
             'discovered_at': row['discovered_at'],
+            'rating': row.get('trueskill_exposed')
+                       if row.get('trueskill_exposed') is not None
+                       else (row['elo_rating'] / 50.0 if row.get('elo_rating') is not None else None),
             # Nested pricing dict for compatibility
             'pricing': {
                 'input': float(row['pricing_input']) if row['pricing_input'] is not None else 0,

@@ -315,8 +315,8 @@ class GameRepository(BaseRepository):
                 # Get model names and ranks for this game
                 cursor.execute("""
                     WITH ranked_models AS (
-                        SELECT id, name, elo_rating,
-                            ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
+                        SELECT id, name, trueskill_exposed,
+                            ROW_NUMBER() OVER (ORDER BY COALESCE(trueskill_exposed, elo_rating / 50.0) DESC) as rank
                         FROM models
                         WHERE test_status = 'ranked' AND is_active = TRUE
                     )
@@ -373,12 +373,12 @@ class GameRepository(BaseRepository):
 
             # Get model names and ranks
             cursor.execute("""
-                WITH ranked_models AS (
-                    SELECT id, name, elo_rating,
-                        ROW_NUMBER() OVER (ORDER BY elo_rating DESC) as rank
-                    FROM models
-                    WHERE test_status = 'ranked' AND is_active = TRUE
-                )
+                    WITH ranked_models AS (
+                        SELECT id, name, trueskill_exposed,
+                            ROW_NUMBER() OVER (ORDER BY COALESCE(trueskill_exposed, elo_rating / 50.0) DESC) as rank
+                        FROM models
+                        WHERE test_status = 'ranked' AND is_active = TRUE
+                    )
                 SELECT gp.player_slot, m.name, rm.rank
                 FROM game_participants gp
                 JOIN models m ON gp.model_id = m.id

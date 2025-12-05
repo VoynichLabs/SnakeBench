@@ -7,7 +7,8 @@ type StatsData = {
       losses: number;
       ties: number;
       apples_eaten: number;
-      elo: number;
+      rating?: number;
+      elo?: number;
       first_game_time: string;
       last_game_time: string;
       top_score: number;

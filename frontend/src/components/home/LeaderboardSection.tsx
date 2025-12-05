@@ -4,7 +4,7 @@ type LeaderboardItem = {
   wins: number;
   losses: number;
   winRate: number;
-  elo: number;
+  rating: number;
   top_score: number;
   total_cost: number;
   apples_eaten: number;
@@ -18,7 +18,7 @@ type StatsData = {
       losses: number;
       ties: number;
       apples_eaten: number;
-      elo: number;
+      rating: number;
       first_game_time: string;
       last_game_time: string;
       top_score: number;
@@ -61,10 +61,10 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         winRate: stats.wins + stats.losses > 0
           ? Number(((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1))
           : 0,
-        elo: stats.elo,
+        rating: stats.rating ?? stats.elo ?? 0,
       }))
       .filter(item => item.wins + item.losses + item.ties >= 1) // Show all models
-      .sort((a, b) => b.elo - a.elo) // Sort by ELO
+      .sort((a, b) => b.rating - a.rating) // Sort by rating
       .map((item, index) => ({
         ...item,
         rank: index + 1,
@@ -157,7 +157,9 @@ export default async function LeaderboardSection() {
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
-                        ELO
+                        <span title="Conservative rating (mu - 3σ) from our match results">
+                          Rating
+                        </span>
                       </th>
                       <th
                         scope="col"
@@ -194,7 +196,7 @@ export default async function LeaderboardSection() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">
-                            {Math.round(item.elo)}
+                            {item.rating.toFixed(2)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">

@@ -6,7 +6,7 @@ and managing ELO ratings in an event-driven manner.
 """
 
 from .game_persistence import insert_game, insert_game_participants
-from .model_updates import update_model_aggregates, update_elo_ratings
+from .model_updates import update_model_aggregates, update_elo_ratings, update_trueskill_ratings
 from .live_game import (
     insert_initial_game,
     insert_initial_participants,
@@ -21,6 +21,7 @@ __all__ = [
     'insert_game_participants',
     'update_model_aggregates',
     'update_elo_ratings',
+    'update_trueskill_ratings',
     'insert_initial_game',
     'insert_initial_participants',
     'update_game_state',

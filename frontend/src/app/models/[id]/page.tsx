@@ -6,7 +6,7 @@ interface Game {
   opponent_score: number;
   opponent_model: string;
   start_time: string;
-  opponent_elo: number;
+  opponent_rating?: number;
   opponent_rank?: number;
   end_time: string;
   result: string;
@@ -22,7 +22,10 @@ interface ModelStats {
   losses: number;
   ties: number;
   apples_eaten: number;
-  elo: number;
+  rating?: number;
+  trueskill_mu?: number;
+  trueskill_sigma?: number;
+  trueskill_exposed?: number;
   total_cost?: number;
   games: Game[];
 }
@@ -112,10 +115,12 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
-                ELO Rating
+                <span title="Conservative rating (mu - 3σ) from recent matches">
+                  Rating
+                </span>
               </dt>
               <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                {Math.round(modelStats.elo).toLocaleString()}
+                {modelStats.rating !== undefined ? modelStats.rating.toFixed(2) : "—"}
               </dd>
             </div>
           </div>
@@ -265,4 +270,3 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
     </div>
   );
 }
-
