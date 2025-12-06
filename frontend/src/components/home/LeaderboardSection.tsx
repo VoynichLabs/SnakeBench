@@ -1,3 +1,5 @@
+import { createEloLikeScaler } from "@/lib/ratingScale";
+
 type LeaderboardItem = {
   rank: number;
   model: string;
@@ -5,6 +7,7 @@ type LeaderboardItem = {
   losses: number;
   winRate: number;
   rating: number;
+  scaledRating: number;
   top_score: number;
   total_cost: number;
   apples_eaten: number;
@@ -47,9 +50,14 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
       totalGames: data.totalGames,
       modelCount: Object.keys(data.aggregatedData || {}).length
     });
+
+    const aggregatedEntries = Object.entries(data.aggregatedData || {});
+    const ratingScaler = createEloLikeScaler(
+      aggregatedEntries.map(([, stats]) => stats.rating)
+    );
     
     // Transform the API data into our leaderboard format
-    const transformedData = Object.entries(data.aggregatedData)
+    const transformedData = aggregatedEntries
       .map(([model, stats]) => ({
         model,
         wins: stats.wins,
@@ -62,6 +70,7 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
           ? Number(((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1))
           : 0,
         rating: stats.rating ?? 0,
+        scaledRating: ratingScaler.scale(stats.rating),
       }))
       .filter(item => item.wins + item.losses + item.ties >= 1) // Show all models
       .sort((a, b) => b.rating - a.rating) // Sort by rating
@@ -157,7 +166,7 @@ export default async function LeaderboardSection() {
                         scope="col"
                         className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
-                        <span title="Conservative rating (mu - 3σ) from our match results">
+                        <span title="This is TrueSkill rating, but it's scaled to whatever to more closely match ELO scale, which is common across the industry.">
                           Rating
                         </span>
                       </th>
@@ -195,8 +204,11 @@ export default async function LeaderboardSection() {
                           <div className="font-mono text-sm text-gray-900">{item.winRate}%</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="font-mono text-sm text-gray-900">
-                            {item.rating.toFixed(2)}
+                          <div
+                            className="font-mono text-sm text-gray-900"
+                            title={`TrueSkill: ${item.rating.toFixed(2)} (display scaled to ELO-like range)`}
+                          >
+                            {item.scaledRating.toLocaleString()}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">

@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 """
-Undo a game by replaying all other games chronologically with TrueSkill and aggregates.
+Undo a game with two modes:
 
-Steps:
-- Reset all models to baseline TrueSkill and zeroed aggregates.
-- Replay every game except the target in start_time order, updating aggregates + TrueSkill.
-- Delete the target game's participants and the game row.
-
-This keeps behavior deterministic and avoids maintaining separate rating logic.
+1) Fast path (default): delete the game + participants and recompute aggregates from remaining games.
+   TrueSkill ratings are left as-is (so they're technically stale) and you can optionally
+   run a full backfill later.
+2) Full rebuild: reset all models and replay every game except the target (expensive, previous default).
 """
 
 import argparse
@@ -34,8 +32,7 @@ from services.trueskill_engine import (  # noqa: E402
 
 def reset_models_and_stats() -> int:
     """
-    Reset TrueSkill fields and aggregate stats to baseline.
-    Returns number of rows updated.
+    Reset TrueSkill fields and aggregate stats to baseline. Returns number of rows updated.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -61,6 +58,64 @@ def reset_models_and_stats() -> int:
         )
         conn.commit()
         return cursor.rowcount
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def recompute_aggregates_all_models() -> None:
+    """
+    Recompute aggregate stats (wins/losses/ties/apples/games_played/last_played_at)
+    from remaining games without touching TrueSkill ratings.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            WITH agg AS (
+                SELECT
+                    gp.model_id,
+                    SUM(CASE WHEN gp.result = 'won' THEN 1 ELSE 0 END) AS wins,
+                    SUM(CASE WHEN gp.result = 'lost' THEN 1 ELSE 0 END) AS losses,
+                    SUM(CASE WHEN gp.result = 'tied' THEN 1 ELSE 0 END) AS ties,
+                    SUM(gp.score) AS apples_eaten,
+                    COUNT(*) AS games_played,
+                    MAX(g.start_time) AS last_played_at
+                FROM game_participants gp
+                JOIN games g ON g.id = gp.game_id
+                GROUP BY gp.model_id
+            )
+            UPDATE models m
+            SET wins = COALESCE(a.wins, 0),
+                losses = COALESCE(a.losses, 0),
+                ties = COALESCE(a.ties, 0),
+                apples_eaten = COALESCE(a.apples_eaten, 0),
+                games_played = COALESCE(a.games_played, 0),
+                last_played_at = a.last_played_at,
+                updated_at = NOW()
+            FROM agg a
+            WHERE m.id = a.model_id
+            """
+        )
+
+        # Reset models that no longer have any games
+        cursor.execute(
+            """
+            UPDATE models m
+            SET wins = 0,
+                losses = 0,
+                ties = 0,
+                apples_eaten = 0,
+                games_played = 0,
+                last_played_at = NULL,
+                updated_at = NOW()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM game_participants gp WHERE gp.model_id = m.id
+            )
+            """
+        )
+        conn.commit()
     finally:
         cursor.close()
         conn.close()
@@ -133,12 +188,20 @@ def replay_all_but_target(target_game_id: str) -> List[str]:
 def main():
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Undo a game by replaying all other games with TrueSkill.")
-    parser.add_argument("game_id", help="The game id to undo (will be deleted)")
+    parser = argparse.ArgumentParser(
+        description="Undo a game. Default: delete + recompute aggregates only (TrueSkill left untouched). "
+                    "Use --replay-all to reset/replay everything except the target game."
+    )
+    parser.add_argument("game_id", help="The game id to undo (will be deleted unless --dry-run)")
     parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Perform replay but do not delete the target game",
+    )
+    parser.add_argument(
+        "--replay-all",
+        action="store_true",
+        help="Reset all models and replay every other game (expensive, previous default behavior)",
     )
     args = parser.parse_args()
 
@@ -146,15 +209,31 @@ def main():
         print(f"Game {args.game_id} not found.")
         return
 
-    processed = replay_all_but_target(args.game_id)
-    print(f"Finished replaying {len(processed)} games (excluding {args.game_id}).")
+    if args.replay_all:
+        processed = replay_all_but_target(args.game_id)
+        print(f"Finished replaying {len(processed)} games (excluding {args.game_id}).")
 
+        if args.dry_run:
+            print("Dry run; target game not deleted.")
+            return
+
+        delete_game_and_participants(args.game_id)
+        print(f"Deleted game {args.game_id} and its participants.")
+        return
+
+    # Fast path: delete and recompute aggregates only (no TrueSkill rebuild)
     if args.dry_run:
-        print("Dry run; target game not deleted.")
+        print("Dry run; no changes made.")
         return
 
     delete_game_and_participants(args.game_id)
-    print(f"Deleted game {args.game_id} and its participants.")
+    recompute_aggregates_all_models()
+
+    print(
+        "Deleted game and participants. Recomputed aggregates from remaining games.\n"
+        "TrueSkill ratings were NOT recomputed; run backfill_trueskill.py with --reset "
+        "if you need fully consistent ratings."
+    )
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { createEloLikeScaler } from '@/lib/ratingScale';
 
 interface Game {
   game_id: string;
@@ -65,6 +66,11 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
   }
 
   const games = [...(modelStats.games || [])].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+  const ratingScaler = createEloLikeScaler([
+    modelStats.rating,
+    ...games.map((game) => game.opponent_rating)
+  ]);
+  const scaledRating = typeof modelStats.rating === "number" ? ratingScaler.scale(modelStats.rating) : undefined;
   
   // Calculate win rate percentage (excludes ties from denominator)
   const decidedGames = modelStats.wins + modelStats.losses;
@@ -115,12 +121,14 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
-                <span title="Conservative rating (mu - 3σ) from recent matches">
+                <span title="This is TrueSkill rating, but it's scaled to whatever to more closely match ELO scale, which is common across the industry.">
                   Rating
                 </span>
               </dt>
               <dd className="mt-1 text-3xl font-semibold text-gray-900">
-                {modelStats.rating !== undefined ? modelStats.rating.toFixed(2) : "—"}
+                <span title={modelStats.rating !== undefined ? `TrueSkill: ${modelStats.rating.toFixed(2)} (display scaled to ELO-like range)` : undefined}>
+                  {scaledRating !== undefined ? scaledRating.toLocaleString() : "—"}
+                </span>
               </dd>
             </div>
           </div>

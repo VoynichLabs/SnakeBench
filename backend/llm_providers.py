@@ -42,8 +42,10 @@ class LLMProviderInterface:
 
         # Add any other top-level fields that aren't known internal fields
         for field_name, value in config.items():
-            if field_name not in known_fields:
-                api_kwargs[field_name] = value
+            # Filter out rating/metadata fields that shouldn't reach the API
+            if field_name in known_fields or field_name.startswith("trueskill_"):
+                continue
+            api_kwargs[field_name] = value
 
         return api_kwargs
 
