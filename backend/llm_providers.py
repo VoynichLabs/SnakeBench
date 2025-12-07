@@ -31,7 +31,7 @@ class LLMProviderInterface:
         known_fields = {
             'name', 'provider', 'pricing', 'kwargs', 'model_name', 'api_type',
             # Database fields from Supabase models table
-            'id', 'model_slug', 'is_active', 'test_status', 'elo_rating',
+            'id', 'model_slug', 'is_active', 'test_status', 'elo_rating', 'rating',
             'wins', 'losses', 'ties', 'apples_eaten', 'games_played',
             'pricing_input', 'pricing_output', 'max_completion_tokens',
             'last_played_at', 'discovered_at'
