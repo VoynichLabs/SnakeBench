@@ -8,9 +8,13 @@ type LeaderboardItem = {
   winRate: number;
   rating: number;
   scaledRating: number;
+  trueskillMu: number;
+  trueskillSigma: number;
+  trueskillExposed: number;
   top_score: number;
   total_cost: number;
   apples_eaten: number;
+  ties: number;
 };
 
 type StatsData = {
@@ -22,6 +26,9 @@ type StatsData = {
       ties: number;
       apples_eaten: number;
       rating: number;
+      trueskill_mu?: number;
+      trueskill_sigma?: number;
+      trueskill_exposed?: number;
       first_game_time: string;
       last_game_time: string;
       top_score: number;
@@ -53,7 +60,7 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
 
     const aggregatedEntries = Object.entries(data.aggregatedData || {});
     const ratingScaler = createEloLikeScaler(
-      aggregatedEntries.map(([, stats]) => stats.rating)
+      aggregatedEntries.map(([, stats]) => stats.trueskill_exposed ?? stats.rating ?? 0)
     );
     
     // Transform the API data into our leaderboard format
@@ -67,10 +74,13 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         total_cost: stats.total_cost,
         apples_eaten: stats.apples_eaten || 0,
         winRate: stats.wins + stats.losses > 0
-          ? Number(((stats.wins / (stats.wins + stats.losses)) * 100).toFixed(1))
+          ? Math.round((stats.wins / (stats.wins + stats.losses)) * 100)
           : 0,
-        rating: stats.rating ?? 0,
-        scaledRating: ratingScaler.scale(stats.rating),
+        rating: stats.trueskill_exposed ?? stats.rating ?? 0,
+        trueskillMu: stats.trueskill_mu ?? 0,
+        trueskillSigma: stats.trueskill_sigma ?? 0,
+        trueskillExposed: stats.trueskill_exposed ?? stats.rating ?? 0,
+        scaledRating: ratingScaler.scale(stats.trueskill_exposed ?? stats.rating ?? 0),
       }))
       .filter(item => item.wins + item.losses + item.ties >= 1) // Show all models
       .sort((a, b) => b.rating - a.rating) // Sort by rating
@@ -128,51 +138,67 @@ export default async function LeaderboardSection() {
                     <tr>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
                         Rank
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
                         Model
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                      >
+                        <div className="relative inline-flex items-center gap-1 group">
+                          <span>TS Rating</span>
+                          <span className="text-gray-400 text-[10px]">?</span>
+                          <div className="pointer-events-none absolute left-0 top-full mt-1 w-64 rounded-md bg-gray-900 text-white text-[11px] font-mono p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10">
+                            TrueSkill exposed = conservative skill.{" "}
+                          </div>
+                        </div>
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                      >
+                        <div className="relative inline-flex items-center gap-1 group">
+                          <span>TS Uncertainty</span>
+                          <span className="text-gray-400 text-[10px]">?</span>
+                          <div className="pointer-events-none absolute left-0 top-full mt-1 w-64 rounded-md bg-gray-900 text-white text-[11px] font-mono p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10">
+                            Uncertainty around skill. <br /> <br /> Lower is more confident; <br /> <br /> &lt;3 is fairly confident.
+                          </div>
+                        </div>
+                      </th>
+                      <th
+                        scope="col"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
                         W/L
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
                         Apples
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
                         Top Score
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
                         Win Rate
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        <span title="This is TrueSkill rating, but it's scaled to whatever to more closely match ELO scale, which is common across the industry.">
-                          Rating
-                        </span>
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
+                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
                       >
                         Cost
                       </th>
@@ -181,37 +207,35 @@ export default async function LeaderboardSection() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {leaderboardData.map((item) => (
                       <tr key={item.model} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
                           #{item.rank}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <a href={`/models/${item.model}`} className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline">
+                        <td className="px-4 py-4 whitespace-normal break-words max-w-[160px] sm:max-w-[220px]">
+                          <a href={`/models/${item.model}`} className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline break-words">
                             {item.model}
                           </a>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title={`μ=${item.trueskillMu.toFixed(3)}, σ=${item.trueskillSigma.toFixed(3)}`}>
+                          {item.trueskillExposed.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                          σ {item.trueskillSigma.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">
                             {item.wins}/{item.losses}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">{item.apples_eaten}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">{item.top_score}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">{item.winRate}%</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div
-                            className="font-mono text-sm text-gray-900"
-                            title={`TrueSkill: ${item.rating.toFixed(2)} (display scaled to ELO-like range)`}
-                          >
-                            {item.scaledRating.toLocaleString()}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="font-mono text-sm text-gray-900">
                             ${(item.total_cost || 0).toFixed(4)}
                           </div>

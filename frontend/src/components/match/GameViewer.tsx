@@ -90,20 +90,29 @@ export default function GameViewer({
   const [currentRound, setCurrentRound] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [wasAutoStopped, setWasAutoStopped] = useState(false);
+  const [thoughtTiming, setThoughtTiming] = useState<"current" | "next">("next");
   const playbackSpeed = 1;
   const prevTotalRoundsRef = useRef(frames.length);
   
   const totalRounds = frames.length;
   const currentRoundData = frames[currentRound] || frames[frames.length - 1];
   
-  // Extract thoughts for current round
+  // Extract thoughts aligned either to the move just executed ("current") or the upcoming move ("next")
   const getThoughtsForModel = (modelId: string) => {
-    if (liveMode && (!currentRoundData?.moves || !currentRoundData.moves[modelId]?.rationale)) {
-      return ["Waiting for live move and rationale..."];
+    const nextFrame = frames[currentRound + 1];
+    const targetFrame =
+      thoughtTiming === "next" && nextFrame
+        ? nextFrame
+        : currentRoundData;
+
+    if (liveMode && (!targetFrame?.moves || !targetFrame.moves[modelId]?.rationale)) {
+      return thoughtTiming === "next"
+        ? ["Waiting for next move and rationale..."]
+        : ["Waiting for live move and rationale..."];
     }
 
-    if (currentRoundData && currentRoundData.moves) {
-      const move = currentRoundData.moves[modelId];
+    if (targetFrame && targetFrame.moves) {
+      const move = targetFrame.moves[modelId];
       if (move?.rationale) {
         const thoughts = move.rationale.split('\n').filter(Boolean);
         return thoughts;
@@ -299,16 +308,49 @@ export default function GameViewer({
       </div>
 
       {/* Game controls */}
-      <GameControls 
-        currentRound={currentRound}
-        totalRounds={totalRounds}
-        isPlaying={isPlaying}
-        onPlay={handlePlay}
-        onNext={handleNext}
-        onPrev={handlePrev}
-        onStart={handleStart}
-        onEnd={handleEnd}
-      />
+      <div className="mt-4 flex flex-col items-center gap-3">
+        <GameControls 
+          currentRound={currentRound}
+          totalRounds={totalRounds}
+          isPlaying={isPlaying}
+          onPlay={handlePlay}
+          onNext={handleNext}
+          onPrev={handlePrev}
+          onStart={handleStart}
+          onEnd={handleEnd}
+        />
+      </div>
+
+      {/* Thought timing toggle */}
+      <div className="mt-2 flex flex-col items-center">
+        <div className="flex items-center gap-2 text-[11px] font-mono text-gray-600">
+          <span>Thoughts show:</span>
+          <div className="inline-flex rounded-md border border-gray-200 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setThoughtTiming("current")}
+              className={`px-3 py-1 text-xs ${
+                thoughtTiming === "current"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Current move
+            </button>
+            <button
+              type="button"
+              onClick={() => setThoughtTiming("next")}
+              className={`px-3 py-1 text-xs ${
+                thoughtTiming === "next"
+                  ? "bg-gray-900 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              Upcoming move
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Game ID + download */}
       <div className="mt-6 flex flex-col items-center gap-3 w-full px-2 sm:px-0">
