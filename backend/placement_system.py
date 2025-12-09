@@ -52,6 +52,17 @@ FLUKY_LOSS_THRESHOLD = 0.25
 # Maximum rematches allowed per opponent
 MAX_REMATCHES = 1
 
+# Require a high-confidence win before doing an upward probe
+HIGH_CONF_WIN_PROBE_THRESHOLD = 0.6
+# Length of consecutive high-confidence wins to trigger a more aggressive probe
+AGGRESSIVE_PROBE_WIN_STREAK = 3
+# Target fraction of interval when aggressive probe kicks in
+AGGRESSIVE_PROBE_TARGET_FRACTION = 0.8
+# Maximum allowed upward jump in opponent rating (conservative TrueSkill) per pick
+MAX_RATING_JUMP = 20.0
+# Minimum rating delta upward after a win (avoid replaying same/lower while on a climb)
+MIN_ASCEND_RATING_DELTA = 0.01
+
 # Interval/search configuration (TrueSkill exposed scale is roughly -20..40)
 INTERVAL_BUFFER = 5.0
 DEFAULT_RATING_LOW = -20.0
@@ -582,14 +593,60 @@ def select_next_opponent_with_reason(
         # Rematch opponent not found (maybe deactivated), clear it
         state.pending_rematch = None
 
-    # Choose a target rating: midpoint by default, upper-quartile probe on odd games
+    # If we just won, prefer strictly higher-rated opponents to keep climbing.
+    last_game = state.game_history[-1] if state.game_history else None
+    last_win_elo = None
+    if last_game and last_game.get("result") == "won":
+        last_win_elo = last_game.get("opponent_elo")
+
+    filtered_candidates = candidates
+    if last_win_elo is not None:
+        upward = [c for c in candidates if c[2] > last_win_elo + MIN_ASCEND_RATING_DELTA]
+        if upward:
+            filtered_candidates = upward
+            debug["ascend_filter_from"] = last_win_elo
+            debug["ascend_filter_count"] = len(upward)
+
+    candidates = filtered_candidates
+
+    # Choose a target rating: midpoint by default; escalate on confidence streaks.
     interval_span = max(0.0, elo_high - elo_low)
-    if state.games_played % 2 == 1:
-        target_elo = elo_low + 0.75 * interval_span
-        probe_reason = "upward_probe"
+    target_fraction = 0.5
+    probe_reason = "midpoint"
+
+    # Compute confident win streak (most recent backwards)
+    streak = 0
+    for g in reversed(state.game_history):
+        if g.get("result") == "won" and g.get("confidence", 0) >= HIGH_CONF_WIN_PROBE_THRESHOLD:
+            streak += 1
+        else:
+            break
+
+    last_game = state.game_history[-1] if state.game_history else None
+    last_confidence = None
+    if last_game and last_game.get("result") == "won":
+        last_confidence = last_game.get("confidence")
+
+    if streak >= AGGRESSIVE_PROBE_WIN_STREAK:
+        target_fraction = AGGRESSIVE_PROBE_TARGET_FRACTION
+        probe_reason = "upward_probe_streak"
     else:
-        target_elo = elo_low + 0.5 * interval_span
-        probe_reason = "midpoint"
+        if state.games_played % 2 == 1:
+            if last_confidence is not None and last_confidence >= HIGH_CONF_WIN_PROBE_THRESHOLD:
+                target_fraction = 0.6
+                probe_reason = "upward_probe"
+            else:
+                probe_reason = "midpoint_hold"
+
+    target_elo = elo_low + target_fraction * interval_span
+
+    # Cap how far above the last opponent we can jump in one pick to avoid
+    # skipping large swaths of the ladder in a single move.
+    if state.game_history:
+        last_opponent_rating = state.game_history[-1].get("opponent_elo")
+        if last_opponent_rating is not None:
+            target_elo = min(target_elo, last_opponent_rating + MAX_RATING_JUMP)
+
     debug["target_elo"] = target_elo
     debug["probe"] = probe_reason
 
