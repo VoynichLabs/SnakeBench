@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "game": {
+    "id": "1e6f7608-649b-47db-ac0c-2222a2eef194",
+    "started_at": "2025-12-10T05:32:30.778675",
+    "ended_at": "2025-12-10T05:33:12.194915",
+    "game_type": "arc-explainer",
+    "max_rounds": 150,
+    "rounds_played": 1,
+    "board": {
+      "width": 10,
+      "height": 10,
+      "num_apples": 5
+    }
+  },
+  "players": {
+    "0": {
+      "model_id": "0",
+      "name": "google/gemini-2.5-flash-lite-preview-09-2025",
+      "result": "won",
+      "final_score": 0,
+      "death": null,
+      "totals": {
+        "input_tokens": 1088,
+        "output_tokens": 1636,
+        "cost": 0.0007632000000000001
+      }
+    },
+    "1": {
+      "model_id": "1",
+      "name": "openai/gpt-5-nano",
+      "result": "lost",
+      "final_score": 0,
+      "death": {
+        "reason": "wall",
+        "round": 0
+      },
+      "totals": {
+        "input_tokens": 1028,
+        "output_tokens": 0,
+        "cost": 5.14e-05
+      }
+    }
+  },
+  "totals": {
+    "cost": 0.0008146000000000002,
+    "input_tokens": 2116,
+    "output_tokens": 1636
+  },
+  "initial_state": {
+    "snakes": {
+      "0": [
+        [
+          4,
+          4
+        ]
+      ],
+      "1": [
+        [
+          9,
+          4
+        ]
+      ]
+    },
+    "apples": [
+      [
+        6,
+        4
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        6,
+        3
+      ],
+      [
+        0,
+        7
+      ],
+      [
+        0,
+        5
+      ]
+    ],
+    "alive": {
+      "0": true,
+      "1": true
+    },
+    "scores": {
+      "0": 0,
+      "1": 0
+    }
+  },
+  "frames": [
+    {
+      "round": 0,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              4,
+              4
+            ]
+          ],
+          "1": [
+            [
+              9,
+              4
+            ]
+          ]
+        },
+        "apples": [
+          [
+            6,
+            4
+          ],
+          [
+            6,
+            7
+          ],
+          [
+            6,
+            3
+          ],
+          [
+            0,
+            7
+          ],
+          [
+            0,
+            5
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": false
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "RIGHT",
+          "rationale": "\n\nThis is a random move: RIGHT",
+          "input_tokens": 1028,
+          "output_tokens": 0,
+          "cost": 5.14e-05
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "The current state is:\nTurn: 0 / 150\nMy Snake (ID 0) Head: (4, 4). Body: None. Apples: 0. Length: 1.\nEnemy Snake #1 Head: (9, 4). Body: None. Apples: 0. Length: 1.\nApples: (6, 4), (6, 7), (6, 3), (0, 7), (0, 5).\nBoard size: 10x10.\n\n**Objective:** Eat an apple while avoiding death.\n\n**1. Analyze Potential Moves for Snake 0 (Head at (4, 4))**\n\nPossible Next Positions:\n*   **UP (5, 4):** Safe from boundaries. No body parts to hit. Enemy 1 is at (9, 4), moving simultaneously.\n*   **DOWN (3, 4):** Safe from boundaries. No body parts to hit.\n*   **LEFT (4, 3):** Safe from boundaries. No body parts to hit.\n*   **RIGHT (4, 5):** Safe from boundaries. No body parts to hit.\n\nSince my snake is only one segment long, I cannot hit my own body (moving backwards is safe regarding the body, as the tail is empty, but the rule states \"Moving directly backwards into your own body (into the cell directly behind your head) counts as hitting yourself and you die.\" Since I have no body, moving from (4,4) to (4,3) (LEFT) or (4,5) (RIGHT) or (3,4) (DOWN) or (5,4) (UP) does not involve moving into a cell immediately behind the head, as there is no cell behind the head). For a length 1 snake, all 4 directions are physically safe regarding self-collision avoidance based on the backward move rule as interpreted for a single block snake.\n\n**2. Evaluate Apple Proximity and Enemy Position**\n\nApples within 1 move:\n*   (6, 4): Distance $\\sqrt{(6-4)^2 + (4-4)^2} = 2$. Not reachable this turn.\n*   (0, 7): Distance $\\sqrt{(0-4)^2 + (7-4)^2} = \\sqrt{16+9} = 5$.\n*   (0, 5): Distance $\\sqrt{(0-4)^2 + (5-4)^2} = \\sqrt{16+1} = \\sqrt{17} \\approx 4.12$.\n*   (6, 3): Distance $\\sqrt{(6-4)^2 + (3-4)^2} = \\sqrt{4+1} = \\sqrt{5} \\approx 2.23$.\n\nThe nearest physical neighbors to (4, 4) are all empty. The nearest apple is (6, 4), which is 2 units away.\n\nEnemy 1 is at (9, 4).\n\n**3. Analyze Enemy Movement and Collision Risk**\n\nEnemy 1 moves simultaneously. Where will Snake 1 move?\nSnake 1 at (9, 4) is near the right edge.\n*   UP (9, 5): Safe.\n*   DOWN (9, 3): Safe.\n*   LEFT (8, 4): Safe.\n*   RIGHT (9, 5): Off board (if 9 is max X, which it is, 10x10 means coordinates 0-9). Wait, board size is 10x10. X ranges from 0 to 9. Moving right from (9, 4) leads to a boundary violation (10, 4).\n\nIf Snake 1 moves RIGHT, it dies (Boundary violation).\nIf Snake 1 moves UP, DOWN, or LEFT, it survives.\n\n**Collision Check (My next position vs Snake 1's potential next position):**\n\n*   **If I move UP to (5, 4):**\n    *   If E1 moves LEFT to (8, 4): Safe.\n    *   If E1 moves UP to (9, 5): Safe.\n    *   If E1 moves DOWN to (9, 3): Safe.\n*   **If I move DOWN to (3, 4):**\n    *   If E1 moves LEFT to (8, 4): Safe.\n    *   If E1 moves UP to (9, 5): Safe.\n    *   If E1 moves DOWN to (9, 3): Safe.\n*   **If I move LEFT to (4, 3):**\n    *   If E1 moves LEFT to (8, 4): Safe.\n    *   If E1 moves UP to (9, 5): Safe.\n    *   If E1 moves DOWN to (9, 3): Safe.\n*   **If I move RIGHT to (4, 5):**\n    *   If E1 moves LEFT to (8, 4): Safe.\n    *   If E1 moves UP to (9, 5): Safe.\n    *   If E1 moves DOWN to (9, 3): Safe.\n\nSince the snake lengths are equal (1), and we are far apart (4 units horizontally), guaranteed head-on collision is impossible this turn regardless of movement, unless the enemy specifically moves towards me, and I move towards it, resulting in meeting at the midpoint (which isn't possible in one step when separated by 4 units).\n\n**4. Strategic Choice**\n\nMy goal is generally to move towards the nearest cluster of apples, which seems to be around X=6 or X=0. Moving towards (6, 4) seems logical. (4, 4) -> (5, 4) -> (6, 4) would take 2 turns if the path is clear.\n\nMoving RIGHT seems promising to approach the apple cluster at X=6.\nMove RIGHT: (4, 4) -> (4, 5). (This is the X direction change, increasing X, which is the right direction). Wait, standard coordinate mapping: Increasing X is Right, Increasing Y is Up.\n\nLet's re-verify directions:\nUP: (4, 5)\nDOWN: (4, 3)\nLEFT: (3, 4)\nRIGHT: (5, 4)\n\nApples near (4, 4):\n(6, 4) is 2 steps RIGHT.\n(6, 3) is 2 steps RIGHT, 1 step DOWN.\n(6, 7) is 2 steps RIGHT, 3 steps UP.\n\nMoving RIGHT (to (5, 4)) puts me one step closer to the apples at (6, 4) and (6, 3). This feels like the best initial greedy path. It keeps me centered horizontally and moves towards the nearest accumulation of targets.\n\nShort-term plan: Move towards the cluster of apples on the right edge (X=6) while maintaining central positioning relative to the vertical axis (Y=4 is central for 0-9). (5, 4) keeps Y options wide open.\n\nLong-term plan: Approach (6, 4). Check if Snake 1 makes defensive/offensive moves towards the center or the other side. Since Snake 1 is isolated on the right edge, I don't need to worry about it for several turns unless it decides to wander inwards aggressively.\n\nMove: RIGHT $((4, 4) \\rightarrow (5, 4))$\n\nRIGHT",
+          "input_tokens": 1088,
+          "output_tokens": 1636,
+          "cost": 0.0007632000000000001
+        }
+      },
+      "events": [
+        {
+          "type": "death",
+          "player_id": "1",
+          "reason": "wall"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "game_id": "1e6f7608-649b-47db-ac0c-2222a2eef194",
+    "start_time": "2025-12-10T05:32:30.778675",
+    "end_time": "2025-12-10T05:33:12.194915",
+    "models": {
+      "0": "google/gemini-2.5-flash-lite-preview-09-2025",
+      "1": "openai/gpt-5-nano"
+    },
+    "game_result": {
+      "1": "lost",
+      "0": "won"
+    },
+    "final_scores": {
+      "0": 0,
+      "1": 0
+    },
+    "death_info": {
+      "1": {
+        "reason": "wall",
+        "round": 0
+      }
+    },
+    "max_rounds": 150,
+    "actual_rounds": 1,
+    "total_cost": 0.0008146000000000002,
+    "player_costs": {
+      "0": 0.0007632000000000001,
+      "1": 5.14e-05
+    }
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "version": 1,
+  "game": {
+    "id": "9ecb0c64-088b-4185-8d7a-859a0316fffb",
+    "started_at": "2025-12-10T05:32:27.734709",
+    "ended_at": "2025-12-10T05:33:18.988055",
+    "game_type": "arc-explainer",
+    "max_rounds": 150,
+    "rounds_played": 1,
+    "board": {
+      "width": 10,
+      "height": 10,
+      "num_apples": 5
+    }
+  },
+  "players": {
+    "0": {
+      "model_id": "0",
+      "name": "openai/gpt-5-mini",
+      "result": "lost",
+      "final_score": 0,
+      "death": {
+        "reason": "wall",
+        "round": 0
+      },
+      "totals": {
+        "input_tokens": 1028,
+        "output_tokens": 0,
+        "cost": 0.000257
+      }
+    },
+    "1": {
+      "model_id": "1",
+      "name": "google/gemini-2.5-flash-preview-09-2025",
+      "result": "won",
+      "final_score": 0,
+      "death": null,
+      "totals": {
+        "input_tokens": 1088,
+        "output_tokens": 2992,
+        "cost": 0.0078064
+      }
+    }
+  },
+  "totals": {
+    "cost": 0.0080634,
+    "input_tokens": 2116,
+    "output_tokens": 2992
+  },
+  "initial_state": {
+    "snakes": {
+      "0": [
+        [
+          5,
+          0
+        ]
+      ],
+      "1": [
+        [
+          7,
+          1
+        ]
+      ]
+    },
+    "apples": [
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        3
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        1,
+        3
+      ],
+      [
+        1,
+        6
+      ]
+    ],
+    "alive": {
+      "0": true,
+      "1": true
+    },
+    "scores": {
+      "0": 0,
+      "1": 0
+    }
+  },
+  "frames": [
+    {
+      "round": 0,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              5,
+              0
+            ]
+          ],
+          "1": [
+            [
+              7,
+              1
+            ]
+          ]
+        },
+        "apples": [
+          [
+            5,
+            6
+          ],
+          [
+            6,
+            3
+          ],
+          [
+            5,
+            1
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            6
+          ]
+        ],
+        "alive": {
+          "0": false,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
+      },
+      "moves": {
+        "0": {
+          "move": "DOWN",
+          "rationale": "\n\nThis is a random move: DOWN",
+          "input_tokens": 1028,
+          "output_tokens": 0,
+          "cost": 0.000257
+        },
+        "1": {
+          "move": "UP",
+          "rationale": "The current turn is 0. My snake (ID 1) is at (7, 1). The enemy snake (ID 0) is at (5, 0).\nThe apples are at: (5, 6), (6, 3), (5, 1), (1, 3), (1, 6).\n\nFirst, let's identify safe moves. The board is 10x10, (0,0) to (9,9).\nMy current position: (7, 1).\n\n1. **UP to (7, 2)**: Safe.\n2. **DOWN to (7, 0)**: Safe.\n3. **LEFT to (6, 1)**: Safe.\n4. **RIGHT to (8, 1)**: Safe.\n\nSince my snake is only one segment long and the enemy is far away (relatively), all four moves are currently safe from immediate death (off-board or hitting self/enemy body). We must also consider head-on collisions, but since both snakes are size 1, a head-on collision only happens if we move to the same square.\n\nMy goal is to reach apples efficiently. The closest apples are:\n1. (5, 1): Manhattan distance = |7-5| + |1-1| = 2.\n2. (6, 3): Manhattan distance = |7-6| + |1-3| = 3.\n3. (1, 3): Manhattan distance = |7-1| + |1-3| = 6 + 2 = 8.\n4. (5, 6): Manhattan distance = |7-5| + |1-6| = 2 + 5 = 7.\n5. (1, 6): Manhattan distance = |7-1| + |1-6| = 6 + 5 = 11.\n\nThe apple at (5, 1) is clearly the best target initially.\n\nLet's evaluate moves based on proximity to (5, 1):\n\n*   **Current position (7, 1). Target (5, 1).**\n\n*   **UP (7, 2):** Distance to (5, 1) becomes |7-5| + |2-1| = 2 + 1 = 3.\n*   **DOWN (7, 0):** Distance to (5, 1) becomes |7-5| + |0-1| = 2 + 1 = 3.\n*   **LEFT (6, 1):** Distance to (5, 1) becomes |6-5| + |1-1| = 1 + 0 = 1. (Best reduction in distance)\n*   **RIGHT (8, 1):** Distance to (5, 1) becomes |8-5| + |1-1| = 3 + 0 = 3.\n\nMoving LEFT brings me closer fastest.\n\nNow consider the enemy snake #0, which is at (5, 0).\nThe enemy is also very close to the apple (5, 1). Distance for S0 to (5, 1) is |5-5| + |0-1| = 1.\n\nIf I move LEFT to (6, 1) and the enemy moves UP to (5, 1) (eating the apple), I will be at (6, 1) and the enemy will be at (5, 1). This is a strong defensive move for the enemy, and they get the apple.\n\nIf I move LEFT to (6, 1), I am safe from collision with S0, as S0 can move to (5, 1), (4, 0), or (6, 0). None of these conflict with (6, 1).\n\nIf I want to compete for (5, 1), I need to reach it in Turn 1.\nIf I move LEFT (6, 1), I reach (5, 1) in Turn 2 (by moving LEFT again).\n\nLet's hypothesize S0's moves:\nS0 is at (5, 0). S0's best move is likely UP to (5, 1) to eat the apple.\n\nIf I move:\n1. **LEFT to (6, 1):** S0 moves UP to (5, 1) and eats the apple. I am one step away at (6, 1).\n2. **UP to (7, 2):** S0 moves UP to (5, 1) and eats the apple. I am further away.\n\nIf I manage to reach (5, 1) first, I eat the apple. If S0 reaches (5, 1) first, S0 eats the apple. Since we move simultaneously, if we both aim for (5, 1), we collide, and both die.\n\nMy position: (7, 1). Target: (5, 1).\nS0 position: (5, 0). Target: (5, 1).\n\nS0 is 1 step away (UP).\nI am 2 steps away (LEFT, LEFT or LEFT, DOWN/UP depending on where I start). Wait, (7, 1) -> (6, 1) -> (5, 1) is 2 steps LEFT.\n\nSince S0 is definitively closer (Manhattan distance 1 vs my 2), S0 has priority for this apple at Turn 1 if they move UP. I should avoid rushing into a collision if S0 is clearly prioritizing it, unless I can block them or guarantee a win.\n\nIf I move LEFT to (6, 1): I safely reposition towards other apples or future moves. S0 likely moves UP to (5, 1) and gets the apple.\n\nIf I move RIGHT to (8, 1) or UP/DOWN, I move further away from S0's path, confirming I concede the apple (5, 1).\n\nGiven that I cannot reach (5, 1) in Turn 1, attempting to move towards it to block S0 would require moving to (6, 1) or perhaps (7, 1) if I could somehow delay S0, which is impossible.\n\nIf I move LEFT to (6, 1), I still position myself well for the apple at (6, 3).\nFrom (6, 1), the distance to (6, 3) is 2 (UP, UP).\nFrom (7, 1), the distance to (6, 3) is 3 (LEFT, UP, UP).\n\nIf I move LEFT now, I am at (6, 1). If S0 takes (5, 1), S0 is now at (5, 1), length 2. I have successfully moved closer to other lucrative spots while avoiding collision.\n\nLet's check alternative targets: (6, 3).\nMy distance to (6, 3) is 3.\nS0's distance to (6, 3) from (5, 0) is |5-6| + |0-3| = 1 + 3 = 4.\n\nIf I move LEFT to (6, 1): New distance to (6, 3) is 2. I am in a good position to claim this second apple, especially if S0 is now busy digesting (5, 1) or moving elsewhere.\n\nIf I move UP to (7, 2): New distance to (6, 3) is |7-6| + |2-3| = 1 + 1 = 2.\nThis is equally fast for reaching (6, 3).\n\nComparing LEFT (6, 1) vs UP (7, 2):\n\n1. **LEFT (6, 1):** Keeps me on the bottom row, closer to the center of the board horizontally. It prepares for moving towards (5, 6), (1, 6), (1, 3) if needed by moving LEFT.\n2. **UP (7, 2):** Puts me one row higher. It prepares for moving towards (6, 3) and (5, 6).\n\nIf S0 takes (5, 1): S0 will be at L=2: Body (5, 0), Head (5, 1).\n\nIf I move LEFT (6, 1):\nTurn 1: Me (6, 1). S0 (5, 1).\nTurn 2: If I move UP to (6, 2), then UP to (6, 3).\nIf S0 moves RIGHT to (6, 1) in Turn 2, we collide!\n\nIf S0 is moving UP to (5, 1) in T1, S0 could move RIGHT to (6, 1) in T2. If I move LEFT in T1, I am at (6, 1). This is dangerous.\n\nWait, if I move LEFT in T0, I end up at (6, 1).\nIf S0 moves UP in T0, S0 ends up at (5, 1).\nIn T1, if I move towards (6, 3) (e.g., UP to (6, 2)), and S0 moves RIGHT towards (6, 1), there is no collision as S0 hits my old tail position (which is empty) or moves into a free square. The risk is if S0 moves towards my current position.\n\nLet's re-examine T1 risk if I move LEFT to (6, 1):\nS0 Head: (5, 1). New Body: (5, 0).\nIf S0 chooses RIGHT (6, 1) in T1, and I choose LEFT (5, 1) in T1 (to try and get the apple *if* S0 missed it), we collide. But we established S0 is almost certain to take (5, 1) in T0.\n\nIf S0 moves UP in T0, they are at (5, 1). My T0 move is LEFT, I am at (6, 1).\nIn T1, I plan to move UP towards (6, 3). If I move UP to (6, 2), and S0 moves RIGHT to (6, 1). We are safe.\n\nHowever, if S0 is moving UP in T0, they are now positioned directly to block my path to (6, 3) by moving RIGHT in T1.\n\nIf S0 moves UP in T0 to (5, 1).\nIf I move UP in T0 to (7, 2).\nS0 is at (5, 1).\nMy distance to (6, 3) is 2. S0 distance to (6, 3) is 3 (e.g., RIGHT, UP, UP).\n\nIn T1: I could move LEFT to (6, 2) and then UP to (6, 3) in T2.\nS0 could move RIGHT to (6, 1). This is away from the apple (6, 3).\nS0 could move UP to (5, 2) and then (5, 3). This leads them towards (6, 3) slowly.\n\nMoving UP feels safer and puts me into a quadrant where S0 is momentarily distracted by their own apple.\n\nLet's choose **UP** to (7, 2).\nWhy UP over LEFT?\nIf I move LEFT to (6, 1), I am too close to S0 who will be at (5, 1). S0 can move RIGHT to (6, 1) in T1 towards me, or LEFT to (4, 1), or UP to (5, 2), or DOWN to (5, 0) (backwards). S0 moving RIGHT (6, 1) might lead to a head-on collision if I move LEFT (5, 1) trying to take the apple S0 just ate, or puts pressure on me if I continue towards (6, 3).\n\nIf I move UP to (7, 2), S0 is at (5, 1). We are separated by distance and axis. S0's moves are less likely to directly intercept me immediately.\nIf S0 moves UP/RIGHT/LEFT from (5, 1), they don't immediately threaten (7, 2) or the path around (7, 2).\n\nTarget strategy: Concede (5, 1). Aim aggressively for (6, 3). Maintain distance from S0.\n\nT0 Move: UP to (7, 2).\nExpected S0 Move: UP to (5, 1) to eat apple.\n\nState after T0 move:\nMe: (7, 2).\nS0: (5, 1). S0 length 2 [(5, 1), (5, 0)].\nApples remaining: (5, 6), (6, 3), (1, 3), (1, 6).\n\nT1 Plan: Move LEFT to (6, 2). This puts me 1 step away from (6, 3).\nS0 options from (5, 1): UP (5, 2), DOWN (5, 0 - suicidal), LEFT (4, 1), RIGHT (6, 1).\nIf S0 moves UP (5, 2), their path is similar to mine toward Y=3 (or Y=6).\nIf S0 moves RIGHT (6, 1), they move away from Y=3.\n\nIf I move UP (7, 2) now, I set myself up for (6, 3) without immediate danger of confrontation with S0.\n\nI choose UP.\n\nUP",
+          "input_tokens": 1088,
+          "output_tokens": 2992,
+          "cost": 0.0078064
+        }
+      },
+      "events": [
+        {
+          "type": "death",
+          "player_id": "0",
+          "reason": "wall"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "game_id": "9ecb0c64-088b-4185-8d7a-859a0316fffb",
+    "start_time": "2025-12-10T05:32:27.734709",
+    "end_time": "2025-12-10T05:33:18.988055",
+    "models": {
+      "0": "openai/gpt-5-mini",
+      "1": "google/gemini-2.5-flash-preview-09-2025"
+    },
+    "game_result": {
+      "0": "lost",
+      "1": "won"
+    },
+    "final_scores": {
+      "0": 0,
+      "1": 0
+    },
+    "death_info": {
+      "0": {
+        "reason": "wall",
+        "round": 0
+      }
+    },
+    "max_rounds": 150,
+    "actual_rounds": 1,
+    "total_cost": 0.0080634,
+    "player_costs": {
+      "0": 0.000257,
+      "1": 0.0078064
+    }
+  }
+}
