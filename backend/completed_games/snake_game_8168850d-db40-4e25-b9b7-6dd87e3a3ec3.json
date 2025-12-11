@@ -1,0 +1,764 @@
+{
+  "version": 1,
+  "game": {
+    "id": "8168850d-db40-4e25-b9b7-6dd87e3a3ec3",
+    "started_at": "2025-12-11T03:14:10.523296",
+    "ended_at": "2025-12-11T03:14:55.704294",
+    "game_type": "arc-explainer",
+    "max_rounds": 150,
+    "rounds_played": 9,
+    "board": {
+      "width": 10,
+      "height": 10,
+      "num_apples": 5
+    }
+  },
+  "players": {
+    "0": {
+      "model_id": "0",
+      "name": "mistralai/devstral-2512:free",
+      "result": "won",
+      "final_score": 2,
+      "death": null,
+      "totals": {
+        "input_tokens": 11921,
+        "output_tokens": 2783,
+        "cost": 0.0
+      }
+    },
+    "1": {
+      "model_id": "1",
+      "name": "mistralai/ministral-3b-2512",
+      "result": "lost",
+      "final_score": 0,
+      "death": {
+        "reason": "wall",
+        "round": 8
+      },
+      "totals": {
+        "input_tokens": 15951,
+        "output_tokens": 7418,
+        "cost": 0.0023369
+      }
+    }
+  },
+  "totals": {
+    "cost": 0.0023369,
+    "input_tokens": 27872,
+    "output_tokens": 10201
+  },
+  "initial_state": {
+    "snakes": {
+      "0": [
+        [
+          0,
+          2
+        ]
+      ],
+      "1": [
+        [
+          0,
+          6
+        ]
+      ]
+    },
+    "apples": [
+      [
+        7,
+        7
+      ],
+      [
+        5,
+        2
+      ],
+      [
+        4,
+        2
+      ],
+      [
+        3,
+        7
+      ],
+      [
+        7,
+        4
+      ]
+    ],
+    "alive": {
+      "0": true,
+      "1": true
+    },
+    "scores": {
+      "0": 0,
+      "1": 0
+    }
+  },
+  "frames": [
+    {
+      "round": 0,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              1,
+              2
+            ]
+          ],
+          "1": [
+            [
+              1,
+              6
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            5,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "RIGHT",
+          "rationale": "Let's analyze the current board state and make a move step by step.\n\n### Current State Recap:\n- **Your snake (ID 1):**\n  - Head: (0, 6)\n  - Body: None (just a single segment)\n  - Apples collected: 0\n- **Enemy snake (ID 0):**\n  - Head: (0, 2)\n  - Body: None\n- **Apples:** (7,7), (5,2), (4,2), (3,7), (7,4)\n- **Board layout:** 10x10 grid, y=0 is bottom, y=9 is top.\n\n### Step 1: Identify Immediate Threats\n- Your head is at (0,6). The only way you can die immediately is if you move into a cell that is occupied by another snake's head or your own body (but since your body is empty, only enemy heads matter).\n- Enemy head is at (0,2). Your head is at (0,6), so the only way you can collide with the enemy head is if you move in a direction that brings your head closer to (0,2) in the x-direction (since y=6 is already higher than y=2, moving down would not bring you closer in y). So, moving left (decreasing x) would bring you closer to the enemy head at (0,2) in the x-direction, but since both heads are at x=0, moving left would place your head at (-1,6), which is off the board (x < 0). So, moving left is invalid because it would take you off the board.\n- Moving right (increasing x) would place your head at (1,6), which is safe.\n- Moving up (increasing y) would place your head at (0,7), which is safe.\n- Moving down (decreasing y) would place your head at (0,5), which is safe.\n\n### Step 2: Check for Collisions with Enemy Body or Ourselves\n- Your body is empty, so no immediate collision with your own body.\n- Enemy body is empty, so no immediate collision with enemy body.\n\n### Step 3: Check for Safe Moves\nFrom the above, all four directions are safe except left (off the board). So, safe moves are up, down, right.\n\n### Step 4: Evaluate Safe Moves for Future Apple Collection\nLet's look at the apples and their positions relative to your current head:\n\n- Apple at (7,7): far away, moving towards it would require a long path.\n- Apple at (5,2): far away, moving towards it would require a long path.\n- Apple at (4,2): far away.\n- Apple at (3,7): closer to your current y-coordinate (y=6 vs y=7), but still far in x.\n- Apple at (7,4): far in x and y.\n\nSince your snake is just a single segment, you cannot eat any apples in one move. You need to grow by eating an apple to have a body and be able to move towards other apples.\n\n### Step 5: Consider Enemy Movement\nEnemy snake is at (0,2). It will move in one of the four directions. If it moves up (increasing y), it could reach (0,3) or (0,1) or (0,2) again (if it moves down), or left/right (but x=0 is the edge, so left would be off the board). So, it will likely move up or down.\n\n### Step 6: Choose a Move to Grow Safely and Avoid Future Threats\nSince you can't eat an apple in one move, you need to choose a move that keeps you safe and allows you to grow in the next turn. You should choose a direction that keeps you away from the enemy head and opens up future options.\n\n- Moving right (1,6): This keeps you away from the enemy head (x=0) and moves you towards the right side of the board. This is a safe and neutral move.\n- Moving up (0,7): This moves you towards the top of the board, which is away from the enemy head.\n- Moving down (0,5): This moves you towards the bottom of the board, which is also away from the enemy head.\n\nBetween these, moving right (1,6) seems to be the safest and most neutral move, as it doesn't immediately threaten the enemy and doesn't put you in a position where you might be trapped.\n\n### Step 7: Long-Term Strategy Note\nFor the next few turns:\n1. Grow by eating an apple as soon as possible to increase your body length and mobility.\n2. Avoid moving directly towards enemy heads or bodies.\n3. Try to stay away from the enemy snake's path to prevent collisions.\n4. Keep an eye on the apples and plan to grow towards the nearest apple to increase your chances of reaching others.\n\n### Final Move:\nRIGHT",
+          "input_tokens": 1046,
+          "output_tokens": 1063,
+          "cost": 0.00021090000000000003
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (0, 2), no body\n- Enemy snake (ID 1): Head at (0, 6), no body\n- Apples at: (7,7), (5,2), (4,2), (3,7), (7,4)\n\nPossible moves for me:\n1. UP: (0,3) - Safe (empty space)\n2. DOWN: (0,1) - Safe (empty space)\n3. LEFT: (-1,2) - Invalid (off board)\n4. RIGHT: (1,2) - Safe (empty space)\n\nAll three valid moves (UP, DOWN, RIGHT) are safe since:\n- No body segments to collide with\n- Not moving off board\n- Not moving into enemy snake (enemy is at (0,6))\n\nStrategy considerations:\n1. The closest apples are at (5,2) and (4,2) - both on the same row (y=2)\n2. Moving RIGHT would take me toward these apples\n3. Moving UP or DOWN would take me away from these immediate apples\n4. The enemy snake is above me at (0,6), so moving UP might lead to future conflicts\n\nBest move: RIGHT\n- Moves toward the closest apples\n- Keeps options open for future moves\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility\n\nRIGHT",
+          "input_tokens": 1046,
+          "output_tokens": 316,
+          "cost": 0.0
+        }
+      }
+    },
+    {
+      "round": 1,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              2,
+              2
+            ]
+          ],
+          "1": [
+            [
+              2,
+              6
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            5,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "RIGHT",
+          "rationale": "**Long-Term Strategy Note:**\n1. **Growth Priority:** Since my snake is currently a single segment, my immediate goal is to grow by eating an apple. The closest apple is at **(5,2)** (distance of 5x and 4y from my head at **(1,6)**), but since I can't eat it now, I must first expand my body to reach it. I\u2019ll aim to grow toward the right (x-direction) to cover more ground toward apples like **(7,7)** and **(7,4)**.\n2. **Enemy Threat:** The enemy snake is at **(1,2)**. It will move this turn, so I must avoid moving toward its path. If it moves up (to **(1,3)**), I should avoid moving down (to **(1,5)**). If it moves right (to **(2,2)**), I should avoid moving left (to **(0,6)**).\n3. **Safe Expansion:** Moving right (to **(2,6)**) is safe and neutral. It keeps me away from the enemy\u2019s potential path and opens a path toward apples on the right side of the board.\n4. **Future Moves:** After this move, I\u2019ll plan to grow toward **(5,2)** or **(7,4)** by extending my body in the next few turns. Avoiding the enemy\u2019s path will be critical to prevent collisions.\n\n---\n**Final Move:** RIGHT",
+          "input_tokens": 2108,
+          "output_tokens": 300,
+          "cost": 0.0002408
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (1, 2), no body\n- Enemy snake (ID 1): Head at (1, 6), no body\n- Apples at: (7,7), (5,2), (4,2), (3,7), (7,4)\n\nPossible moves for me:\n1. UP: (1,3) - Safe (empty space)\n2. DOWN: (1,1) - Safe (empty space)\n3. LEFT: (0,2) - Safe (empty space)\n4. RIGHT: (2,2) - Safe (empty space)\n\nAll four moves are safe since:\n- No body segments to collide with\n- Not moving off board\n- Not moving into enemy snake (enemy is at (1,6))\n\nStrategy considerations:\n1. The closest apples are at (5,2) and (4,2) - both on the same row (y=2)\n2. Moving RIGHT would continue toward these apples\n3. Moving UP would take me toward the enemy snake at (1,6)\n4. Moving DOWN or LEFT would take me away from the immediate apples\n\nBest move: RIGHT\n- Continues toward the closest apples\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nRIGHT",
+          "input_tokens": 1361,
+          "output_tokens": 295,
+          "cost": 0.0
+        }
+      }
+    },
+    {
+      "round": 2,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              3,
+              2
+            ]
+          ],
+          "1": [
+            [
+              2,
+              5
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            5,
+            2
+          ],
+          [
+            4,
+            2
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 0,
+          "1": 0
+        }
+      },
+      "moves": {
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (2, 2), no body\n- Enemy snake (ID 1): Head at (2, 6), no body\n- Apples at: (7,7), (5,2), (4,2), (3,7), (7,4)\n\nPossible moves for me:\n1. UP: (2,3) - Safe (empty space)\n2. DOWN: (2,1) - Safe (empty space)\n3. LEFT: (1,2) - Safe (empty space)\n4. RIGHT: (3,2) - Safe (empty space)\n\nAll four moves are safe since:\n- No body segments to collide with\n- Not moving off board\n- Not moving into enemy snake (enemy is at (2,6))\n\nStrategy considerations:\n1. The closest apples are at (5,2) and (4,2) - both on the same row (y=2)\n2. Moving RIGHT would continue toward these apples\n3. Moving UP would take me toward the enemy snake at (2,6)\n4. Moving DOWN or LEFT would take me away from the immediate apples\n\nBest move: RIGHT\n- Continues toward the closest apples\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nRIGHT",
+          "input_tokens": 1340,
+          "output_tokens": 295,
+          "cost": 0.0
+        },
+        "1": {
+          "move": "DOWN",
+          "rationale": "### **Current Analysis & Decision Process**\n\n#### **1. Immediate Safety Check**\n- **Head Position:** `(2, 6)`\n- **Last Move:** RIGHT (so previous direction was LEFT)\n- **Body:** None (single-segment snake)\n- **Enemy Snake #0:** Head at `(2, 2)`, no body.\n\n**Safe Moves:**\n- **UP:** `(2, 7)` \u2192 Valid (no overlap with enemy or body)\n- **DOWN:** `(2, 5)` \u2192 Valid\n- **LEFT:** `(1, 6)` \u2192 Valid\n- **RIGHT:** `(3, 6)` \u2192 Valid\n\n**Dangerous Moves:**\n- **Backwards (LEFT from `(2,6)`):** `(1,6)` is already a valid move, but since the last move was RIGHT, moving LEFT would be a direct reversal (self-collision). **This is invalid.**\n  - *Correction:* The last move was RIGHT, so moving LEFT is **not** a direct reversal (since the snake didn\u2019t move LEFT last turn). Thus, **all four directions are safe** for this turn.\n\n#### **2. Apple Proximity & Growth Strategy**\n- **Closest Apples:**\n  - `(5,2)` (distance: ~5x, 4y from head)\n  - `(7,4)` (distance: ~5x, 2y)\n  - `(7,7)` (distance: ~5x, 1y)\n- **Current Snake Length:** 1 (head only).\n- **Goal:** Grow toward apples while avoiding enemy threats.\n\n#### **3. Enemy Threat Assessment**\n- **Enemy Snake #0:**\n  - Current head: `(2,2)`\n  - Possible moves this turn (assuming no body to block):\n    - UP: `(2,3)`\n    - DOWN: `(2,1)`\n    - LEFT: `(1,2)`\n    - RIGHT: `(3,2)`\n- **Our Snake\u2019s Possible Moves:**\n  - If enemy moves UP to `(2,3)`, we should avoid moving DOWN to `(2,5)` (direct path).\n  - If enemy moves RIGHT to `(3,2)`, we should avoid moving LEFT to `(1,6)` (direct path).\n  - If enemy moves LEFT to `(1,2)`, we should avoid moving UP to `(2,7)` (direct path).\n\n**Optimal Move:**\n- **RIGHT to `(3,6)`** is neutral and avoids direct enemy paths.\n- **UP to `(2,7)`** is risky if enemy moves LEFT (but unlikely).\n- **DOWN to `(2,5)`** is safer if enemy moves UP, but less ideal for growth.\n- **LEFT to `(1,6)`** is safe but blocks future expansion toward apples.\n\n#### **4. Long-Term Growth Plan**\n- **Short-Term:** Move RIGHT to `(3,6)` to expand body toward apples on the right.\n- **Mid-Term:** Extend toward `(5,2)` or `(7,4)` by growing rightward.\n- **Avoid:** Trapping in narrow paths or enemy collisions.\n\n---\n\n### **Final Move:**\n**DOWN**",
+          "input_tokens": 1345,
+          "output_tokens": 669,
+          "cost": 0.0002014
+        }
+      }
+    },
+    {
+      "round": 3,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              4,
+              2
+            ],
+            [
+              3,
+              2
+            ]
+          ],
+          "1": [
+            [
+              1,
+              5
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            5,
+            2
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ],
+          [
+            8,
+            8
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 1,
+          "1": 0
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "LEFT",
+          "rationale": "### **Current Analysis & Decision Process (Updated for New Turn)**\n\n#### **1. Immediate Safety Check**\n- **Head Position:** `(2, 5)` (from last move: DOWN from `(2,6)`).\n- **Last Move:** DOWN (so previous direction was UP).\n- **Body:** None (still a single-segment snake).\n- **Enemy Snake #0:**\n  - Head at `(3, 2)` (from last turn\u2019s move: RIGHT from `(2,2)`).\n  - Possible moves this turn (no body to block):\n    - UP: `(3,3)`\n    - DOWN: `(3,1)`\n    - LEFT: `(2,2)`\n    - RIGHT: `(4,2)`\n\n**Safe Moves:**\n- **UP:** `(2,6)` \u2192 Valid (no overlap with enemy or body).\n- **DOWN:** `(3,5)` \u2192 Valid.\n- **LEFT:** `(1,5)` \u2192 Valid.\n- **RIGHT:** `(3,5)` \u2192 Wait, no: RIGHT from `(2,5)` is `(3,5)` (same as DOWN). **This is a collision with the cell behind the head (backwards move).**\n  - *Correction:* RIGHT from `(2,5)` is `(3,5)`, which is **not** the cell directly behind the head (the head is at `(2,5)`, so the cell behind is `(2,4)`). Thus, **RIGHT is safe** (no self-collision).\n  - *Clarification:* The rule prohibits moving directly backwards (i.e., into the cell *directly* behind the head). Here, moving RIGHT is not backwards, so it\u2019s valid.\n\n**Dangerous Moves:**\n- **Backwards (UP from `(2,5)`):** `(2,6)` is valid, but since the last move was DOWN, moving UP would be a direct reversal (self-collision). **This is invalid.**\n  - *Correction:* The last move was DOWN, so moving UP is **not** a direct reversal (since the snake didn\u2019t move UP last turn). Thus, **all four directions are safe** for this turn.\n\n#### **2. Apple Proximity & Growth Strategy**\n- **Closest Apples:**\n  - `(7,4)` (distance: ~5x, 1y from head).\n  - `(7,7)` (distance: ~5x, 2y).\n  - `(5,2)` (distance: ~3x, 3y).\n- **Current Snake Length:** 1.\n- **Goal:** Grow toward apples while avoiding enemy threats.\n\n#### **3. Enemy Threat Assessment**\n- **Enemy Snake #0:**\n  - Current head: `(3,2)`.\n  - Possible moves this turn:\n    - UP: `(3,3)`.\n    - DOWN: `(3,1)`.\n    - LEFT: `(2,2)`.\n    - RIGHT: `(4,2)`.\n- **Our Snake\u2019s Possible Moves:**\n  - If enemy moves LEFT to `(2,2)`, we should avoid moving UP to `(2,6)` (direct path).\n  - If enemy moves RIGHT to `(4,2)`, we should avoid moving LEFT to `(1,5)` (direct path).\n  - If enemy moves UP to `(3,3)`, we should avoid moving DOWN to `(3,5)` (direct path).\n\n**Optimal Move:**\n- **UP to `(2,6)`** is risky if enemy moves LEFT (but unlikely).\n- **DOWN to `(3,5)`** is safer if enemy moves UP, but less ideal for growth.\n- **LEFT to `(1,5)`** is safe but blocks future expansion toward apples.\n- **RIGHT to `(3,5)`** is neutral and avoids direct enemy paths.\n\n#### **4. Long-Term Growth Plan**\n- **Short-Term:** Move RIGHT to `(3,5)` to expand body toward apples on the right.\n- **Mid-Term:** Extend toward `(7,4)` or `(7,7)` by growing rightward.\n- **Avoid:** Trapping in narrow paths or enemy collisions.\n\n---\n### **Long-Term Strategy Note**\n- **Phase 1 (Turns 1-10):** Expand rightward toward `(7,4)` or `(7,7)` while avoiding enemy threats.\n- **Phase 2 (Turns 10-30):** Prioritize apples `(7,4)` and `(7,7)`; if enemy grows, expand diagonally toward `(5,2)`.\n- **Phase 3 (Final):** If possible, reach 30 apples before enemies do.\n\n---\n**Final Move:**\nLEFT",
+          "input_tokens": 1712,
+          "output_tokens": 990,
+          "cost": 0.0002702
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (3, 2), no body\n- Enemy snake (ID 1): Head at (2, 5), no body\n- Apples at: (7,7), (5,2), (4,2), (3,7), (7,4)\n\nPossible moves for me:\n1. UP: (3,3) - Safe (empty space)\n2. DOWN: (3,1) - Safe (empty space)\n3. LEFT: (2,2) - Safe (empty space)\n4. RIGHT: (4,2) - Safe (empty space)\n\nAll four moves are safe since:\n- No body segments to collide with\n- Not moving off board\n- Not moving into enemy snake (enemy is at (2,5))\n\nStrategy considerations:\n1. The closest apples are at (5,2) and (4,2) - both on the same row (y=2)\n2. Moving RIGHT would take me directly to (4,2) which has an apple\n3. Moving UP would take me toward the enemy snake at (2,5)\n4. Moving DOWN or LEFT would take me away from the immediate apples\n\nBest move: RIGHT\n- Takes me directly to an apple at (4,2)\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nRIGHT",
+          "input_tokens": 1340,
+          "output_tokens": 309,
+          "cost": 0.0
+        }
+      }
+    },
+    {
+      "round": 4,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              5,
+              2
+            ],
+            [
+              4,
+              2
+            ],
+            [
+              3,
+              2
+            ]
+          ],
+          "1": [
+            [
+              1,
+              4
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ],
+          [
+            8,
+            8
+          ],
+          [
+            9,
+            3
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 2,
+          "1": 0
+        }
+      },
+      "moves": {
+        "1": {
+          "move": "DOWN",
+          "rationale": "### **Current Analysis & Decision Process (Updated for New Turn)**\n\n#### **1. Immediate Safety Check**\n- **Head Position:** `(1, 5)` (from last move: LEFT from `(2, 5)`).\n- **Last Move:** LEFT (so previous direction was RIGHT).\n- **Body:** None (still a single-segment snake).\n- **Enemy Snake #0:**\n  - Head at `(4, 2)` (from last turn\u2019s move: UP from `(4, 3)`).\n  - Possible moves this turn:\n    - UP: `(4, 1)`\n    - DOWN: `(4, 3)`\n    - LEFT: `(3, 2)`\n    - RIGHT: `(5, 2)`\n\n**Safe Moves:**\n- **UP:** `(1, 4)` \u2192 Valid (no overlap with enemy or body).\n- **DOWN:** `(2, 5)` \u2192 Valid.\n- **LEFT:** `(0, 5)` \u2192 Invalid (off-board).\n- **RIGHT:** `(2, 5)` \u2192 Same as DOWN. **No self-collision risk** (moving RIGHT is not directly backwards).\n\n**Dangerous Moves:**\n- **LEFT:** Invalid (off-board).\n\n#### **2. Apple Proximity & Growth Strategy**\n- **Closest Apples:**\n  - `(7, 4)` (distance: ~6x, 1y).\n  - `(7, 7)` (distance: ~6x, 2y).\n  - `(5, 2)` (distance: ~4x, 3y).\n- **Current Snake Length:** 1.\n- **Goal:** Expand toward `(5, 2)` or `(7, 4)` while avoiding enemy threats.\n\n#### **3. Enemy Threat Assessment**\n- **Enemy Snake #0:**\n  - Current head: `(4, 2)`.\n  - Possible moves this turn:\n    - UP: `(4, 1)` \u2192 Would collide with our potential move UP to `(1, 4)` if we move UP.\n    - DOWN: `(4, 3)` \u2192 Safe.\n    - LEFT: `(3, 2)` \u2192 Safe.\n    - RIGHT: `(5, 2)` \u2192 Safe.\n- **Our Snake\u2019s Possible Moves:**\n  - If enemy moves UP to `(4, 1)`, we should avoid moving UP to `(1, 4)` (direct path).\n  - If enemy moves LEFT to `(3, 2)`, we should avoid moving DOWN to `(2, 5)` (direct path).\n  - If enemy moves RIGHT to `(5, 2)`, we should avoid moving RIGHT to `(2, 5)` (same as DOWN).\n\n**Optimal Move:**\n- **DOWN to `(2, 5)`** is safer than UP (avoids enemy\u2019s potential UP move).\n- **UP to `(1, 4)`** is risky if enemy moves UP, but `(5, 2)` is closer to apples.\n\n#### **4. Long-Term Growth Plan**\n- **Short-Term:** Move DOWN to `(2, 5)` to expand body toward `(5, 2)` or `(7, 4)`.\n- **Mid-Term:** Extend toward `(5, 2)` or `(7, 4)` by growing downward or rightward.\n- **Avoid:** Trapping in narrow paths or enemy collisions.\n\n---\n### **Long-Term Strategy Note**\n- **Phase 1 (Turns 1-15):** Expand downward toward `(5, 2)` or `(7, 4)` while avoiding enemy threats.\n- **Phase 2 (Turns 15-30):** Prioritize `(5, 2)` and `(7, 4)`; if enemy grows, expand diagonally toward `(7, 7)`.\n- **Phase 3 (Final):** If possible, reach 30 apples before enemies do.\n\n---\n**Final Move:**\nDOWN",
+          "input_tokens": 2038,
+          "output_tokens": 830,
+          "cost": 0.00028680000000000003
+        },
+        "0": {
+          "move": "RIGHT",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (4, 2), Body at [(3, 2)]\n- Enemy snake (ID 1): Head at (1, 5), no body\n- Apples at: (7,7), (5,2), (3,7), (7,4), (8,8)\n\nPossible moves for me:\n1. UP: (4,3) - Safe (empty space)\n2. DOWN: (4,1) - Safe (empty space)\n3. LEFT: (3,2) - Unsafe (would hit my own body)\n4. RIGHT: (5,2) - Safe (has an apple)\n\nAll moves except LEFT are safe since:\n- No body segments to collide with (except LEFT which hits my own body)\n- Not moving off board\n- Not moving into enemy snake (enemy is at (1,5))\n\nStrategy considerations:\n1. The closest apple is at (5,2) - directly to my right\n2. Moving RIGHT would take me directly to an apple at (5,2)\n3. Moving UP would take me toward the apple at (3,7) but is less direct\n4. Moving DOWN would take me away from immediate apples\n\nBest move: RIGHT\n- Takes me directly to an apple at (5,2)\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nRIGHT",
+          "input_tokens": 1358,
+          "output_tokens": 316,
+          "cost": 0.0
+        }
+      }
+    },
+    {
+      "round": 5,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              5,
+              3
+            ],
+            [
+              5,
+              2
+            ],
+            [
+              4,
+              2
+            ]
+          ],
+          "1": [
+            [
+              1,
+              5
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ],
+          [
+            8,
+            8
+          ],
+          [
+            9,
+            3
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 2,
+          "1": 0
+        }
+      },
+      "moves": {
+        "0": {
+          "move": "UP",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (5, 2), Body at [(4, 2), (3, 2)]\n- Enemy snake (ID 1): Head at (1, 4), no body\n- Apples at: (7,7), (3,7), (7,4), (8,8), (9,3)\n\nPossible moves for me:\n1. UP: (5,3) - Safe (empty space)\n2. DOWN: (5,1) - Safe (empty space)\n3. LEFT: (4,2) - Unsafe (would hit my own body)\n4. RIGHT: (6,2) - Safe (empty space)\n\nAll moves except LEFT are safe since:\n- No body segments to collide with (except LEFT which hits my own body)\n- Not moving off board\n- Not moving into enemy snake (enemy is at (1,4))\n\nStrategy considerations:\n1. The closest apples are at (3,7) and (7,4)\n2. Moving UP would take me toward the apple at (3,7)\n3. Moving RIGHT would take me toward the apple at (7,4)\n4. Moving DOWN would take me away from immediate apples\n\nBest move: UP\n- Takes me toward the apple at (3,7)\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nUP",
+          "input_tokens": 1372,
+          "output_tokens": 313,
+          "cost": 0.0
+        },
+        "1": {
+          "move": "UP",
+          "rationale": "### **Current Analysis & Decision Process (Updated for New Turn)**\n\n#### **1. Immediate Safety Check**\n- **Head Position:** `(2, 5)` (from last move: DOWN from `(1, 4)`).\n- **Last Move:** DOWN (so previous direction was UP).\n- **Body:** None (still a single-segment snake).\n- **Enemy Snake #0:**\n  - Head at `(5, 2)` (from last turn\u2019s move: RIGHT from `(4, 2)`).\n  - Possible moves this turn:\n    - UP: `(5, 1)`\n    - DOWN: `(5, 3)`\n    - LEFT: `(4, 2)`\n    - RIGHT: `(6, 2)`\n\n**Safe Moves:**\n- **UP:** `(2, 4)` \u2192 Valid (no overlap with enemy or body).\n- **DOWN:** `(3, 5)` \u2192 Valid.\n- **LEFT:** `(1, 5)` \u2192 Valid (off-board check: `(1, 5)` is within bounds).\n- **RIGHT:** `(3, 5)` \u2192 Same as DOWN. **No self-collision risk** (moving RIGHT is not directly backwards).\n\n**Dangerous Moves:**\n- None, as all directions are safe.\n\n#### **2. Apple Proximity & Growth Strategy**\n- **Closest Apples:**\n  - `(7, 4)` (distance: ~5x, 1y).\n  - `(7, 7)` (distance: ~5x, 2y).\n  - `(5, 2)` (distance: ~3x, 3y).\n- **Current Snake Length:** 1.\n- **Goal:** Prioritize `(5, 2)` (closest) and `(7, 4)` (next closest) while avoiding enemy threats.\n\n#### **3. Enemy Threat Assessment**\n- **Enemy Snake #0:**\n  - Current head: `(5, 2)`.\n  - Possible moves this turn:\n    - UP: `(5, 1)` \u2192 Would collide with our potential move UP to `(2, 4)` if we move UP.\n    - DOWN: `(5, 3)` \u2192 Safe.\n    - LEFT: `(4, 2)` \u2192 Safe.\n    - RIGHT: `(6, 2)` \u2192 Safe.\n- **Our Snake\u2019s Possible Moves:**\n  - If enemy moves UP to `(5, 1)`, we should avoid moving UP to `(2, 4)` (direct path).\n  - If enemy moves LEFT to `(4, 2)`, we should avoid moving LEFT to `(1, 5)` (direct path).\n  - If enemy moves RIGHT to `(6, 2)`, no immediate collision risk.\n\n**Optimal Move:**\n- **UP to `(2, 4)`** is risky if enemy moves UP, but `(5, 2)` is closest to apples.\n- **LEFT to `(1, 5)`** is safer than UP but less optimal for apple proximity.\n- **DOWN to `(3, 5)`** is neutral but avoids immediate enemy threats.\n\n#### **4. Long-Term Growth Plan**\n- **Short-Term:** Move **UP to `(2, 4)`** to grow toward `(5, 2)` and `(7, 4)` while avoiding enemy\u2019s potential UP move.\n- **Mid-Term:** Extend toward `(5, 2)` by growing upward or rightward.\n- **Avoid:** Trapping in narrow paths or enemy collisions.\n\n---\n### **Long-Term Strategy Note**\n- **Phase 1 (Turns 1-20):** Expand upward toward `(5, 2)` and `(7, 4)` while avoiding enemy threats.\n- **Phase 2 (Turns 20-40):** Prioritize `(7, 4)` and `(7, 7)`; if enemy grows, expand diagonally toward `(7, 7)`.\n- **Phase 3 (Final):** If possible, reach 30 apples before enemies do.\n\n---\n**Final Move:**\nUP",
+          "input_tokens": 1885,
+          "output_tokens": 854,
+          "cost": 0.0002739
+        }
+      }
+    },
+    {
+      "round": 6,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              5,
+              4
+            ],
+            [
+              5,
+              3
+            ],
+            [
+              5,
+              2
+            ]
+          ],
+          "1": [
+            [
+              0,
+              5
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ],
+          [
+            8,
+            8
+          ],
+          [
+            9,
+            3
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 2,
+          "1": 0
+        }
+      },
+      "moves": {
+        "0": {
+          "move": "UP",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (5, 3), Body at [(5, 2), (4, 2)]\n- Enemy snake (ID 1): Head at (1, 5), no body\n- Apples at: (7,7), (3,7), (7,4), (8,8), (9,3)\n\nPossible moves for me:\n1. UP: (5,4) - Safe (empty space)\n2. DOWN: (5,2) - Unsafe (would hit my own body)\n3. LEFT: (4,3) - Safe (empty space)\n4. RIGHT: (6,3) - Safe (empty space)\n\nAll moves except DOWN are safe since:\n- No body segments to collide with (except DOWN which hits my own body)\n- Not moving off board\n- Not moving into enemy snake (enemy is at (1,5))\n\nStrategy considerations:\n1. The closest apples are at (3,7) and (7,4)\n2. Moving UP would take me toward the apple at (3,7)\n3. Moving RIGHT would take me toward the apple at (7,4)\n4. Moving LEFT would take me away from immediate apples\n\nBest move: UP\n- Takes me toward the apple at (3,7)\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nUP",
+          "input_tokens": 1368,
+          "output_tokens": 313,
+          "cost": 0.0
+        },
+        "1": {
+          "move": "LEFT",
+          "rationale": "### **Current Analysis & Decision Process (Updated for New Turn)**\n\n#### **1. Immediate Safety Check**\n- **Head Position:** `(2, 4)` (from last move: UP from `(1, 5)`).\n- **Last Move:** UP (so previous direction was DOWN).\n- **Body:** None (still a single-segment snake).\n- **Enemy Snake #0:**\n  - Head at `(5, 3)` (from last turn\u2019s move: DOWN from `(5, 2)`).\n  - Possible moves this turn:\n    - UP: `(5, 2)` \u2192 Collides with our body if we move UP (since our body is at `(1, 5)` and we\u2019re at `(2, 4)`). **Dangerous.**\n    - DOWN: `(6, 3)` \u2192 Valid.\n    - LEFT: `(4, 3)` \u2192 Valid.\n    - RIGHT: `(5, 4)` \u2192 Valid.\n\n**Safe Moves:**\n- **DOWN:** `(3, 4)` \u2192 Valid (no overlap with enemy or body).\n- **LEFT:** `(1, 4)` \u2192 Valid (off-board check: `(1, 4)` is within bounds).\n- **RIGHT:** `(2, 5)` \u2192 Valid (no overlap with enemy or body).\n\n**Dangerous Moves:**\n- **UP:** `(2, 3)` \u2192 Would collide with enemy\u2019s potential UP move to `(5, 2)` if enemy moves UP. **Risky but not immediately fatal.**\n\n#### **2. Apple Proximity & Growth Strategy**\n- **Closest Apples:**\n  - `(7, 4)` (distance: ~5x, 3y).\n  - `(7, 7)` (distance: ~5x, 3y).\n  - `(3, 7)` (distance: ~1x, 3y).\n- **Current Snake Length:** 1.\n- **Goal:** Prioritize `(3, 7)` (closest) and `(7, 4)` (next closest) while avoiding enemy threats.\n\n#### **3. Enemy Threat Assessment**\n- **Enemy Snake #0:**\n  - Current head: `(5, 3)`.\n  - Possible moves this turn:\n    - UP: `(5, 2)` \u2192 Collision with our body if we move UP. **Avoid.**\n    - DOWN: `(6, 3)` \u2192 Safe.\n    - LEFT: `(4, 3)` \u2192 Safe.\n    - RIGHT: `(5, 4)` \u2192 Safe.\n- **Our Snake\u2019s Possible Moves:**\n  - If enemy moves LEFT to `(4, 3)`, we should avoid moving LEFT to `(1, 4)` (direct path).\n  - If enemy moves RIGHT to `(5, 4)`, no immediate collision risk.\n  - If enemy moves DOWN to `(6, 3)`, no immediate collision risk.\n\n**Optimal Move:**\n- **LEFT to `(1, 4)`** is the safest and most direct toward `(3, 7)` (closest apple). Enemy\u2019s LEFT move to `(4, 3)` does not threaten this path.\n- **DOWN to `(3, 4)`** is also safe but less optimal for apple proximity.\n- **RIGHT to `(2, 5)`** is neutral but avoids immediate enemy threats.\n\n#### **4. Long-Term Growth Plan**\n- **Short-Term:** Move **LEFT to `(1, 4)`** to grow toward `(3, 7)` while avoiding enemy threats.\n- **Mid-Term:** Extend leftward or upward toward `(3, 7)` and `(7, 4)`.\n- **Avoid:** Trapping in narrow paths or enemy collisions.\n\n---\n### **Long-Term Strategy Note**\n- **Phase 1 (Turns 1-30):** Expand leftward toward `(3, 7)` and `(7, 4)` while avoiding enemy threats.\n- **Phase 2 (Turns 30-60):** Prioritize `(7, 4)` and `(7, 7)`; if enemy grows, expand diagonally toward `(7, 7)`.\n- **Phase 3 (Final):** If possible, reach 30 apples before enemies do.\n\n---\n**Final Move:**\nLEFT",
+          "input_tokens": 1909,
+          "output_tokens": 902,
+          "cost": 0.0002811
+        }
+      }
+    },
+    {
+      "round": 7,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              5,
+              5
+            ],
+            [
+              5,
+              4
+            ],
+            [
+              5,
+              3
+            ]
+          ],
+          "1": [
+            [
+              0,
+              4
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ],
+          [
+            8,
+            8
+          ],
+          [
+            9,
+            3
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": true
+        },
+        "scores": {
+          "0": 2,
+          "1": 0
+        }
+      },
+      "moves": {
+        "0": {
+          "move": "UP",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (5, 4), Body at [(5, 3), (5, 2)]\n- Enemy snake (ID 1): Head at (0, 5), no body\n- Apples at: (7,7), (3,7), (7,4), (8,8), (9,3)\n\nPossible moves for me:\n1. UP: (5,5) - Safe (empty space)\n2. DOWN: (5,3) - Unsafe (would hit my own body)\n3. LEFT: (4,4) - Safe (empty space)\n4. RIGHT: (6,4) - Safe (empty space)\n\nAll moves except DOWN are safe since:\n- No body segments to collide with (except DOWN which hits my own body)\n- Not moving off board\n- Not moving into enemy snake (enemy is at (0,5))\n\nStrategy considerations:\n1. The closest apples are at (3,7) and (7,4)\n2. Moving UP would take me toward the apple at (3,7)\n3. Moving RIGHT would take me toward the apple at (7,4)\n4. Moving LEFT would take me away from immediate apples\n\nBest move: UP\n- Takes me toward the apple at (3,7)\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nUP",
+          "input_tokens": 1368,
+          "output_tokens": 313,
+          "cost": 0.0
+        },
+        "1": {
+          "move": "DOWN",
+          "rationale": "### **Current Analysis & Decision Process (Updated for New Turn)**\n\n#### **1. Immediate Safety Check**\n- **Head Position:** `(1, 4)` (from last move: LEFT from `(2, 4)`).\n- **Last Move:** LEFT (so previous direction was RIGHT).\n- **Body:** None (still a single-segment snake).\n- **Enemy Snake #0:**\n  - Head at `(5, 4)` (from last turn\u2019s move: RIGHT from `(5, 3)`).\n  - Possible moves this turn:\n    - UP: `(5, 3)` \u2192 Collision with our body if we move UP (since our body is at `(2, 4)` and we\u2019re at `(1, 4)`). **Dangerous.**\n    - DOWN: `(6, 4)` \u2192 Valid.\n    - LEFT: `(4, 4)` \u2192 Valid.\n    - RIGHT: `(5, 5)` \u2192 Valid.\n\n**Safe Moves:**\n- **DOWN:** `(2, 4)` \u2192 Valid (no overlap with enemy or body).\n- **LEFT:** `(0, 4)` \u2192 Valid (off-board check: `(0, 4)` is within bounds).\n- **RIGHT:** `(1, 5)` \u2192 Valid (no overlap with enemy or body).\n\n**Dangerous Moves:**\n- **UP:** `(1, 3)` \u2192 Would collide with enemy\u2019s potential UP move to `(5, 3)` if enemy moves UP. **Risky but not immediately fatal.**\n\n#### **2. Apple Proximity & Growth Strategy**\n- **Closest Apples:**\n  - `(3, 7)` (distance: ~2x, 3y).\n  - `(7, 4)` (distance: ~3x, 1y).\n  - `(7, 7)` (distance: ~4x, 3y).\n- **Current Snake Length:** 1.\n- **Goal:** Prioritize `(3, 7)` (closest) and `(7, 4)` (next closest) while avoiding enemy threats.\n\n#### **3. Enemy Threat Assessment**\n- **Enemy Snake #0:**\n  - Current head: `(5, 4)`.\n  - Possible moves this turn:\n    - UP: `(5, 3)` \u2192 Collision with our body if we move UP. **Avoid.**\n    - DOWN: `(6, 4)` \u2192 Safe.\n    - LEFT: `(4, 4)` \u2192 Safe.\n    - RIGHT: `(5, 5)` \u2192 Safe.\n- **Our Snake\u2019s Possible Moves:**\n  - If enemy moves LEFT to `(4, 4)`, we should avoid moving LEFT to `(0, 4)` (direct path).\n  - If enemy moves RIGHT to `(5, 5)`, no immediate collision risk.\n  - If enemy moves DOWN to `(6, 4)`, no immediate collision risk.\n\n**Optimal Move:**\n- **DOWN to `(2, 4)`** is the safest and most direct toward `(3, 7)` (closest apple). Enemy\u2019s LEFT move to `(4, 4)` does not threaten this path.\n- **LEFT to `(0, 4)`** is safe but less optimal for apple proximity.\n- **RIGHT to `(1, 5)`** is neutral but avoids immediate enemy threats.\n\n#### **4. Long-Term Growth Plan**\n- **Short-Term:** Move **DOWN to `(2, 4)`** to grow toward `(3, 7)` while avoiding enemy threats.\n- **Mid-Term:** Extend downward or leftward toward `(3, 7)` and `(7, 4)`.\n- **Avoid:** Trapping in narrow paths or enemy collisions.\n\n---\n### **Long-Term Strategy Note**\n- **Phase 1 (Turns 1-30):** Expand downward toward `(3, 7)` and `(7, 4)` while avoiding enemy threats.\n- **Phase 2 (Turns 30-60):** Prioritize `(7, 4)` and `(7, 7)`; if enemy grows, expand diagonally toward `(7, 7)`.\n- **Phase 3 (Final):** If possible, reach 30 apples before enemies do.\n\n---\nDOWN",
+          "input_tokens": 1957,
+          "output_tokens": 896,
+          "cost": 0.00028530000000000005
+        }
+      }
+    },
+    {
+      "round": 8,
+      "state": {
+        "snakes": {
+          "0": [
+            [
+              5,
+              5
+            ],
+            [
+              5,
+              4
+            ],
+            [
+              5,
+              3
+            ]
+          ],
+          "1": [
+            [
+              0,
+              4
+            ]
+          ]
+        },
+        "apples": [
+          [
+            7,
+            7
+          ],
+          [
+            3,
+            7
+          ],
+          [
+            7,
+            4
+          ],
+          [
+            8,
+            8
+          ],
+          [
+            9,
+            3
+          ]
+        ],
+        "alive": {
+          "0": true,
+          "1": false
+        },
+        "scores": {
+          "0": 2,
+          "1": 0
+        }
+      },
+      "moves": {
+        "0": {
+          "move": "UP",
+          "rationale": "Let's analyze the current situation and plan the next move.\n\nCurrent state:\n- My snake (ID 0): Head at (5, 5), Body at [(5, 4), (5, 3)]\n- Enemy snake (ID 1): Head at (0, 4), no body\n- Apples at: (7,7), (3,7), (7,4), (8,8), (9,3)\n\nPossible moves for me:\n1. UP: (5,6) - Safe (empty space)\n2. DOWN: (5,4) - Unsafe (would hit my own body)\n3. LEFT: (4,5) - Safe (empty space)\n4. RIGHT: (6,5) - Safe (empty space)\n\nAll moves except DOWN are safe since:\n- No body segments to collide with (except DOWN which hits my own body)\n- Not moving off board\n- Not moving into enemy snake (enemy is at (0,4))\n\nStrategy considerations:\n1. The closest apples are at (3,7) and (7,4)\n2. Moving UP would take me toward the apple at (3,7)\n3. Moving RIGHT would take me toward the apple at (7,4)\n4. Moving LEFT would take me away from immediate apples\n\nBest move: UP\n- Takes me toward the apple at (3,7)\n- Avoids potential conflict with enemy snake\n- Maintains maximum flexibility for future moves\n\nUP",
+          "input_tokens": 1368,
+          "output_tokens": 313,
+          "cost": 0.0
+        },
+        "1": {
+          "move": "LEFT",
+          "rationale": "### **Current Analysis & Decision Process (Updated for New Turn)**\n\n#### **1. Immediate Safety Check**\n- **Head Position:** `(2, 4)` (from last move: DOWN from `(1, 4)`).\n- **Last Move:** DOWN (so previous direction was UP).\n- **Body:** None (still a single-segment snake).\n- **Enemy Snake #0:**\n  - Head at `(5, 4)` (from last turn\u2019s move: RIGHT from `(5, 3)`).\n  - Possible moves this turn:\n    - **UP:** `(5, 3)` \u2192 Collision with our body if we move UP (our body is at `(1, 4)` and `(2, 4)`). **Dangerous.**\n    - **DOWN:** `(6, 4)` \u2192 Valid.\n    - **LEFT:** `(4, 4)` \u2192 Valid.\n    - **RIGHT:** `(5, 5)` \u2192 Valid.\n\n**Safe Moves:**\n- **UP:** `(2, 3)` \u2192 Valid (no overlap with enemy or body).\n- **DOWN:** `(3, 4)` \u2192 Valid (no overlap).\n- **LEFT:** `(1, 4)` \u2192 Valid (off-board check: `(1, 4)` is within bounds).\n- **RIGHT:** `(3, 5)` \u2192 Valid.\n\n**Dangerous Moves:**\n- None, since enemy\u2019s UP move to `(5, 3)` does not threaten our current position.\n\n#### **2. Apple Proximity & Growth Strategy**\n- **Closest Apples:**\n  - `(3, 7)` (distance: ~2x, 3y).\n  - `(7, 4)` (distance: ~1x, 1y).\n  - `(7, 7)` (distance: ~4x, 3y).\n- **Current Snake Length:** 1.\n- **Goal:** Prioritize `(7, 4)` (closest) and `(3, 7)` (next closest) while avoiding enemy threats.\n\n#### **3. Enemy Threat Assessment**\n- **Enemy Snake #0:**\n  - Current head: `(5, 4)`.\n  - Possible moves this turn:\n    - **UP:** `(5, 3)` \u2192 Would collide with our body if we move UP. **Avoid.**\n    - **DOWN:** `(6, 4)` \u2192 Safe.\n    - **LEFT:** `(4, 4)` \u2192 Safe.\n    - **RIGHT:** `(5, 5)` \u2192 Safe.\n- **Our Snake\u2019s Possible Moves:**\n  - If enemy moves LEFT to `(4, 4)`, we should avoid moving LEFT to `(1, 4)` (direct path).\n  - If enemy moves RIGHT to `(5, 5)`, no immediate collision risk.\n  - If enemy moves DOWN to `(6, 4)`, no immediate collision risk.\n\n**Optimal Move:**\n- **LEFT to `(1, 4)`** is the safest and most direct toward `(7, 4)` (closest apple). Enemy\u2019s LEFT move to `(4, 4)` does not threaten this path.\n- **UP to `(2, 3)`** is also safe but less optimal for apple proximity.\n- **DOWN to `(3, 4)`** is neutral but avoids immediate enemy threats.\n- **RIGHT to `(3, 5)`** is less optimal for apple proximity.\n\n#### **4. Long-Term Growth Plan**\n- **Short-Term:** Move **LEFT to `(1, 4)`** to grow toward `(7, 4)` while avoiding enemy threats.\n- **Mid-Term:** Extend leftward or downward toward `(3, 7)` and `(7, 4)`.\n- **Avoid:** Trapping in narrow paths or enemy collisions.\n\n---\n### **Long-Term Strategy Note**\n- **Phase 1 (Turns 1-30):** Expand leftward toward `(7, 4)` and `(3, 7)` while avoiding enemy threats.\n- **Phase 2 (Turns 30-60):** Prioritize `(3, 7)` and `(7, 7)`; if enemy grows, expand diagonally toward `(7, 7)`.\n- **Phase 3 (Final):** If possible, reach 30 apples before enemies do.\n\n---\nLEFT",
+          "input_tokens": 1951,
+          "output_tokens": 914,
+          "cost": 0.0002865
+        }
+      },
+      "events": [
+        {
+          "type": "death",
+          "player_id": "1",
+          "reason": "wall"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "game_id": "8168850d-db40-4e25-b9b7-6dd87e3a3ec3",
+    "start_time": "2025-12-11T03:14:10.523296",
+    "end_time": "2025-12-11T03:14:55.704294",
+    "models": {
+      "0": "mistralai/devstral-2512:free",
+      "1": "mistralai/ministral-3b-2512"
+    },
+    "game_result": {
+      "1": "lost",
+      "0": "won"
+    },
+    "final_scores": {
+      "0": 2,
+      "1": 0
+    },
+    "death_info": {
+      "1": {
+        "reason": "wall",
+        "round": 8
+      }
+    },
+    "max_rounds": 150,
+    "actual_rounds": 9,
+    "total_cost": 0.0023369,
+    "player_costs": {
+      "0": 0.0,
+      "1": 0.0023369
+    }
+  }
+}
