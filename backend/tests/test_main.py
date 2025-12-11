@@ -441,6 +441,52 @@ class TestCollisionDetection:
         assert game.snakes["1"].alive is False
         assert game.snakes["0"].death_reason == "head_collision"
         assert game.snakes["1"].death_reason == "head_collision"
+        assert game.game_over is True
+        assert game.game_result["0"] == "tied"
+        assert game.game_result["1"] == "tied"
+
+    @patch('main.DB_AVAILABLE', False)
+    def test_head_collision_both_die_higher_score_wins(self):
+        """When both snakes die, higher pre-existing score wins."""
+        game = SnakeGame(width=10, height=10, num_apples=0)
+        game.apples = []
+
+        mock_player_0 = Mock()
+        mock_player_0.get_move = Mock(return_value={
+            "direction": RIGHT,
+            "rationale": "test",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost": 0.0
+        })
+        mock_player_0.name = "Player0"
+
+        mock_player_1 = Mock()
+        mock_player_1.get_move = Mock(return_value={
+            "direction": LEFT,
+            "rationale": "test",
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cost": 0.0
+        })
+        mock_player_1.name = "Player1"
+
+        game.snakes["0"] = Snake([(4, 5)])
+        game.snakes["1"] = Snake([(6, 5)])
+        game.players["0"] = mock_player_0
+        game.players["1"] = mock_player_1
+        game.scores["0"] = 2
+        game.scores["1"] = 5
+        game.player_costs["0"] = 0.0
+        game.player_costs["1"] = 0.0
+
+        game.run_round()
+
+        assert game.game_over is True
+        assert game.snakes["0"].alive is False
+        assert game.snakes["1"].alive is False
+        assert game.game_result["0"] == "lost"
+        assert game.game_result["1"] == "won"
 
     @patch('main.DB_AVAILABLE', False)
     def test_body_collision_attacker_dies(self):
