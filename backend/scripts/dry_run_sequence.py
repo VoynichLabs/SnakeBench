@@ -124,13 +124,13 @@ def main() -> None:
             "my_death_reason": death,
             "total_rounds": rounds,
         }
-        update_placement_state(state, game, opponent_elo=opp_rating)
+        update_placement_state(state, game, opponent_rating=opp_rating)
 
         print(
             f"Game {idx}: vs {opp_name} (rank #{opp_rank}, rating {opp_rating:.2f}) -> {result} | "
             f"mu={state.skill.mu:.2f}, sigma={state.skill.sigma:.2f} | "
-            f"interval=[{state.elo_low:.2f},{state.elo_high:.2f}] | probe={debug.get('probe')} "
-            f"target={debug.get('target_elo'):.2f}"
+            f"interval=[{state.rating_low:.2f},{state.rating_high:.2f}] | probe={debug.get('probe')} "
+            f"target={debug.get('target_rating'):.2f}"
         )
 
 

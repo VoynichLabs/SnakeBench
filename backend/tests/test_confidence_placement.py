@@ -51,7 +51,7 @@ class GameResult:
     """Detailed result of a single game."""
     opponent_id: int
     opponent_name: str
-    opponent_elo: float
+    opponent_rating: float
     opponent_rank: int
     result: str  # 'won', 'lost', 'tied'
     my_score: int
@@ -170,7 +170,7 @@ class SkillEstimate:
         """Optimistic estimate (2 sigma above mean)."""
         return self.mu + 2 * self.sigma
 
-    def update(self, opponent_elo: float, result: str, confidence: float):
+    def update(self, opponent_rating: float, result: str, confidence: float):
         """
         Update skill estimate based on game result.
 
@@ -181,7 +181,7 @@ class SkillEstimate:
         - Sigma decreases with each game (more certainty)
         """
         # Expected score based on current estimate
-        expected = 1 / (1 + 10 ** ((opponent_elo - self.mu) / 400))
+        expected = 1 / (1 + 10 ** ((opponent_rating - self.mu) / 400))
 
         # Actual score
         if result == 'won':
@@ -214,7 +214,7 @@ class SkillEstimate:
 
 def calculate_information_gain(
     skill: SkillEstimate,
-    opponent_elo: float,
+    opponent_rating: float,
     opponent_id: int
 ) -> float:
     """
@@ -238,7 +238,7 @@ def calculate_information_gain(
 
     # How much would this game reduce our uncertainty?
     # Best opponents are near our current estimate
-    distance_from_estimate = abs(opponent_elo - skill.mu)
+    distance_from_estimate = abs(opponent_rating - skill.mu)
 
     # Optimal opponent is at 1 sigma away (challenging but beatable)
     optimal_distance = skill.sigma
@@ -319,11 +319,11 @@ def simulate_confidence_placement(
     for i, game in enumerate(game_results[:max_games]):
         # Find opponent in our ranked list
         opponent_rank = None
-        opponent_elo = game.get('opponent_elo', 1500)
+        opponent_rating = game.get('opponent_rating', 1500)
         for idx, (mid, name, elo, rank) in enumerate(models_with_rank):
             if name == game.get('opponent_name') or mid == game.get('opponent_id'):
                 opponent_rank = rank
-                opponent_elo = elo
+                opponent_rating = elo
                 break
 
         if opponent_rank is None:
@@ -333,7 +333,7 @@ def simulate_confidence_placement(
         result = GameResult(
             opponent_id=game.get('opponent_id', 0),
             opponent_name=game.get('opponent_name', 'Unknown'),
-            opponent_elo=opponent_elo,
+            opponent_rating=opponent_rating,
             opponent_rank=opponent_rank,
             result=game['result'],
             my_score=game.get('my_score', 0),
@@ -349,12 +349,12 @@ def simulate_confidence_placement(
         # Update skill estimate
         old_mu = skill.mu
         old_sigma = skill.sigma
-        skill.update(opponent_elo, result.result, confidence)
+        skill.update(opponent_rating, result.result, confidence)
         skill.opponents_played.add(result.opponent_id)
 
         # Log
         game_log.append(
-            f"Game {i+1}: vs {result.opponent_name[:25]:<25} (#{opponent_rank}, ELO {opponent_elo:.0f}) "
+            f"Game {i+1}: vs {result.opponent_name[:25]:<25} (#{opponent_rank}, ELO {opponent_rating:.0f}) "
             f"-> {result.result.upper():<4} | Score: {result.my_score}-{result.opponent_score} | "
             f"Conf: {confidence:.2f} | "
             f"Skill: {old_mu:.0f}±{old_sigma:.0f} -> {skill.mu:.0f}±{skill.sigma:.0f}"
@@ -483,7 +483,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'Qwen2.5 Coder 32B Instruct',
             'opponent_rank': 109,
-            'opponent_elo': 1700 - 109 * 2,  # ~1482
+            'opponent_rating': 1700 - 109 * 2,  # ~1482
             'result': 'won',
             'my_score': 1,
             'opponent_score': 2,
@@ -493,7 +493,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'MoonshotAI: Kimi K2 Thinking',
             'opponent_rank': 38,
-            'opponent_elo': 1700 - 38 * 2,  # ~1624
+            'opponent_rating': 1700 - 38 * 2,  # ~1624
             'result': 'lost',
             'my_score': 3,
             'opponent_score': 3,  # TIE SCORE but lost!
@@ -503,7 +503,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'Qwen: Qwen3 Coder 30B A3B Instruct',
             'opponent_rank': 93,
-            'opponent_elo': 1700 - 93 * 2,  # ~1514
+            'opponent_rating': 1700 - 93 * 2,  # ~1514
             'result': 'won',
             'my_score': 3,
             'opponent_score': 3,
@@ -513,7 +513,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'Qwen: Qwen3 Next 80B A3B Thinking',
             'opponent_rank': 50,
-            'opponent_elo': 1700 - 50 * 2,  # ~1600
+            'opponent_rating': 1700 - 50 * 2,  # ~1600
             'result': 'lost',
             'my_score': 10,
             'opponent_score': 13,
@@ -523,7 +523,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'Z.AI: GLM 4.5V',
             'opponent_rank': 91,
-            'opponent_elo': 1700 - 91 * 2,  # ~1518
+            'opponent_rating': 1700 - 91 * 2,  # ~1518
             'result': 'won',
             'my_score': 10,
             'opponent_score': 8,
@@ -533,7 +533,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'DeepSeek: DeepSeek V3',
             'opponent_rank': 85,
-            'opponent_elo': 1700 - 85 * 2,  # ~1530
+            'opponent_rating': 1700 - 85 * 2,  # ~1530
             'result': 'won',
             'my_score': 15,
             'opponent_score': 21,  # Lost on score but won the game?
@@ -543,7 +543,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'Qwen: Qwen2.5 VL 72B Instruct',
             'opponent_rank': 84,
-            'opponent_elo': 1700 - 84 * 2,  # ~1532
+            'opponent_rating': 1700 - 84 * 2,  # ~1532
             'result': 'won',
             'my_score': 5,
             'opponent_score': 4,
@@ -553,7 +553,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'TheDrummer: Cydonia 24B V4.1',
             'opponent_rank': 82,
-            'opponent_elo': 1700 - 82 * 2,  # ~1536
+            'opponent_rating': 1700 - 82 * 2,  # ~1536
             'result': 'won',
             'my_score': 7,
             'opponent_score': 3,
@@ -563,7 +563,7 @@ def test_with_actual_match_history():
         {
             'opponent_name': 'Qwen: Qwen3 235B A22B Instruct',
             'opponent_rank': 58,
-            'opponent_elo': 1700 - 58 * 2,  # ~1584
+            'opponent_rating': 1700 - 58 * 2,  # ~1584
             'result': 'tied',
             'my_score': 12,
             'opponent_score': 8,
@@ -583,7 +583,7 @@ def test_with_actual_match_history():
         result = GameResult(
             opponent_id=0,
             opponent_name=game['opponent_name'],
-            opponent_elo=game['opponent_elo'],
+            opponent_rating=game['opponent_rating'],
             opponent_rank=game['opponent_rank'],
             result=game['result'],
             my_score=game['my_score'],
@@ -714,7 +714,7 @@ def test_production_system():
 
     for i, game in enumerate(game_results):
         opponent_id = game['opponent_id']
-        opponent_elo = 1700 - opponent_id * 2
+        opponent_rating = 1700 - opponent_id * 2
 
         # Get confidence for this result
         conf = get_confidence_for_result(
@@ -729,9 +729,9 @@ def test_production_system():
         old_sigma = state.skill.sigma
 
         # Update state
-        update_placement_state(state, game, opponent_elo)
+        update_placement_state(state, game, opponent_rating)
 
-        print(f"Game {i+1}: vs {game['opponent_name'][:25]:<25} (ELO {opponent_elo})")
+        print(f"Game {i+1}: vs {game['opponent_name'][:25]:<25} (ELO {opponent_rating})")
         print(f"  Result: {game['result'].upper():<4} | Score: {game['my_score']}-{game['opponent_score']} | Conf: {conf:.2f}")
         print(f"  Skill: {old_mu:.0f}±{old_sigma:.0f} -> {state.skill.mu:.0f}±{state.skill.sigma:.0f}")
 
@@ -898,8 +898,8 @@ class TestIntervalAwarePlacement:
         # Seed an interval that spans the board; mu sits near the middle
         state.skill.mu = 1500.0
         state.skill.sigma = 50.0  # Tight sigma would normally keep us near mu
-        state.elo_low = 1650.0
-        state.elo_high = 1750.0
+        state.rating_low = 1650.0
+        state.rating_high = 1750.0
 
         ranked_models = self._ranked_models()
         opponent = select_next_opponent(state, ranked_models=ranked_models)
@@ -914,8 +914,8 @@ class TestIntervalAwarePlacement:
         to avoid getting stuck with weak opponents early.
         """
         state = init_placement_state(model_id=999, max_games=9)
-        state.elo_low = 1200.0
-        state.elo_high = 1800.0
+        state.rating_low = 1200.0
+        state.rating_high = 1800.0
         state.skill.mu = 1500.0
         state.skill.sigma = 200.0
 
@@ -928,11 +928,11 @@ class TestIntervalAwarePlacement:
             "total_rounds": 30,
         }
 
-        update_placement_state(state, game_result, opponent_elo=1300.0)
+        update_placement_state(state, game_result, opponent_rating=1300.0)
 
         # Upper bound should remain high, and floor should rise from its initial value
-        assert state.elo_high >= 1700.0
-        assert state.elo_low > 1200.0
+        assert state.rating_high >= 1700.0
+        assert state.rating_low > 1200.0
 
 
 if __name__ == "__main__":
