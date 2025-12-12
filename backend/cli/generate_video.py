@@ -7,10 +7,10 @@ Usage:
     python generate_video.py --local <path_to_replay.json>
 
 Examples:
-    # Generate from Supabase
+    # Generate from local completed_games directory
     python generate_video.py abc-123-def-456
 
-    # Generate from local file
+    # Generate from specific local file
     python generate_video.py --local ../completed_games/snake_game_xyz.json
 
     # Custom output path
@@ -30,7 +30,7 @@ from pathlib import Path
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from services.video_generator import SnakeVideoGenerator, get_video_public_url
+from services.video_generator import SnakeVideoGenerator, get_video_local_path
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -79,7 +79,7 @@ def main():
     input_group.add_argument(
         'game_id',
         nargs='?',
-        help='Game ID to fetch from Supabase'
+        help='Game ID to load from local completed_games directory'
     )
     input_group.add_argument(
         '--local',
@@ -91,12 +91,7 @@ def main():
     parser.add_argument(
         '--output', '-o',
         type=str,
-        help='Output video file path (default: temp file)'
-    )
-    parser.add_argument(
-        '--no-upload',
-        action='store_true',
-        help='Skip uploading to Supabase (only generate local file)'
+        help='Output video file path (default: completed_games/<game_id>_replay.mp4)'
     )
 
     # Video settings
@@ -129,7 +124,7 @@ def main():
             logger.info(f"Using game ID: {game_id}")
         else:
             game_id = args.game_id
-            replay_data = None  # Will be downloaded from Supabase
+            replay_data = None  # Will be loaded from local completed_games
 
         # Create video generator
         generator = SnakeVideoGenerator(
@@ -146,31 +141,7 @@ def main():
             output_path=args.output
         )
 
-        logger.info(f"✓ Video generated successfully: {video_path}")
-
-        # Upload to Supabase if not disabled
-        if not args.no_upload:
-            logger.info("Uploading to Supabase Storage...")
-
-            try:
-                result = generator._upload_video_to_supabase(game_id, video_path)
-                logger.info(f"✓ Video uploaded successfully!")
-                logger.info(f"  Storage path: {result['storage_path']}")
-                logger.info(f"  Public URL: {result['public_url']}")
-
-                # Clean up temp file if we created one
-                if args.output is None and os.path.exists(video_path):
-                    os.remove(video_path)
-                    logger.info(f"  Cleaned up temporary file")
-
-            except Exception as e:
-                logger.error(f"✗ Upload failed: {e}")
-                logger.info(f"  Local video saved at: {video_path}")
-                sys.exit(1)
-        else:
-            logger.info(f"✓ Skipping upload (--no-upload flag set)")
-            logger.info(f"  Local video saved at: {video_path}")
-
+        logger.info(f"[OK] Video generated successfully: {video_path}")
         logger.info("Done!")
 
     except KeyboardInterrupt:

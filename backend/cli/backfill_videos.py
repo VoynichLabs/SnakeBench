@@ -2,29 +2,29 @@
 """
 One-off helper to backfill missing match videos.
 
-- Pulls all games from the Supabase Postgres `games` table
-- Skips games that already have `replay.mp4` in storage (unless --force)
-- Generates videos from the stored replay.json and uploads them
-- Runs work in parallel (default 15 workers)
+- Scans local completed_games directory for replay JSON files
+- Skips games that already have a video file (unless --force)
+- Generates videos and saves them locally
+- Runs work in parallel (default 4 workers)
 """
 
 import argparse
 import logging
 import os
 import sys
+import glob
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, Iterable, List
+from typing import Dict, List
 
 from dotenv import load_dotenv
 
 # Add backend directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from database_postgres import get_connection
-from services.supabase_client import get_supabase_client
 from services.video_generator import SnakeVideoGenerator
 
 logger = logging.getLogger(__name__)
+backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def fetch_game_ids(limit: int | None = None, offset: int = 0, batch_size: int = 500) -> List[str]:
