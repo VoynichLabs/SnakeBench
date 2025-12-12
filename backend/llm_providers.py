@@ -75,6 +75,34 @@ class OpenRouterProvider(LLMProviderInterface):
             request_kwargs['extra_headers'] = self.extra_headers
 
         if self.api_type == 'responses':
+            if self.model_name.startswith("openai/") or self.model_name.startswith("x-ai/"):
+                reasoning = request_kwargs.get("reasoning")
+                if not isinstance(reasoning, dict):
+                    reasoning = {}
+                if "summary" not in reasoning:
+                    reasoning["summary"] = "detailed"
+                request_kwargs["reasoning"] = reasoning
+
+                text = request_kwargs.get("text")
+                if not isinstance(text, dict):
+                    text = {}
+                if "verbosity" not in text:
+                    text["verbosity"] = "medium"
+                request_kwargs["text"] = text
+
+                request_kwargs.setdefault("store", True)
+
+                include = request_kwargs.get("include")
+                if include is None:
+                    include = []
+                if isinstance(include, str):
+                    include = [include]
+                if not isinstance(include, list):
+                    include = []
+                if "reasoning.encrypted_content" not in include:
+                    include.append("reasoning.encrypted_content")
+                request_kwargs["include"] = include
+
             response = self.client.responses.create(
                 model=self.model_name,
                 input=prompt,
