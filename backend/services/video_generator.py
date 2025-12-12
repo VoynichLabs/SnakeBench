@@ -4,7 +4,7 @@ Video Generation Service for Snake Game Replays
 This service generates MP4 videos from game replay JSON files by:
 1. Rendering each frame using PIL (Pillow)
 2. Encoding frames to video using MoviePy/FFmpeg
-3. Uploading the final video to Supabase Storage
+3. Saving the video to local completed_games directory
 
 The rendering matches the frontend design with:
 - Canvas game board with grid
@@ -25,13 +25,10 @@ from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import ImageSequenceClip
 import numpy as np
 
-# Import Supabase helpers
 import sys
 backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
-
-from services.supabase_client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 
@@ -507,7 +504,7 @@ class SnakeVideoGenerator:
 
         Args:
             game_id: The game ID to generate video for
-            replay_data: Optional replay data (if None, will download from Supabase)
+            replay_data: Optional replay data (if None, will load from local completed_games)
             output_path: Optional output path (if None, uses temp file)
 
         Returns:
@@ -517,11 +514,12 @@ class SnakeVideoGenerator:
 
         # Load replay data if not provided
         if replay_data is None:
-            logger.info(f"Downloading replay data for game {game_id}")
-            from services.supabase_storage import download_replay
-            replay_data = download_replay(game_id)
-            if replay_data is None:
-                raise ValueError(f"Could not find replay data for game {game_id}")
+            logger.info(f"Loading replay data for game {game_id} from local files")
+            replay_path = os.path.join(backend_path, "completed_games", f"snake_game_{game_id}.json")
+            if not os.path.exists(replay_path):
+                raise ValueError(f"Could not find replay data for game {game_id} at {replay_path}")
+            with open(replay_path, 'r') as f:
+                replay_data = json.load(f)
 
         metadata, rounds = self._normalize_replay(replay_data)
         model_ids = list(metadata.get('models', {}).keys())

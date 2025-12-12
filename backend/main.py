@@ -18,7 +18,6 @@ from players import Player, RandomPlayer, LLMPlayer
 load_dotenv()
 
 _disable_internal_db = os.getenv('SNAKEBENCH_DISABLE_INTERNAL_DB', '').strip().lower() in {'1', 'true', 'yes'}
-_disable_supabase = os.getenv('SNAKEBENCH_DISABLE_SUPABASE', '').strip().lower() in {'1', 'true', 'yes'}
 
 # Import data access functions for DB persistence
 try:
@@ -561,22 +560,11 @@ class SnakeGame:
             "metadata": metadata  # Keep for compatibility with existing tools
         }
 
-        if _disable_supabase:
-            self.replay_storage_path = f"completed_games/{filename}"
-            self.replay_public_url = None
-        else:
-            try:
-                from services.supabase_storage import upload_replay
-                result = upload_replay(self.game_id, data)
-                self.replay_storage_path = result['storage_path']
-                self.replay_public_url = result['public_url']
-                print(f"✓ Uploaded replay to Supabase: {self.replay_storage_path}")
-            except Exception as e:
-                print(f"✗ Failed to upload replay to Supabase: {e}")
-                self.replay_storage_path = f"completed_games/{filename}"
-                self.replay_public_url = None
+        # Always store replays locally (no cloud upload)
+        self.replay_storage_path = f"completed_games/{filename}"
+        self.replay_public_url = None
 
-        # Also write locally for debugging/backup (optional)
+        # Write replay JSON to local completed_games directory
         os.makedirs('completed_games', exist_ok=True)
         with open(f'completed_games/{filename}', "w") as f:
             json.dump(data, f, indent=2)

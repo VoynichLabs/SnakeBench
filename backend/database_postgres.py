@@ -1,13 +1,16 @@
 """
-Supabase PostgreSQL database connection and schema management.
+PostgreSQL database connection and schema management.
 
-This replaces the SQLite database.py with PostgreSQL connections
-using Supabase's connection pooler.
+Connects to PostgreSQL using DATABASE_URL (preferred) or individual
+PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE environment variables.
+
+This module is provider-agnostic and works with Railway, Render, Heroku,
+or any PostgreSQL instance.
 """
 
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
@@ -18,45 +21,53 @@ logger = logging.getLogger(__name__)
 
 def get_connection_string() -> str:
     """
-    Get the Supabase PostgreSQL connection string.
+    Get the PostgreSQL connection string.
+
+    Priority:
+    1. DATABASE_URL environment variable (standard for Railway, Heroku, etc.)
+    2. Individual PG* environment variables (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE)
 
     Returns:
-        Connection string for Supabase PostgreSQL
+        Connection string for PostgreSQL
+
+    Raises:
+        ValueError: If no valid connection configuration is found
     """
-    # Get Supabase URL and parse for connection details
-    supabase_url = os.getenv('SUPABASE_URL')
-    password = os.getenv('SUPABASE_DB_PASSWORD')
+    # Prefer DATABASE_URL (standard for Railway, Heroku, Render, etc.)
+    database_url = os.getenv('DATABASE_URL')
+    if database_url:
+        return database_url
 
-    if not supabase_url or not password:
-        raise ValueError("SUPABASE_URL and SUPABASE_DB_PASSWORD are required")
+    # Fallback to individual PG* variables
+    pghost = os.getenv('PGHOST')
+    pgport = os.getenv('PGPORT', '5432')
+    pguser = os.getenv('PGUSER')
+    pgpassword = os.getenv('PGPASSWORD')
+    pgdatabase = os.getenv('PGDATABASE')
 
-    # Extract project ref from URL (e.g., ohcwbelgdvjxleimagqp)
-    # URL format: https://ohcwbelgdvjxleimagqp.supabase.co
-    project_ref = supabase_url.split('//')[1].split('.')[0]
+    if pghost and pguser and pgpassword and pgdatabase:
+        return f"postgresql://{pguser}:{pgpassword}@{pghost}:{pgport}/{pgdatabase}"
 
-    # Connection pooler format
-    # postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-us-west-1.pooler.supabase.com:5432/postgres
-    # For direct connection (transaction mode), use port 6543
-    # For session mode (better for long connections), use port 5432
-
-    conn_string = f"postgresql://postgres.{project_ref}:{password}@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
-
-    return conn_string
+    raise ValueError(
+        "Database connection not configured. "
+        "Set DATABASE_URL or PGHOST/PGUSER/PGPASSWORD/PGDATABASE environment variables."
+    )
 
 
 def get_connection():
     """
-    Get a database connection to Supabase PostgreSQL.
+    Get a database connection to PostgreSQL.
 
     Returns:
         psycopg2 connection with RealDictCursor (returns rows as dictionaries)
     """
     try:
         conn_string = get_connection_string()
+        # Railway and most cloud providers require SSL
         conn = psycopg2.connect(conn_string, cursor_factory=RealDictCursor)
         return conn
     except Exception as e:
-        logger.error(f"Failed to connect to Supabase PostgreSQL: {e}")
+        logger.error(f"Failed to connect to PostgreSQL: {e}")
         raise
 
 
@@ -65,10 +76,10 @@ def init_database() -> None:
     Initialize the database schema.
     This is now handled by the SQL migration file (001_initial_schema.sql).
 
-    Run that migration in Supabase SQL Editor first!
+    Run that migration in your database admin tool or via Drizzle.
     """
-    print("Database schema should be initialized via Supabase SQL Editor.")
-    print("Run backend/migrations/001_initial_schema.sql if you haven't already.")
+    print("Database schema should be initialized via migrations.")
+    print("For ARC Explainer, run: npm run db:push")
 
     # Test the connection
     try:
@@ -87,21 +98,21 @@ def init_database() -> None:
         tables = [row['table_name'] for row in cursor.fetchall()]
 
         if len(tables) == 3:
-            print(f"✓ All required tables found: {', '.join(tables)}")
+            print(f"[OK] All required tables found: {', '.join(tables)}")
         else:
-            print(f"⚠ Only found {len(tables)} tables: {', '.join(tables)}")
-            print("Please run backend/migrations/001_initial_schema.sql in Supabase SQL Editor")
+            print(f"[WARN] Only found {len(tables)} tables: {', '.join(tables)}")
+            print("Run migrations to create missing tables.")
 
         cursor.close()
         conn.close()
 
     except Exception as e:
-        print(f"✗ Failed to connect to Supabase PostgreSQL: {e}")
-        print("Make sure SUPABASE_URL and SUPABASE_DB_PASSWORD are set in .env")
+        print(f"[ERROR] Failed to connect to PostgreSQL: {e}")
+        print("Make sure DATABASE_URL is set correctly.")
         raise
 
 
 if __name__ == "__main__":
     # Test the connection
-    print("Testing Supabase PostgreSQL connection...")
+    print("Testing PostgreSQL connection...")
     init_database()
