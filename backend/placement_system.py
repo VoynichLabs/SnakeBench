@@ -59,7 +59,7 @@ AGGRESSIVE_PROBE_WIN_STREAK = 3
 # Target fraction of interval when aggressive probe kicks in
 AGGRESSIVE_PROBE_TARGET_FRACTION = 0.8
 # Maximum allowed upward jump in opponent rating (conservative TrueSkill) per pick
-MAX_RATING_JUMP = 20.0
+MAX_RATING_JUMP = 5.0
 # Minimum rating delta upward after a win (avoid replaying same/lower while on a climb)
 MIN_ASCEND_RATING_DELTA = 0.01
 
@@ -91,7 +91,7 @@ class GameResultDetail:
     game_id: str
     opponent_id: int
     opponent_name: str
-    opponent_elo: float
+    opponent_rating: float
     opponent_rank: int
     result: str  # 'won', 'lost', 'tied'
     my_score: int
@@ -222,7 +222,7 @@ class SkillEstimate:
 
     def update(
         self,
-        opponent_elo: float,
+        opponent_rating: float,
         result: str,
         confidence: float,
         margin_factor: float = 1.0,
@@ -232,7 +232,7 @@ class SkillEstimate:
         Update skill estimate based on game result.
 
         Args:
-            opponent_elo: ELO rating of the opponent
+        opponent_rating: rating of the opponent (TrueSkill exposed)
             result: 'won', 'lost', or 'tied'
             confidence: How much to trust this result (0.0 to 1.0)
             margin_factor: Multiplier based on score differential and surprise
@@ -240,7 +240,7 @@ class SkillEstimate:
         """
         # Expected score based on current estimate using TrueSkill beta as scale.
         scale = math.sqrt(2) * TS_DEFAULT_BETA
-        expected = 1 / (1 + math.exp(-(self.mu - opponent_elo) / scale))
+        expected = 1 / (1 + math.exp(-(self.mu - opponent_rating) / scale))
 
         # Actual score
         if result == 'won':
@@ -293,8 +293,8 @@ class PlacementState:
     opponent_play_counts: Dict[int, int]  # Track how many times each opponent played
     game_history: List[Dict[str, Any]]  # Detailed history for reconstruction
     pending_rematch: Optional[int] = None  # opponent_id if rematch is pending
-    elo_low: float = DEFAULT_RATING_LOW  # Lower bound of current search interval
-    elo_high: float = DEFAULT_RATING_HIGH  # Upper bound of current search interval
+    rating_low: float = DEFAULT_RATING_LOW  # Lower bound of current search interval
+    rating_high: float = DEFAULT_RATING_HIGH  # Upper bound of current search interval
 
     def __post_init__(self):
         if self.opponent_play_counts is None:
@@ -311,8 +311,8 @@ class PlacementState:
             'opponent_play_counts': self.opponent_play_counts,
             'game_history': self.game_history,
             'pending_rematch': self.pending_rematch,
-            'elo_low': self.elo_low,
-            'elo_high': self.elo_high,
+            'rating_low': self.rating_low,
+            'rating_high': self.rating_high,
         }
 
     @classmethod
@@ -327,8 +327,8 @@ class PlacementState:
             opponent_play_counts=data.get('opponent_play_counts', {}),
             game_history=data.get('game_history', []),
             pending_rematch=data.get('pending_rematch'),
-            elo_low=data.get('elo_low', DEFAULT_RATING_LOW),
-            elo_high=data.get('elo_high', DEFAULT_RATING_HIGH),
+            rating_low=data.get('rating_low', data.get('elo_low', DEFAULT_RATING_LOW)),
+            rating_high=data.get('rating_high', data.get('elo_high', DEFAULT_RATING_HIGH)),
         )
 
 
@@ -383,8 +383,8 @@ def init_placement_state(model_id: int, max_games: int = 9) -> PlacementState:
         opponent_play_counts={},
         game_history=[],
         pending_rematch=None,
-        elo_low=DEFAULT_RATING_LOW,
-        elo_high=DEFAULT_RATING_HIGH,
+        rating_low=DEFAULT_RATING_LOW,
+        rating_high=DEFAULT_RATING_HIGH,
     )
 
 
@@ -404,7 +404,7 @@ def calculate_information_gain(
 
     Args:
         skill: Current skill estimate
-        opponent_rating: rating of potential opponent (trueskill_exposed)
+    opponent_rating: rating of potential opponent (TrueSkill exposed)
         opponent_id: ID of potential opponent
         play_count: How many times we've played this opponent
 
@@ -445,15 +445,15 @@ def ensure_interval_bounds(
     If missing, derive from the leaderboard with a small buffer; otherwise
     fall back to sensible defaults.
     """
-    if getattr(state, "elo_low", None) is None or getattr(state, "elo_high", None) is None:
+    if getattr(state, "rating_low", None) is None or getattr(state, "rating_high", None) is None:
         if ranked_models:
             ratings = [m[2] for m in ranked_models]
-            state.elo_low = min(ratings) - INTERVAL_BUFFER
-            state.elo_high = max(ratings) + INTERVAL_BUFFER
+            state.rating_low = min(ratings) - INTERVAL_BUFFER
+            state.rating_high = max(ratings) + INTERVAL_BUFFER
         else:
-            state.elo_low = DEFAULT_RATING_LOW
-            state.elo_high = DEFAULT_RATING_HIGH
-    return state.elo_low, state.elo_high
+            state.rating_low = DEFAULT_RATING_LOW
+            state.rating_high = DEFAULT_RATING_HIGH
+    return state.rating_low, state.rating_high
 
 
 def window_from_sigma(sigma: float, norm_margin: float) -> float:
@@ -475,7 +475,7 @@ def tighten_interval(
     expected: float,
 ) -> None:
     """
-    Update the [elo_low, elo_high] interval based on the result.
+    Update the [rating_low, rating_high] interval based on the result.
 
     Wins lift the floor, losses lower the ceiling, draws only raise the floor
     when the opponent is well below current belief.
@@ -483,19 +483,19 @@ def tighten_interval(
     step = window_from_sigma(state.skill.sigma, norm_margin)
 
     if result == 'won':
-        state.elo_low = max(state.elo_low, opponent_rating - step)
+        state.rating_low = max(state.rating_low, opponent_rating - step)
     elif result == 'lost':
-        state.elo_high = min(state.elo_high, opponent_rating + step)
+        state.rating_high = min(state.rating_high, opponent_rating + step)
     else:  # tied
         # Only lift the floor on draws vs clearly weaker opponents
         if opponent_rating < state.skill.mu - 0.5 * state.skill.sigma:
-            state.elo_low = max(state.elo_low, opponent_rating - step / 2)
+            state.rating_low = max(state.rating_low, opponent_rating - step / 2)
 
     # Guard against inverted bounds
-    if state.elo_low > state.elo_high:
-        mid = (state.elo_low + state.elo_high) / 2
-        state.elo_low = mid
-        state.elo_high = mid
+    if state.rating_low > state.rating_high:
+        mid = (state.rating_low + state.rating_high) / 2
+        state.rating_low = mid
+        state.rating_high = mid
 
 
 def should_rematch(
@@ -578,39 +578,39 @@ def select_next_opponent_with_reason(
         return None, debug
 
     # Ensure interval bounds are seeded
-    elo_low, elo_high = ensure_interval_bounds(state, ranked_models)
-    debug["interval"] = (elo_low, elo_high)
+    rating_low, rating_high = ensure_interval_bounds(state, ranked_models)
+    debug["interval"] = (rating_low, rating_high)
 
     # Check for pending rematch
     if state.pending_rematch is not None:
-        for model_id, name, elo, rank in candidates:
+        for model_id, name, rating, rank in candidates:
             if model_id == state.pending_rematch:
                 debug.update({
                     "reason": "pending_rematch",
                     "opponent_id": model_id,
                 })
-                return (model_id, name, elo, rank), debug
+                return (model_id, name, rating, rank), debug
         # Rematch opponent not found (maybe deactivated), clear it
         state.pending_rematch = None
 
     # If we just won, prefer strictly higher-rated opponents to keep climbing.
     last_game = state.game_history[-1] if state.game_history else None
-    last_win_elo = None
+    last_win_rating = None
     if last_game and last_game.get("result") == "won":
-        last_win_elo = last_game.get("opponent_elo")
+        last_win_rating = last_game.get("opponent_rating")
 
     filtered_candidates = candidates
-    if last_win_elo is not None:
-        upward = [c for c in candidates if c[2] > last_win_elo + MIN_ASCEND_RATING_DELTA]
+    if last_win_rating is not None:
+        upward = [c for c in candidates if c[2] > last_win_rating + MIN_ASCEND_RATING_DELTA]
         if upward:
             filtered_candidates = upward
-            debug["ascend_filter_from"] = last_win_elo
+            debug["ascend_filter_from"] = last_win_rating
             debug["ascend_filter_count"] = len(upward)
 
     candidates = filtered_candidates
 
     # Choose a target rating: midpoint by default; escalate on confidence streaks.
-    interval_span = max(0.0, elo_high - elo_low)
+    interval_span = max(0.0, rating_high - rating_low)
     target_fraction = 0.5
     probe_reason = "midpoint"
 
@@ -638,34 +638,34 @@ def select_next_opponent_with_reason(
             else:
                 probe_reason = "midpoint_hold"
 
-    target_elo = elo_low + target_fraction * interval_span
+    target_rating = rating_low + target_fraction * interval_span
 
     # Cap how far above the last opponent we can jump in one pick to avoid
     # skipping large swaths of the ladder in a single move.
     if state.game_history:
-        last_opponent_rating = state.game_history[-1].get("opponent_elo")
+        last_opponent_rating = state.game_history[-1].get("opponent_rating")
         if last_opponent_rating is not None:
-            target_elo = min(target_elo, last_opponent_rating + MAX_RATING_JUMP)
+            target_rating = min(target_rating, last_opponent_rating + MAX_RATING_JUMP)
 
-    debug["target_elo"] = target_elo
+    debug["target_rating"] = target_rating
     debug["probe"] = probe_reason
 
     # Score each candidate by distance to target, breaking ties with information gain
     best = None
     best_key = None
-    for model_id, name, elo, rank in candidates:
+    for model_id, name, rating, rank in candidates:
         play_count = state.opponent_play_counts.get(model_id, 0)
-        info_gain = calculate_information_gain(state.skill, elo, model_id, play_count)
-        distance = abs(elo - target_elo)
+        info_gain = calculate_information_gain(state.skill, rating, model_id, play_count)
+        distance = abs(rating - target_rating)
         # Prefer closer to target; if equal distance, pick higher info_gain
         key = (distance, -info_gain)
         if best is None or key < best_key:
-            best = (model_id, name, elo, rank)
+            best = (model_id, name, rating, rank)
             best_key = key
             debug.update({
                 "selected_id": model_id,
                 "selected_name": name,
-                "selected_elo": elo,
+                "selected_rating": rating,
                 "selected_rank": rank,
                 "distance_to_target": distance,
                 "info_gain": info_gain,
@@ -678,7 +678,7 @@ def select_next_opponent_with_reason(
 def update_placement_state(
     state: PlacementState,
     game_result: Dict[str, Any],
-    opponent_elo: float
+    opponent_rating: float
 ) -> None:
     """
     Update placement state based on a completed game.
@@ -692,7 +692,7 @@ def update_placement_state(
             - opponent_score: int
             - my_death_reason: Optional[str]
             - total_rounds: int
-    opponent_elo: rating of the opponent at match time (trueskill_exposed)
+    opponent_rating: rating of the opponent at match time (TrueSkill exposed)
     """
     opponent_id = game_result['opponent_id']
     result = game_result['result']
@@ -711,7 +711,7 @@ def update_placement_state(
 
     # Expected vs actual for rating update
     scale = math.sqrt(2) * TS_DEFAULT_BETA
-    expected = 1 / (1 + math.exp(-(state.skill.mu - opponent_elo) / scale))
+    expected = 1 / (1 + math.exp(-(state.skill.mu - opponent_rating) / scale))
     if result == 'won':
         actual = 1.0
     elif result == 'lost':
@@ -727,7 +727,7 @@ def update_placement_state(
 
     # Update skill estimate
     state.skill.update(
-        opponent_elo,
+        opponent_rating,
         result,
         confidence,
         margin_factor=margin_factor,
@@ -735,7 +735,7 @@ def update_placement_state(
     )
 
     # Tighten interval based on result
-    tighten_interval(state, opponent_elo, result, norm_margin, expected)
+    tighten_interval(state, opponent_rating, result, norm_margin, expected)
 
     # Track opponent
     state.opponents_played.add(opponent_id)
@@ -744,7 +744,7 @@ def update_placement_state(
     # Add to history
     state.game_history.append({
         **game_result,
-        'opponent_elo': opponent_elo,
+        'opponent_rating': opponent_rating,
         'confidence': confidence,
     })
 
@@ -769,7 +769,7 @@ def get_final_rank(
     """
     Determine final rank based on skill estimate.
 
-    Compares the model's estimated skill (mu) against the ELO ratings
+    Compares the model's estimated skill (mu) against the TrueSkill exposed ratings
     of all ranked models to find where it belongs.
 
     Args:
@@ -787,8 +787,8 @@ def get_final_rank(
 
     # Find where our skill estimate fits in the leaderboard
     final_rank = 0
-    for idx, (_, _, elo, _) in enumerate(ranked_models):
-        if state.skill.mu < elo:
+    for idx, (_, _, rating, _) in enumerate(ranked_models):
+        if state.skill.mu < rating:
             final_rank = idx + 1
 
     return final_rank
@@ -816,7 +816,7 @@ def rebuild_state_from_history(
         Tuple of (reconstructed state, number of completed games)
     """
     # Create a lookup for opponent ratings
-    elo_lookup = {m[0]: m[2] for m in ranked_models}
+    rating_lookup = {m[0]: m[2] for m in ranked_models}
 
     # Initialize fresh state
     state = init_placement_state(model_id, max_games)
@@ -829,10 +829,10 @@ def rebuild_state_from_history(
         if opponent_id is None or result is None:
             continue
 
-        # Get opponent ELO (use stored value or look up current)
-        opponent_elo = record.get('opponent_elo')
-        if opponent_elo is None:
-            opponent_elo = elo_lookup.get(opponent_id, 1500.0)
+        # Get opponent rating (use stored value or look up current)
+        opponent_rating = record.get('opponent_rating') or record.get('opponent_elo')
+        if opponent_rating is None:
+            opponent_rating = rating_lookup.get(opponent_id, TS_DEFAULT_MU)
 
         # Build game result dict
         game_result = {
@@ -845,7 +845,7 @@ def rebuild_state_from_history(
         }
 
         # Update state with this game
-        update_placement_state(state, game_result, opponent_elo)
+        update_placement_state(state, game_result, opponent_rating)
 
     return state, len(history)
 
