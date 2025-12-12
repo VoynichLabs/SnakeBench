@@ -4,6 +4,24 @@ from json.decoder import JSONDecodeError
 from openai import OpenAI
 from typing import Dict, Any, Optional
 
+
+def _sanitize_env_value(value: Optional[str]) -> Optional[str]:
+    """
+    Clean up env-provided strings that may include surrounding quotes or whitespace.
+
+    Some shells/export flows set values like OPENROUTER_API_KEY="sk-or-...".
+    The OpenAI SDK forwards the raw string, so we strip wrapping quotes here
+    to avoid 401s that look like "No cookie auth credentials found".
+    """
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if len(cleaned) >= 2 and (
+        (cleaned[0] == '"' and cleaned[-1] == '"') or (cleaned[0] == "'" and cleaned[-1] == "'")
+    ):
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
+
 class LLMProviderInterface:
     """
     A common interface for LLM calls.
@@ -51,8 +69,9 @@ class LLMProviderInterface:
 
 class OpenRouterProvider(LLMProviderInterface):
     def __init__(self, api_key: str, config: Dict[str, Any]):
-        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        raw_base_url = os.getenv("OPENROUTER_BASE_URL")
+        base_url = _sanitize_env_value(raw_base_url) or "https://openrouter.ai/api/v1"
+        self.client = OpenAI(api_key=_sanitize_env_value(api_key) or api_key, base_url=base_url)
         self.model_name = config['model_name']
         self.api_type = config.get('api_type', 'completions')
         self.api_kwargs = self.extract_api_kwargs(config)
@@ -79,6 +98,8 @@ class OpenRouterProvider(LLMProviderInterface):
                 reasoning = request_kwargs.get("reasoning")
                 if not isinstance(reasoning, dict):
                     reasoning = {}
+                if "effort" not in reasoning:
+                    reasoning["effort"] = "medium"
                 if "summary" not in reasoning:
                     reasoning["summary"] = "detailed"
                 request_kwargs["reasoning"] = reasoning
@@ -124,17 +145,37 @@ class OpenRouterProvider(LLMProviderInterface):
             if not output:
                 raise ValueError(f"OpenRouter response missing output field: {response}")
 
-            message = output[0]
-            content = getattr(message, "content", None)
-            if content is None and isinstance(message, dict):
-                content = message.get("content")
-            if not content:
-                raise ValueError(f"OpenRouter response missing content block: {message}")
+            # Responses output can contain reasoning items before the actual message.
+            # Find the first content block that carries text.
+            text = None
+            for item in output:
+                content = getattr(item, "content", None)
+                if content is None and isinstance(item, dict):
+                    content = item.get("content")
+                if not content:
+                    continue
 
-            block = content[0]
-            text = getattr(block, "text", None)
-            if text is None and isinstance(block, dict):
-                text = block.get("text", "")
+                for block in content:
+                    block_type = getattr(block, "type", None)
+                    if block_type is None and isinstance(block, dict):
+                        block_type = block.get("type")
+
+                    block_text = getattr(block, "text", None)
+                    if block_text is None and isinstance(block, dict):
+                        block_text = block.get("text")
+
+                    if block_text and (block_type in {None, "output_text", "text"}):
+                        text = block_text
+                        break
+
+                if text:
+                    break
+
+            if text is None:
+                # Fallback: some SDK versions expose a flattened "output_text" helper.
+                text = getattr(response, "output_text", None)
+            if not text:
+                raise ValueError(f"OpenRouter response missing text content: {output}")
 
             # Extract usage information
             usage = getattr(response, "usage", None)
@@ -215,7 +256,8 @@ def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
     Factory function for creating an LLM provider instance.
     All models now route through OpenRouter.
     """
-    if not os.getenv("OPENROUTER_API_KEY"):
+    api_key = _sanitize_env_value(os.getenv("OPENROUTER_API_KEY"))
+    if not api_key:
         raise ValueError("OPENROUTER_API_KEY is not set in the environment variables.")
 
-    return OpenRouterProvider(api_key=os.getenv("OPENROUTER_API_KEY"), config=player_config)
+    return OpenRouterProvider(api_key=api_key, config=player_config)
