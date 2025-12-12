@@ -92,7 +92,7 @@ def fetch_eval_history(conn, model_id: int) -> List[Dict]:
     - Scores for both players
     - Death reason and round
     - Total rounds played
-    - Opponent ELO at match time
+    - Opponent rating (TrueSkill exposed) at match time
     """
     cursor = conn.cursor()
     cursor.execute(
@@ -127,13 +127,13 @@ def fetch_eval_history(conn, model_id: int) -> List[Dict]:
                 LIMIT 1
             ) AS opponent_rank_at_match,
             (
-                SELECT m.elo_rating
+                SELECT m.trueskill_exposed
                 FROM game_participants opp
                 JOIN models m ON m.id = opp.model_id
                 WHERE opp.game_id = g.id
                   AND opp.model_id != gp.model_id
                 LIMIT 1
-            ) AS opponent_elo
+            ) AS opponent_rating
         FROM games g
         JOIN game_participants gp ON gp.game_id = g.id
         WHERE gp.model_id = %s
@@ -169,7 +169,7 @@ def dispatch_eval_game(
     game_params: Dict[str, int],
     model_rank_at_match: Optional[int] = None,
     opponent_rank_at_match: Optional[int] = None,
-    opponent_elo_at_match: Optional[float] = None,
+    opponent_rating_at_match: Optional[float] = None,
 ) -> str:
     """
     Enqueue a single evaluation game between two named models.
@@ -181,7 +181,7 @@ def dispatch_eval_game(
     if config_a is None or config_b is None:
         raise ValueError(f"Could not load configs for {model_name} vs {opponent_name}")
 
-    # Add rank and ELO information to game_params for storage during game creation
+    # Add rank and rating information to game_params for storage during game creation
     enhanced_params = {
         **game_params,
         "game_type": "evaluation",
@@ -189,9 +189,9 @@ def dispatch_eval_game(
             "0": model_rank_at_match,  # Player 0 is model_a
             "1": opponent_rank_at_match  # Player 1 is model_b
         },
-        "player_elos": {
-            "0": None,  # New model doesn't have ELO yet
-            "1": opponent_elo_at_match
+        "player_ratings": {
+            "0": None,  # New model doesn't have a rating yet
+            "1": opponent_rating_at_match
         }
     }
 
@@ -233,9 +233,6 @@ def run_evaluation_batch(
             stats["no_ranked"] = True
             printer("No ranked models available to compare against. Aborting.")
             return stats
-
-        # Create ELO lookup for quick access
-        elo_lookup = {m[0]: m[2] for m in ranked_models}
 
         candidates = fetch_candidates(conn, max_models)
         if not candidates:
@@ -294,7 +291,7 @@ def run_evaluation_batch(
                 stats["finalized"].append(model_name)
                 continue
 
-            opponent_id, opponent_name, opponent_elo, opponent_rank = opponent
+            opponent_id, opponent_name, opponent_rating, opponent_rank = opponent
 
             # Check if this is a rematch
             is_rematch = state.pending_rematch == opponent_id
@@ -303,7 +300,7 @@ def run_evaluation_batch(
                 stats["rematches"].append(model_name)
 
             interval = debug.get("interval")
-            target_elo = debug.get("target_elo")
+            target_rating = debug.get("target_rating")
             distance = debug.get("distance_to_target")
             info_gain = debug.get("info_gain")
             probe = debug.get("probe")
@@ -311,9 +308,9 @@ def run_evaluation_batch(
             selection_meta = []
             if probe:
                 selection_meta.append(f"probe={probe}")
-            if target_elo is not None and interval:
+            if target_rating is not None and interval:
                 selection_meta.append(
-                    f"target={target_elo:.1f} interval=[{interval[0]:.1f}, {interval[1]:.1f}]"
+                    f"target={target_rating:.1f} interval=[{interval[0]:.1f}, {interval[1]:.1f}]"
                 )
             if distance is not None:
                 selection_meta.append(f"dist={distance:.1f}")
@@ -325,7 +322,7 @@ def run_evaluation_batch(
             meta_str = f" [{' | '.join(selection_meta)}]" if selection_meta else ""
 
             printer(
-                f"  Next opponent: {opponent_name} (rank #{opponent_rank}, ELO {opponent_elo:.1f})"
+                f"  Next opponent: {opponent_name} (rank #{opponent_rank}, rating {opponent_rating:.1f})"
                 f"{' [REMATCH]' if is_rematch else ''}{meta_str}"
             )
 
@@ -339,7 +336,7 @@ def run_evaluation_batch(
                     game_params,
                     model_rank_at_match=model_rank_index,
                     opponent_rank_at_match=opponent_rank,
-                    opponent_elo_at_match=opponent_elo,
+                    opponent_rating_at_match=opponent_rating,
                 )
                 printer(f"  Enqueued Celery task: {task_id}")
                 stats["enqueued"].append(

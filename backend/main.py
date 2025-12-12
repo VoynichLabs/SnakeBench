@@ -355,7 +355,18 @@ class SnakeGame:
                 self.game_result = {snakes_died_this_round[0]: "lost", survivor: "won"}
             else:  # both died
                 self.game_over = True
-                self.game_result = {sid: "tied" for sid in self.snakes}
+                ids = list(self.snakes.keys())
+                score_by_id = {sid: self.scores.get(sid, 0) for sid in ids}
+                top_score = max(score_by_id.values()) if score_by_id else 0
+                winners = [sid for sid, sc in score_by_id.items() if sc == top_score]
+                if len(winners) == 1:
+                    winner = winners[0]
+                    self.game_result = {
+                        sid: ("won" if sid == winner else "lost")
+                        for sid in ids
+                    }
+                else:
+                    self.game_result = {sid: "tied" for sid in ids}
 
             self.round_number += 1
             self.record_frame(round_index, round_moves, events=events)
