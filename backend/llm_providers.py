@@ -2,7 +2,7 @@ import os
 import json
 from json.decoder import JSONDecodeError
 from openai import OpenAI
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple, Union
 
 
 def _sanitize_env_value(value: Optional[str]) -> Optional[str]:
@@ -21,6 +21,93 @@ def _sanitize_env_value(value: Optional[str]) -> Optional[str]:
     ):
         cleaned = cleaned[1:-1].strip()
     return cleaned
+
+
+def _normalize_provider_name(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return str(value).strip().lower()
+
+
+def _normalize_openai_model_name(model_name: str) -> str:
+    """
+    Allow SnakeBench configs that use OpenRouter-style namespaces like "openai/gpt-5.1-codex"
+    while still calling OpenAI directly with the native model id (e.g. "gpt-5.1-codex").
+    """
+    if not model_name:
+        return model_name
+    cleaned = str(model_name).strip()
+    if cleaned.startswith("openai/"):
+        return cleaned[len("openai/") :]
+    return cleaned
+
+
+def _build_responses_input(prompt: str) -> List[Dict[str, Any]]:
+    """
+    Build a Responses API compliant input payload (role/content items, not chat messages).
+    """
+    return [
+        {
+            "role": "user",
+            "content": [
+                {"type": "input_text", "text": prompt},
+            ],
+        }
+    ]
+
+
+def _extract_text_from_responses_output(response: Any, *, provider_label: str) -> Tuple[str, int, int]:
+    """
+    Extract (text, input_tokens, output_tokens) from an OpenAI Responses-like payload.
+
+    Supports both SDK objects and dict-like payloads. This logic is shared by OpenRouter
+    (proxy) and direct OpenAI providers.
+    """
+    output = getattr(response, "output", None)
+    if output is None and isinstance(response, dict):
+        output = response.get("output")
+    if not output:
+        raise ValueError(f"{provider_label} response missing output field: {response}")
+
+    text = None
+    for item in output:
+        content = getattr(item, "content", None)
+        if content is None and isinstance(item, dict):
+            content = item.get("content")
+        if not content:
+            continue
+
+        for block in content:
+            block_type = getattr(block, "type", None)
+            if block_type is None and isinstance(block, dict):
+                block_type = block.get("type")
+
+            block_text = getattr(block, "text", None)
+            if block_text is None and isinstance(block, dict):
+                block_text = block.get("text")
+
+            if block_text and (block_type in {None, "output_text", "text"}):
+                text = block_text
+                break
+
+        if text:
+            break
+
+    if text is None:
+        text = getattr(response, "output_text", None)
+
+    if not text:
+        raise ValueError(f"{provider_label} response missing text content: {output}")
+
+    usage = getattr(response, "usage", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage", {})
+
+    input_tokens = getattr(usage, "input_tokens", 0) if usage else 0
+    output_tokens = getattr(usage, "output_tokens", 0) if usage else 0
+
+    return str(text or "").strip(), int(input_tokens or 0), int(output_tokens or 0)
+
 
 class LLMProviderInterface:
     """
@@ -139,53 +226,14 @@ class OpenRouterProvider(LLMProviderInterface):
                     preview = response[:200].replace('\n', ' ')
                     raise ValueError(f"OpenRouter returned unexpected text payload: {preview}...")
 
-            output = getattr(response, "output", None)
-            if output is None and isinstance(response, dict):
-                output = response.get("output")
-            if not output:
-                raise ValueError(f"OpenRouter response missing output field: {response}")
-
-            # Responses output can contain reasoning items before the actual message.
-            # Find the first content block that carries text.
-            text = None
-            for item in output:
-                content = getattr(item, "content", None)
-                if content is None and isinstance(item, dict):
-                    content = item.get("content")
-                if not content:
-                    continue
-
-                for block in content:
-                    block_type = getattr(block, "type", None)
-                    if block_type is None and isinstance(block, dict):
-                        block_type = block.get("type")
-
-                    block_text = getattr(block, "text", None)
-                    if block_text is None and isinstance(block, dict):
-                        block_text = block.get("text")
-
-                    if block_text and (block_type in {None, "output_text", "text"}):
-                        text = block_text
-                        break
-
-                if text:
-                    break
-
-            if text is None:
-                # Fallback: some SDK versions expose a flattened "output_text" helper.
-                text = getattr(response, "output_text", None)
-            if not text:
-                raise ValueError(f"OpenRouter response missing text content: {output}")
-
-            # Extract usage information
-            usage = getattr(response, "usage", None)
-            if usage is None and isinstance(response, dict):
-                usage = response.get("usage", {})
+            text, input_tokens, output_tokens = _extract_text_from_responses_output(
+                response, provider_label="OpenRouter"
+            )
 
             return {
-                "text": str(text or "").strip(),
-                "input_tokens": getattr(usage, "input_tokens", 0) if usage else 0,
-                "output_tokens": getattr(usage, "output_tokens", 0) if usage else 0
+                "text": text,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
             }
         else:
             try:
@@ -251,11 +299,101 @@ class OpenRouterProvider(LLMProviderInterface):
             return True
 
 
+class OpenAIProvider(LLMProviderInterface):
+    """
+    Direct OpenAI provider using the Responses API.
+
+    Uses OPENAI_API_KEY and calls /v1/responses via the official OpenAI SDK.
+    """
+
+    def __init__(self, api_key: str, config: Dict[str, Any]):
+        self.client = OpenAI(api_key=_sanitize_env_value(api_key) or api_key)
+        self.model_name = _normalize_openai_model_name(config["model_name"])
+        self.api_type = config.get("api_type", "responses")
+        self.api_kwargs = self.extract_api_kwargs(config)
+
+    def get_response(self, prompt: str) -> Dict[str, Any]:
+        request_kwargs = dict(self.api_kwargs)
+
+        if self.api_type != "responses":
+            raise ValueError("Direct OpenAI provider only supports api_type='responses'")
+
+        reasoning = request_kwargs.get("reasoning")
+        if not isinstance(reasoning, dict):
+            reasoning = {}
+        if "effort" not in reasoning:
+            reasoning["effort"] = "medium"
+        if "summary" not in reasoning:
+            reasoning["summary"] = "detailed"
+        request_kwargs["reasoning"] = reasoning
+
+        text = request_kwargs.get("text")
+        if not isinstance(text, dict):
+            text = {}
+        if "verbosity" not in text:
+            text["verbosity"] = "medium"
+        request_kwargs["text"] = text
+
+        # SnakeBench game calls should not store conversation by default.
+        # If caller provides store explicitly, honor it.
+        if "store" not in request_kwargs:
+            request_kwargs["store"] = False
+
+        response = self.client.responses.create(
+            model=self.model_name,
+            input=_build_responses_input(prompt),
+            **request_kwargs,
+        )
+
+        text, input_tokens, output_tokens = _extract_text_from_responses_output(
+            response, provider_label="OpenAI"
+        )
+
+        return {
+            "text": text,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        }
+
+    def health_check(self) -> bool:
+        try:
+            request_kwargs = dict(self.api_kwargs)
+            request_kwargs["max_output_tokens"] = 1
+            if "store" not in request_kwargs:
+                request_kwargs["store"] = False
+
+            self.client.responses.create(
+                model=self.model_name,
+                input=_build_responses_input("test"),
+                **request_kwargs,
+            )
+            return True
+        except Exception as e:
+            error_str = str(e).lower()
+            if "404" in error_str or "model not found" in error_str or "not found" in error_str:
+                return False
+            print(f"Warning: OpenAI health check failed with non-404 error: {e}")
+            return True
+
+
 def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
     """
     Factory function for creating an LLM provider instance.
-    All models now route through OpenRouter.
+
+    Supports:
+    - OpenRouter (default): OPENROUTER_API_KEY + base_url=https://openrouter.ai/api/v1
+    - OpenAI direct: OPENAI_API_KEY + /v1/responses
     """
+    provider_name = _normalize_provider_name(player_config.get("provider"))
+
+    # Common aliases seen in configs and other layers.
+    if provider_name in {"openai", "openai direct"}:
+        api_key = _sanitize_env_value(os.getenv("OPENAI_API_KEY"))
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
+        return OpenAIProvider(api_key=api_key, config=player_config)
+
+    # Default to OpenRouter. "OpenRouter" (runner), "openrouter" (BYO key), or empty.
     api_key = _sanitize_env_value(os.getenv("OPENROUTER_API_KEY"))
     if not api_key:
         raise ValueError("OPENROUTER_API_KEY is not set in the environment variables.")
