@@ -6,6 +6,10 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
 
 ## Project Overview
 
+## ARC Explainer note
+
+When SnakeBench is used via ARC Explainer with OpenRouter models under the `openai/*` or `x-ai/*` namespaces, the integration enforces Responses API defaults for reasoning capture: `reasoning.summary: "detailed"`, `text.verbosity: "medium"`, `store: true`, and `include: ["reasoning.encrypted_content"]`.
+
 ### Backend: Game Simulation (`backend/main.py` & Celery workers)
 
 - **Snake & Game Mechanics:**
