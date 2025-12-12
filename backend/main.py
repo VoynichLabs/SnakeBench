@@ -15,6 +15,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from domain import Snake, GameState, UP, DOWN, LEFT, RIGHT, VALID_MOVES, APPLE_TARGET
 from players import Player, RandomPlayer, LLMPlayer
 
+load_dotenv()
+
+_disable_internal_db = os.getenv('SNAKEBENCH_DISABLE_INTERNAL_DB', '').strip().lower() in {'1', 'true', 'yes'}
+_disable_supabase = os.getenv('SNAKEBENCH_DISABLE_SUPABASE', '').strip().lower() in {'1', 'true', 'yes'}
+
 # Import data access functions for DB persistence
 try:
     from data_access import (
@@ -36,7 +41,8 @@ except ImportError as e:
     print("Database persistence will be disabled.")
     DB_AVAILABLE = False
 
-load_dotenv()
+if _disable_internal_db:
+    DB_AVAILABLE = False
 
 class SnakeGame:
     """
@@ -555,18 +561,20 @@ class SnakeGame:
             "metadata": metadata  # Keep for compatibility with existing tools
         }
 
-        # Upload to Supabase Storage
-        try:
-            from services.supabase_storage import upload_replay
-            result = upload_replay(self.game_id, data)
-            self.replay_storage_path = result['storage_path']
-            self.replay_public_url = result['public_url']
-            print(f"✓ Uploaded replay to Supabase: {self.replay_storage_path}")
-        except Exception as e:
-            print(f"✗ Failed to upload replay to Supabase: {e}")
-            # Fall back to storing local path if upload fails
+        if _disable_supabase:
             self.replay_storage_path = f"completed_games/{filename}"
             self.replay_public_url = None
+        else:
+            try:
+                from services.supabase_storage import upload_replay
+                result = upload_replay(self.game_id, data)
+                self.replay_storage_path = result['storage_path']
+                self.replay_public_url = result['public_url']
+                print(f"✓ Uploaded replay to Supabase: {self.replay_storage_path}")
+            except Exception as e:
+                print(f"✗ Failed to upload replay to Supabase: {e}")
+                self.replay_storage_path = f"completed_games/{filename}"
+                self.replay_public_url = None
 
         # Also write locally for debugging/backup (optional)
         os.makedirs('completed_games', exist_ok=True)
