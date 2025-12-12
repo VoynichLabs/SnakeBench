@@ -124,3 +124,26 @@ def test_openai_provider_uses_responses_input_items(monkeypatch):
 
     for forbidden_key in ("trueskill_mu", "trueskill_sigma", "trueskill_exposed"):
         assert forbidden_key not in responses.last_kwargs
+
+
+def test_factory_prefers_openai_for_openai_models_when_key_present(monkeypatch):
+    responses = DummyResponses()
+
+    class DummyClient:
+        def __init__(self, *args, **kwargs):
+            self.responses = SimpleNamespace(create=responses.create)
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=lambda **_: None))
+
+    monkeypatch.setattr(llm_providers, "OpenAI", DummyClient)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    provider = llm_providers.create_llm_provider(
+        {
+            "name": "test-model",
+            "model_name": "openai/gpt-5.1-codex-mini",
+            # provider omitted on purpose: should prefer OpenAI direct
+        }
+    )
+
+    assert isinstance(provider, llm_providers.OpenAIProvider)

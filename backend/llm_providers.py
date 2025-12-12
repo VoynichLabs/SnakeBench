@@ -385,17 +385,32 @@ def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
     - OpenAI direct: OPENAI_API_KEY + /v1/responses
     """
     provider_name = _normalize_provider_name(player_config.get("provider"))
+    model_name = str(player_config.get("model_name") or "")
+    normalized_model = _normalize_openai_model_name(model_name)
 
-    # Common aliases seen in configs and other layers.
+    openai_api_key = _sanitize_env_value(os.getenv("OPENAI_API_KEY"))
+    openrouter_api_key = _sanitize_env_value(os.getenv("OPENROUTER_API_KEY"))
+
+    # Explicit provider selection always wins.
     if provider_name in {"openai", "openai direct"}:
-        api_key = _sanitize_env_value(os.getenv("OPENAI_API_KEY"))
-        if not api_key:
+        if not openai_api_key:
             raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
-        return OpenAIProvider(api_key=api_key, config=player_config)
+        return OpenAIProvider(api_key=openai_api_key, config=player_config)
 
-    # Default to OpenRouter. "OpenRouter" (runner), "openrouter" (BYO key), or empty.
-    api_key = _sanitize_env_value(os.getenv("OPENROUTER_API_KEY"))
-    if not api_key:
+    if provider_name in {"openrouter"}:
+        if not openrouter_api_key:
+            raise ValueError("OPENROUTER_API_KEY is not set in the environment variables.")
+        return OpenRouterProvider(api_key=openrouter_api_key, config=player_config)
+
+    # Preference rule:
+    # If the model is an OpenAI model and an OpenAI key is available, use OpenAI directly.
+    # This avoids routing OpenAI traffic through OpenRouter unless explicitly requested.
+    if model_name.startswith("openai/") or normalized_model.startswith("gpt-") or normalized_model.startswith("o"):
+        if openai_api_key:
+            return OpenAIProvider(api_key=openai_api_key, config=player_config)
+
+    # Default to OpenRouter for everything else.
+    if not openrouter_api_key:
         raise ValueError("OPENROUTER_API_KEY is not set in the environment variables.")
 
-    return OpenRouterProvider(api_key=api_key, config=player_config)
+    return OpenRouterProvider(api_key=openrouter_api_key, config=player_config)
