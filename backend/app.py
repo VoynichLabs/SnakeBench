@@ -170,7 +170,7 @@ def get_model_details(model_name):
         return jsonify({"error": "Failed to load model details"}), 500
 
 
-# Endpoint to get a list of games - now returns metadata with Supabase URLs
+# Endpoint to get a list of games - returns metadata with local replay paths
 # Mimics functionality in frontend/src/app/api/games/route.ts
 @app.route("/api/games", methods=["GET"])
 def get_games_endpoint():
@@ -184,31 +184,24 @@ def get_games_endpoint():
         # Get games from database
         games_data = get_games(limit=limit, offset=offset, sort_by=sort_by)
 
-        # Return game metadata with Supabase URLs instead of loading files
-        from services.supabase_storage import get_replay_public_url
-
         games_list = []
         for game_data in games_data:
+            game_id = game_data.get('id')
             replay_path = game_data.get('replay_path')
 
-            # Construct Supabase public URL from replay_path
-            # If replay_path is like "<game_id>/replay.json", extract game_id
-            # If it's old format "completed_games/...", skip it
-            if replay_path and '/' in replay_path and not replay_path.startswith('completed_games'):
-                game_id = replay_path.split('/')[0]
-                replay_url = get_replay_public_url(game_id)
+            # Build local replay path
+            if replay_path:
+                local_replay_path = replay_path
             else:
-                # Skip games with old local paths or invalid paths
-                logging.warning(f"Skipping game with invalid replay_path: {replay_path}")
-                continue
+                local_replay_path = f"completed_games/snake_game_{game_id}.json"
 
-            # Return game metadata with replay URL
+            # Return game metadata
             game_metadata = {
-                'game_id': game_data.get('id'),
+                'game_id': game_id,
                 'start_time': game_data.get('start_time'),
                 'end_time': game_data.get('end_time'),
                 'rounds': game_data.get('rounds'),
-                'replay_url': replay_url,
+                'replay_path': local_replay_path,
                 'board_width': game_data.get('board_width'),
                 'board_height': game_data.get('board_height'),
                 'total_score': game_data.get('total_score'),

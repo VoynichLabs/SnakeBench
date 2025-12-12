@@ -27,97 +27,56 @@ logger = logging.getLogger(__name__)
 backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def fetch_game_ids(limit: int | None = None, offset: int = 0, batch_size: int = 500) -> List[str]:
-    """Stream game IDs from Postgres in batches to avoid loading everything at once."""
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    try:
-        game_ids: List[str] = []
-        fetched = 0
-        current_offset = offset
-
-        while True:
-            if limit is not None:
-                # Clamp batch size to remaining requested rows
-                remaining = limit - fetched
-                if remaining <= 0:
-                    break
-                batch_take = min(batch_size, remaining)
-            else:
-                batch_take = batch_size
-
-            cursor.execute(
-                """
-                SELECT id
-                FROM games
-                ORDER BY start_time DESC
-                LIMIT %s OFFSET %s
-                """,
-                (batch_take, current_offset)
-            )
-            rows = cursor.fetchall()
-            if not rows:
-                break
-
-            game_ids.extend(row["id"] for row in rows)
-            fetched += len(rows)
-            current_offset += batch_take
-
-        return game_ids
-    finally:
-        cursor.close()
-        conn.close()
+def find_local_game_ids(limit: int | None = None, offset: int = 0) -> List[str]:
+    """Find game IDs from local completed_games directory."""
+    completed_games_dir = os.path.join(backend_path, "completed_games")
+    pattern = os.path.join(completed_games_dir, "snake_game_*.json")
+    
+    all_files = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
+    
+    game_ids: List[str] = []
+    for filepath in all_files:
+        filename = os.path.basename(filepath)
+        # Extract game ID from snake_game_<game_id>.json
+        if filename.startswith("snake_game_") and filename.endswith(".json"):
+            game_id = filename[11:-5]  # Remove "snake_game_" prefix and ".json" suffix
+            game_ids.append(game_id)
+    
+    # Apply offset and limit
+    game_ids = game_ids[offset:]
+    if limit is not None:
+        game_ids = game_ids[:limit]
+    
+    return game_ids
 
 
-def list_game_files(bucket: str, game_id: str) -> List[Dict]:
-    """List files for a game folder in Supabase Storage."""
-    supabase = get_supabase_client()
-    try:
-        return supabase.storage.from_(bucket).list(path=game_id)
-    except Exception as exc:
-        logger.warning("Could not list storage files for %s: %s", game_id, exc)
-        return []
+def video_exists_locally(game_id: str) -> bool:
+    """Check whether video file already exists locally."""
+    video_path = os.path.join(backend_path, "completed_games", f"{game_id}_replay.mp4")
+    return os.path.exists(video_path)
 
 
-def video_exists(files: Iterable[Dict]) -> bool:
-    """Check whether replay.mp4 is already present."""
-    return any(file.get("name") == "replay.mp4" for file in files)
-
-
-def replay_exists(files: Iterable[Dict]) -> bool:
-    """Check whether replay.json is present (required for generation)."""
-    return any(file.get("name") == "replay.json" for file in files)
-
-
-def process_game(game_id: str, bucket: str, force: bool = False) -> str:
-    """Generate and upload a video for a single game."""
-    files = list_game_files(bucket, game_id)
-    has_video = video_exists(files)
-    has_replay = replay_exists(files)
-
-    if has_video and not force:
+def process_game(game_id: str, output_dir: str, force: bool = False) -> str:
+    """Generate a video for a single game and save locally."""
+    if video_exists_locally(game_id) and not force:
         logger.info("%s: video already exists, skipping", game_id)
         return "skipped_existing"
 
-    if not has_replay:
-        logger.warning("%s: missing replay.json in storage, skipping", game_id)
-        return "missing_replay"
-
     try:
         generator = SnakeVideoGenerator()
-        result = generator.generate_and_upload(game_id)
-        logger.info("%s: uploaded %s", game_id, result["public_url"])
-        return "uploaded"
+        output_path = os.path.join(output_dir, f"{game_id}_replay.mp4")
+        video_path = generator.generate_video(game_id, output_path=output_path)
+        logger.info("%s: generated %s", game_id, video_path)
+        return "generated"
     except Exception as exc:  # pylint: disable=broad-except
-        logger.exception("%s: failed to generate/upload (%s)", game_id, exc)
+        logger.exception("%s: failed to generate (%s)", game_id, exc)
         return "failed"
 
 
 def main():
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Backfill missing replay videos for all games")
+    parser = argparse.ArgumentParser(description="Backfill missing replay videos for local games")
     parser.add_argument(
         "--limit",
         type=int,
@@ -127,18 +86,23 @@ def main():
         "--offset",
         type=int,
         default=0,
-        help="Start processing from this offset in the games table",
+        help="Start processing from this offset",
     )
     parser.add_argument(
         "--workers",
         type=int,
-        default=15,
-        help="Number of parallel workers (default: 15)",
+        default=4,
+        help="Number of parallel workers (default: 4)",
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Regenerate even if replay.mp4 already exists in storage",
+        help="Regenerate even if video already exists locally",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="Output directory for videos (default: completed_games)",
     )
     args = parser.parse_args()
 
@@ -147,10 +111,11 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    bucket = os.getenv("SUPABASE_BUCKET", "matches")
-    logger.info("Using bucket: %s", bucket)
+    output_dir = args.output_dir or os.path.join(backend_path, "completed_games")
+    os.makedirs(output_dir, exist_ok=True)
+    logger.info("Output directory: %s", output_dir)
 
-    game_ids = fetch_game_ids(limit=args.limit, offset=args.offset)
+    game_ids = find_local_game_ids(limit=args.limit, offset=args.offset)
     if not game_ids:
         logger.info("No games found to process")
         return
@@ -158,15 +123,14 @@ def main():
     logger.info("Processing %s games with %s workers...", len(game_ids), args.workers)
 
     results_counter: Dict[str, int] = {
-        "uploaded": 0,
+        "generated": 0,
         "skipped_existing": 0,
-        "missing_replay": 0,
         "failed": 0,
     }
 
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         future_to_game = {
-            executor.submit(process_game, game_id, bucket, args.force): game_id
+            executor.submit(process_game, game_id, output_dir, args.force): game_id
             for game_id in game_ids
         }
 
@@ -176,10 +140,9 @@ def main():
                 results_counter[status] += 1
 
     logger.info(
-        "Finished! Uploaded=%s, Skipped(existing)=%s, Missing replay=%s, Failed=%s",
-        results_counter["uploaded"],
+        "Finished! Generated=%s, Skipped(existing)=%s, Failed=%s",
+        results_counter["generated"],
         results_counter["skipped_existing"],
-        results_counter["missing_replay"],
         results_counter["failed"],
     )
 
