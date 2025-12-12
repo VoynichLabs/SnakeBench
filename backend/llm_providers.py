@@ -90,7 +90,10 @@ class OpenRouterProvider(LLMProviderInterface):
                     text["verbosity"] = "medium"
                 request_kwargs["text"] = text
 
-                request_kwargs.setdefault("store", True)
+                # OpenRouter's Responses API schema rejects store=true for proxied OpenAI/xAI models.
+                # Allow the request to proceed by omitting store entirely (or forcing false).
+                if "store" in request_kwargs:
+                    request_kwargs.pop("store", None)
 
                 include = request_kwargs.get("include")
                 if include is None:
