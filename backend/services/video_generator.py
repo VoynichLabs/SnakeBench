@@ -569,80 +569,36 @@ class SnakeVideoGenerator:
         logger.info(f"Video created successfully at {output_path}")
         return output_path
 
-    def generate_and_upload(self, game_id: str) -> Dict[str, str]:
+    def generate_and_save(self, game_id: str, output_dir: Optional[str] = None) -> str:
         """
-        Generate video and upload to Supabase Storage
+        Generate video and save to local completed_games directory
 
         Args:
             game_id: The game ID to process
+            output_dir: Optional output directory (defaults to completed_games)
 
         Returns:
-            Dictionary with storage_path and public_url
+            Path to the saved video file
         """
-        # Generate video
-        video_path = self.generate_video(game_id)
-
-        try:
-            # Upload to Supabase
-            logger.info(f"Uploading video to Supabase for game {game_id}")
-            result = self._upload_video_to_supabase(game_id, video_path)
-            logger.info(f"Video uploaded successfully: {result['public_url']}")
-            return result
-
-        finally:
-            # Clean up temp file
-            if os.path.exists(video_path):
-                os.remove(video_path)
-                logger.info(f"Cleaned up temporary file: {video_path}")
-
-    def _upload_video_to_supabase(self, game_id: str, video_path: str) -> Dict[str, str]:
-        """Upload video to Supabase Storage"""
-        bucket_name = os.getenv('SUPABASE_BUCKET')
-        if not bucket_name:
-            raise ValueError("SUPABASE_BUCKET environment variable is required")
-
-        supabase = get_supabase_client()
-        storage_path = f"{game_id}/replay.mp4"
-
-        # Read video file
-        with open(video_path, 'rb') as f:
-            video_bytes = f.read()
-
-        # Upload to Supabase Storage
-        result = supabase.storage.from_(bucket_name).upload(
-            path=storage_path,
-            file=video_bytes,
-            file_options={
-                "content-type": "video/mp4",
-                "upsert": "true"
-            }
-        )
-
-        # Construct public URL
-        supabase_url = os.getenv('SUPABASE_URL')
-        public_url = f"{supabase_url}/storage/v1/object/public/{bucket_name}/{storage_path}"
-
-        return {
-            'storage_path': storage_path,
-            'public_url': public_url
-        }
+        if output_dir is None:
+            output_dir = os.path.join(backend_path, "completed_games")
+        
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, f"{game_id}_replay.mp4")
+        
+        video_path = self.generate_video(game_id, output_path=output_path)
+        logger.info(f"Video saved to {video_path}")
+        return video_path
 
 
-def get_video_public_url(game_id: str) -> str:
+def get_video_local_path(game_id: str) -> str:
     """
-    Get the public URL for a game's video
+    Get the local path for a game's video
 
     Args:
         game_id: The game ID
 
     Returns:
-        Public URL to the video file
+        Local path to the video file
     """
-    bucket_name = os.getenv('SUPABASE_BUCKET', 'matches')
-    supabase_url = os.getenv('SUPABASE_URL')
-
-    if not supabase_url:
-        raise ValueError("SUPABASE_URL environment variable is required")
-
-    storage_path = f"{game_id}/replay.mp4"
-    return f"{supabase_url}/storage/v1/object/public/{bucket_name}/{storage_path}"
+    return os.path.join(backend_path, "completed_games", f"{game_id}_replay.mp4")
