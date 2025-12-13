@@ -216,7 +216,7 @@ class OpenRouterProvider(LLMProviderInterface):
 
             response = self.client.responses.create(
                 model=self.model_name,
-                input=prompt,
+                input=_build_responses_input(prompt),
                 **request_kwargs,
             )
             if isinstance(response, str):
