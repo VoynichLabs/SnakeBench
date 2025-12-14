@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 from dotenv import load_dotenv
 import json
+import threading
 import uuid
 import argparse
 from data_access.api_queries import get_model_by_name
@@ -42,6 +43,24 @@ except ImportError as e:
 
 if _disable_internal_db:
     DB_AVAILABLE = False
+
+_ARC_EXPLAINER_STDOUT_EVENTS = os.getenv('ARC_EXPLAINER_STDOUT_EVENTS', '').strip().lower() in {'1', 'true', 'yes'}
+_ARC_EXPLAINER_STDOUT_LOCK = threading.Lock()
+
+
+def _arc_emit(event: Dict[str, Any]) -> None:
+    if not _ARC_EXPLAINER_STDOUT_EVENTS:
+        return
+    try:
+        payload = json.dumps(event, ensure_ascii=False)
+    except Exception:
+        return
+    try:
+        with _ARC_EXPLAINER_STDOUT_LOCK:
+            print(payload, flush=True)
+    except Exception:
+        return
+
 
 class SnakeGame:
     """
@@ -83,6 +102,17 @@ class SnakeGame:
         # Store how many apples we want to keep on the board at all times
         self.num_apples = num_apples
         self.game_type = game_type
+
+        _arc_emit({
+            "type": "game.init",
+            "gameId": self.game_id,
+            "width": self.width,
+            "height": self.height,
+            "maxRounds": self.max_rounds,
+            "numApples": self.num_apples,
+            "gameType": self.game_type,
+            "ts": time.time(),
+        })
 
         # We store multiple apples as a set of (x, y) or a list.
         # Here, let's keep them as a list to preserve GameState JSON-friendliness.
@@ -217,7 +247,25 @@ class SnakeGame:
                     "output_tokens": move_data.get("output_tokens", 0),
                     "cost": move_data.get("cost", 0.0)
                 }
-                print(f"Player {snake_id} ({player_name}) chose move: {move_data['direction']} (cost: ${move_data.get('cost', 0.0):.6f})")
+                if not _ARC_EXPLAINER_STDOUT_EVENTS:
+                    print(f"Player {snake_id} ({player_name}) chose move: {move_data['direction']} (cost: ${move_data.get('cost', 0.0):.6f})")
+
+                _arc_emit({
+                    "type": "chunk",
+                    "chunk": {
+                        "type": "text",
+                        "delta": str(move_data.get("rationale", "") or ""),
+                        "content": str(move_data.get("rationale", "") or ""),
+                        "metadata": {
+                            "channel": "wormarena.llm",
+                            "snakeId": str(snake_id),
+                            "playerName": str(player_name),
+                            "round": int(getattr(state_snapshot, 'round_number', 0) or 0),
+                        },
+                        "timestamp": int(time.time() * 1000),
+                    },
+                    "ts": time.time(),
+                })
 
         return round_moves
 
@@ -238,9 +286,27 @@ class SnakeGame:
         # Capture the initial state once (before any moves are applied)
         if self.initial_state is None:
             self.initial_state = self._snapshot_state()
+            state = self.initial_state
+            _arc_emit({
+                "type": "frame",
+                "round": int(self.round_number),
+                "frame": {
+                    "state": {
+                        "width": self.width,
+                        "height": self.height,
+                        "apples": state.get("apples", []),
+                        "snakes": state.get("snakes", {}),
+                        "alive": state.get("alive", {}),
+                        "scores": state.get("scores", {}),
+                        "maxRounds": self.max_rounds,
+                    }
+                },
+                "ts": time.time(),
+            })
 
         round_index = self.round_number
-        self.print_board()
+        if not _ARC_EXPLAINER_STDOUT_EVENTS:
+            self.print_board()
 
         # --- PARALLEL GATHER OF MOVES ---
         round_moves = self.gather_moves_in_parallel(self)
@@ -375,6 +441,23 @@ class SnakeGame:
 
             self.round_number += 1
             self.record_frame(round_index, round_moves, events=events)
+            state = self._snapshot_state()
+            _arc_emit({
+                "type": "frame",
+                "round": int(self.round_number),
+                "frame": {
+                    "state": {
+                        "width": self.width,
+                        "height": self.height,
+                        "apples": state.get("apples", []),
+                        "snakes": state.get("snakes", {}),
+                        "alive": state.get("alive", {}),
+                        "scores": state.get("scores", {}),
+                        "maxRounds": self.max_rounds,
+                    }
+                },
+                "ts": time.time(),
+            })
             return
 
         # --------------------------------------------------
@@ -433,6 +516,24 @@ class SnakeGame:
 
         # Persist replay frame for this round
         self.record_frame(round_index, round_moves, events=events)
+
+        state = self._snapshot_state()
+        _arc_emit({
+            "type": "frame",
+            "round": int(self.round_number),
+            "frame": {
+                "state": {
+                    "width": self.width,
+                    "height": self.height,
+                    "apples": state.get("apples", []),
+                    "snakes": state.get("snakes", {}),
+                    "alive": state.get("alive", {}),
+                    "scores": state.get("scores", {}),
+                    "maxRounds": self.max_rounds,
+                }
+            },
+            "ts": time.time(),
+        })
 
         time.sleep(0.3)
 
@@ -688,6 +789,8 @@ class SnakeGame:
         """
         Prints a visual representation of the current board state.
         """
+        if _ARC_EXPLAINER_STDOUT_EVENTS:
+            return
         print("\n" + self.get_current_state().print_board() + "\n")
 
     def end_game(self, reason: str):
