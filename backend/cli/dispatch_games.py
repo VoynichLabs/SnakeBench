@@ -62,14 +62,14 @@ def dispatch_games(
     config_b = get_model_by_name(model_name_b)
 
     if config_a is None:
-        print(f"✗ Model '{model_name_a}' not found in database")
+        print(f"Model '{model_name_a}' not found in database")
         sys.exit(1)
     if config_b is None:
-        print(f"✗ Model '{model_name_b}' not found in database")
+        print(f"Model '{model_name_b}' not found in database")
         sys.exit(1)
 
-    print(f"✓ Loaded: {config_a['name']}")
-    print(f"✓ Loaded: {config_b['name']}")
+    print(f"Loaded: {config_a['name']}")
+    print(f"Loaded: {config_b['name']}")
 
     # Create task group
     group_id = str(uuid.uuid4())
@@ -90,8 +90,8 @@ def dispatch_games(
         if (i + 1) % 10 == 0 or (i + 1) == count:
             print(f"  Queued: {i + 1}/{count} tasks")
 
-    print(f"\n✓ All {count} tasks submitted to queue")
-    print(f"✓ Workers will process tasks in parallel")
+    print(f"\nAll {count} tasks submitted to queue")
+    print("Workers will process tasks in parallel")
 
     # Monitor if requested
     if monitor:
@@ -134,11 +134,11 @@ def monitor_tasks(task_ids: List[str]):
             progress = completed / total if total > 0 else 0
             bar_width = 40
             filled = int(bar_width * progress)
-            bar = '█' * filled + '░' * (bar_width - filled)
+            bar = '#' * filled + '-' * (bar_width - filled)
 
             # Status line
             print(f"\r[{bar}] {completed}/{total} complete "
-                  f"| ✓ {success} | ✗ {failed} | ⟳ {retry} | ▶ {in_progress} | ⋯ {pending}",
+                  f"| ok {success} | failed {failed} | retry {retry} | active {in_progress} | pending {pending}",
                   end='', flush=True)
 
             # Print newly finished game IDs for quick inspection
@@ -148,16 +148,16 @@ def monitor_tasks(task_ids: List[str]):
                     try:
                         info = r.result or {}
                         game_id = info.get('game_id') or '<unknown>'
-                        print(f"\n✓ Game complete: task_id={r.id}, game_id={game_id}")
+                        print(f"\nGame complete: task_id={r.id}, game_id={game_id}")
                     except Exception:
-                        print(f"\n✓ Game complete: task_id={r.id}")
+                        print(f"\nGame complete: task_id={r.id}")
 
             # Check if all done
             if completed == total:
-                print("\n\n✓ All tasks completed!")
+                print("\n\nAll tasks completed!")
 
                 if failed > 0:
-                    print(f"\n⚠ {failed} task(s) failed. Check worker logs for details.")
+                    print(f"\n{failed} task(s) failed. Check worker logs for details.")
                     print("\nFailed task IDs:")
                     for r in results:
                         if r.state == 'FAILURE':
@@ -172,7 +172,7 @@ def monitor_tasks(task_ids: List[str]):
             time.sleep(2)  # Update every 2 seconds
 
     except KeyboardInterrupt:
-        print("\n\n⚠ Monitoring stopped (tasks continue running in background)")
+        print("\n\nMonitoring stopped (tasks continue running in background)")
         print(f"Tasks will complete independently on workers")
 
 
@@ -186,7 +186,7 @@ def get_batch_status(batch_id: str):
     batch_file = f"batch_{batch_id}.txt"
 
     if not os.path.exists(batch_file):
-        print(f"✗ Batch file not found: {batch_file}")
+        print(f"Batch file not found: {batch_file}")
         sys.exit(1)
 
     # Load task IDs from batch file

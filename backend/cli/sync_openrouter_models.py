@@ -53,11 +53,11 @@ def fetch_openrouter_models(api_key: Optional[str] = None) -> List[Dict[str, Any
         data = response.json()
         models = data.get('data', [])
 
-        print(f"✓ Fetched {len(models)} models from OpenRouter")
+        print(f"Fetched {len(models)} models from OpenRouter")
         return models
 
     except requests.RequestException as e:
-        print(f"✗ Error fetching models from OpenRouter: {e}")
+        print(f"Error fetching models from OpenRouter: {e}")
         raise
 
 
@@ -135,7 +135,7 @@ def upsert_model(model_data: Dict[str, Any]) -> Tuple[Optional[int], bool]:
     """
     # Skip Auto Router entirely
     if model_data.get('name') == 'Auto Router':
-        print(f"  ⊘ Skipped: Auto Router (excluded from sync)")
+        print(f"  Skipped: Auto Router (excluded from sync)")
         return None, False
 
     def qualifies_for_auto_activation(data: Dict[str, Any]) -> bool:
@@ -225,7 +225,7 @@ def upsert_model(model_data: Dict[str, Any]) -> Tuple[Optional[int], bool]:
         return model_id, is_new
 
     except Exception as e:
-        print(f"  ✗ Error upserting model {model_data.get('name')}: {e}")
+        print(f"  Error upserting model {model_data.get('name')}: {e}")
         conn.rollback()
         return None, False
 
@@ -289,7 +289,7 @@ def sync_models(api_key: Optional[str] = None) -> Dict[str, int]:
                 stats['updated'] += 1
 
         except Exception as e:
-            print(f"  ✗ Error processing model: {e}")
+            print(f"  Error processing model: {e}")
             stats['skipped'] += 1
 
     # Print summary

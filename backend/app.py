@@ -20,6 +20,14 @@ from database_postgres import get_connection
 
 load_dotenv()
 
+
+def _get_completed_games_dir() -> str:
+    d = os.getenv("SNAKEBENCH_COMPLETED_GAMES_DIR", "completed_games_local").strip()
+    return d or "completed_games_local"
+
+
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 TOP_MATCH_CACHE_SECONDS = int(os.getenv("TOP_MATCH_CACHE_SECONDS", "900"))
@@ -193,7 +201,7 @@ def get_games_endpoint():
             if replay_path:
                 local_replay_path = replay_path
             else:
-                local_replay_path = f"completed_games/snake_game_{game_id}.json"
+                local_replay_path = f"{_get_completed_games_dir()}/snake_game_{game_id}.json"
 
             # Return game metadata
             game_metadata = {
@@ -428,7 +436,9 @@ def get_game_by_id_endpoint(match_id):
         replay_path = game_data.get('replay_path')
 
         # If replay_path is in new format (<game_id>/replay.json), redirect to Supabase
-        if replay_path and '/' in replay_path and not replay_path.startswith('completed_games'):
+        if replay_path and '/' in replay_path and not (
+            replay_path.startswith('completed_games') or replay_path.startswith(_get_completed_games_dir())
+        ):
             replay_url = get_replay_public_url(match_id)
             # Return 302 redirect to Supabase Storage
             return redirect(replay_url, code=302)
@@ -437,10 +447,10 @@ def get_game_by_id_endpoint(match_id):
         else:
             full_path = replay_path
             if replay_path and not os.path.exists(full_path):
-                # Try relative to parent directory (project root)
-                parent_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), replay_path)
-                if os.path.exists(parent_path):
-                    full_path = parent_path
+                # Try relative to backend directory
+                backend_path = os.path.join(_BACKEND_DIR, replay_path)
+                if os.path.exists(backend_path):
+                    full_path = backend_path
 
             if not replay_path or not os.path.exists(full_path):
                 logging.error(f"Replay file not found: {replay_path}")

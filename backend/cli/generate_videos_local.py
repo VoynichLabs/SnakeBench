@@ -40,6 +40,18 @@ from services.video_generator import SnakeVideoGenerator  # type: ignore  # noqa
 logger = logging.getLogger(__name__)
 
 
+def _get_completed_games_dir() -> str:
+    d = os.getenv("SNAKEBENCH_COMPLETED_GAMES_DIR", "completed_games_local").strip()
+    return d or "completed_games_local"
+
+
+def _get_default_videos_dir_name() -> str:
+    completed_games_dir = _get_completed_games_dir()
+    if completed_games_dir == "completed_games_local":
+        return "completed_games_videos_local"
+    return "completed_games_videos"
+
+
 def iter_replay_files(root: Path) -> List[Path]:
     """Return a sorted list of local replay JSON files."""
     return sorted(root.glob("snake_game_*.json"))
@@ -85,7 +97,7 @@ def process_replay(
             replay_data=replay_data,
             output_path=str(output_path),
         )
-        logger.info("✓ Generated %s", output_path)
+        logger.info("Generated %s", output_path)
         return "ok"
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Failed to generate video for %s: %s", json_path, exc)
@@ -99,13 +111,13 @@ def main() -> None:
     parser.add_argument(
         "--root",
         type=str,
-        default=str(BACKEND_ROOT / "completed_games"),
+        default=str(BACKEND_ROOT / _get_completed_games_dir()),
         help="Directory containing snake_game_*.json (default: ../completed_games)",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default=str(BACKEND_ROOT / "completed_games_videos"),
+        default=str(BACKEND_ROOT / _get_default_videos_dir_name()),
         help="Directory to write MP4 files (default: ../completed_games_videos)",
     )
     parser.add_argument(

@@ -898,7 +898,9 @@ class TestGameHistory:
         filename = f"test_replay_{game.game_id}.json"
         game.save_history_to_json(filename)
 
-        path = Path("completed_games") / filename
+        backend_root = Path(__file__).resolve().parent.parent
+        completed_games_dir = (os.getenv("SNAKEBENCH_COMPLETED_GAMES_DIR", "completed_games_local").strip() or "completed_games_local")
+        path = backend_root / completed_games_dir / filename
         assert path.exists(), "Replay file was not written"
 
         with path.open() as f:

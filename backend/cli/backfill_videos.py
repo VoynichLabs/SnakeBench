@@ -27,10 +27,27 @@ logger = logging.getLogger(__name__)
 backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _get_completed_games_dir() -> str:
+    d = os.getenv("SNAKEBENCH_COMPLETED_GAMES_DIR", "completed_games_local").strip()
+    return d or "completed_games_local"
+
+
+def _get_completed_games_path() -> str:
+    return os.path.join(backend_path, _get_completed_games_dir())
+
+
+def _get_local_videos_path() -> str:
+    completed_games_dir = _get_completed_games_dir()
+    if completed_games_dir == "completed_games_local":
+        videos_dir = "completed_games_videos_local"
+    else:
+        videos_dir = "completed_games_videos"
+    return os.path.join(backend_path, videos_dir)
+
+
 def find_local_game_ids(limit: int | None = None, offset: int = 0) -> List[str]:
     """Find game IDs from local completed_games directory."""
-    completed_games_dir = os.path.join(backend_path, "completed_games")
-    pattern = os.path.join(completed_games_dir, "snake_game_*.json")
+    pattern = os.path.join(_get_completed_games_path(), "snake_game_*.json")
     
     all_files = sorted(glob.glob(pattern), key=os.path.getmtime, reverse=True)
     
@@ -50,15 +67,15 @@ def find_local_game_ids(limit: int | None = None, offset: int = 0) -> List[str]:
     return game_ids
 
 
-def video_exists_locally(game_id: str) -> bool:
+def video_exists_locally(game_id: str, output_dir: str) -> bool:
     """Check whether video file already exists locally."""
-    video_path = os.path.join(backend_path, "completed_games", f"{game_id}_replay.mp4")
+    video_path = os.path.join(output_dir, f"{game_id}_replay.mp4")
     return os.path.exists(video_path)
 
 
 def process_game(game_id: str, output_dir: str, force: bool = False) -> str:
     """Generate a video for a single game and save locally."""
-    if video_exists_locally(game_id) and not force:
+    if video_exists_locally(game_id, output_dir) and not force:
         logger.info("%s: video already exists, skipping", game_id)
         return "skipped_existing"
 
@@ -111,7 +128,7 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
-    output_dir = args.output_dir or os.path.join(backend_path, "completed_games")
+    output_dir = args.output_dir or _get_local_videos_path()
     os.makedirs(output_dir, exist_ok=True)
     logger.info("Output directory: %s", output_dir)
 

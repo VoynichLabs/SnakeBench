@@ -79,7 +79,7 @@ def main():
     input_group.add_argument(
         'game_id',
         nargs='?',
-        help='Game ID to load from local completed_games directory'
+        help='Game ID to load from local replay directory'
     )
     input_group.add_argument(
         '--local',
@@ -91,7 +91,7 @@ def main():
     parser.add_argument(
         '--output', '-o',
         type=str,
-        help='Output video file path (default: completed_games/<game_id>_replay.mp4)'
+        help='Output video file path (default: local videos directory)'
     )
 
     # Video settings
@@ -124,7 +124,10 @@ def main():
             logger.info(f"Using game ID: {game_id}")
         else:
             game_id = args.game_id
-            replay_data = None  # Will be loaded from local completed_games
+            replay_data = None  # Will be loaded from local replay directory
+
+        if not args.output:
+            args.output = get_video_local_path(game_id)
 
         # Create video generator
         generator = SnakeVideoGenerator(

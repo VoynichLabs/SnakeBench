@@ -30,6 +30,24 @@ backend_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
+
+def _get_completed_games_dir() -> str:
+    d = os.getenv("SNAKEBENCH_COMPLETED_GAMES_DIR", "completed_games_local").strip()
+    return d or "completed_games_local"
+
+
+def _get_completed_games_path() -> str:
+    return os.path.join(backend_path, _get_completed_games_dir())
+
+
+def _get_local_videos_path() -> str:
+    completed_games_dir = _get_completed_games_dir()
+    if completed_games_dir == "completed_games_local":
+        videos_dir = "completed_games_videos_local"
+    else:
+        videos_dir = "completed_games_videos"
+    return os.path.join(backend_path, videos_dir)
+
 logger = logging.getLogger(__name__)
 
 # Video settings
@@ -515,7 +533,7 @@ class SnakeVideoGenerator:
         # Load replay data if not provided
         if replay_data is None:
             logger.info(f"Loading replay data for game {game_id} from local files")
-            replay_path = os.path.join(backend_path, "completed_games", f"snake_game_{game_id}.json")
+            replay_path = os.path.join(_get_completed_games_path(), f"snake_game_{game_id}.json")
             if not os.path.exists(replay_path):
                 raise ValueError(f"Could not find replay data for game {game_id} at {replay_path}")
             with open(replay_path, 'r') as f:
@@ -581,7 +599,7 @@ class SnakeVideoGenerator:
             Path to the saved video file
         """
         if output_dir is None:
-            output_dir = os.path.join(backend_path, "completed_games")
+            output_dir = _get_local_videos_path()
         
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"{game_id}_replay.mp4")
@@ -601,4 +619,4 @@ def get_video_local_path(game_id: str) -> str:
     Returns:
         Local path to the video file
     """
-    return os.path.join(backend_path, "completed_games", f"{game_id}_replay.mp4")
+    return os.path.join(_get_local_videos_path(), f"{game_id}_replay.mp4")

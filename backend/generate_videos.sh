@@ -40,12 +40,14 @@ if [ "$1" == "--batch" ]; then
     echo -e "${BLUE}Batch processing all local replay files...${NC}"
     echo ""
 
+    COMPLETED_GAMES_DIR=${SNAKEBENCH_COMPLETED_GAMES_DIR:-completed_games_local}
+
     count=0
     success=0
     failed=0
 
-    for file in completed_games/snake_game_*.json; do
-        if [ "$file" == "completed_games/snake_index.json" ]; then
+    for file in ${COMPLETED_GAMES_DIR}/snake_game_*.json; do
+        if [ "$file" == "${COMPLETED_GAMES_DIR}/snake_index.json" ]; then
             continue
         fi
 
@@ -58,10 +60,10 @@ if [ "$1" == "--batch" ]; then
 
         if python -m cli.generate_video --local "$file" 2>&1 | tail -1 | grep -q "Done!"; then
             success=$((success + 1))
-            echo -e "${GREEN}  ✓ Success${NC}"
+            echo -e "${GREEN}  Success${NC}"
         else
             failed=$((failed + 1))
-            echo -e "${RED}  ✗ Failed${NC}"
+            echo -e "${RED}  Failed${NC}"
         fi
         echo ""
     done

@@ -16,6 +16,7 @@ No Supabase or Postgres access is used; everything is computed from local JSON.
 import argparse
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,11 @@ from typing import Dict, List, Optional
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_completed_games_dir() -> str:
+    d = os.getenv("SNAKEBENCH_COMPLETED_GAMES_DIR", "completed_games_local").strip()
+    return d or "completed_games_local"
 
 
 @dataclass
@@ -123,7 +129,7 @@ def main() -> None:
     parser.add_argument(
         "--root",
         type=str,
-        default=str(Path(__file__).resolve().parent.parent / "completed_games"),
+        default=str(Path(__file__).resolve().parent.parent / _get_completed_games_dir()),
         help="Directory containing snake_game_*.json (default: ../completed_games)",
     )
     parser.add_argument(

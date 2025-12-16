@@ -13,6 +13,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from services.video_generator import SnakeVideoGenerator, get_video_public_url
 
 
+def _get_completed_games_dir() -> str:
+    d = os.getenv("SNAKEBENCH_COMPLETED_GAMES_DIR", "completed_games_local").strip()
+    return d or "completed_games_local"
+
+
 def example_1_generate_and_upload():
     """Example 1: Generate video and upload to Supabase in one step"""
     print("Example 1: Generate and Upload")
@@ -28,7 +33,7 @@ def example_1_generate_and_upload():
     # 4. Clean up temp files
     result = generator.generate_and_upload(game_id)
 
-    print(f"✓ Video uploaded!")
+    print("Video uploaded!")
     print(f"  URL: {result['public_url']}")
     print()
 
@@ -41,7 +46,8 @@ def example_2_local_replay():
     import json
 
     # Load local replay
-    with open("completed_games/snake_game_xyz.json", 'r') as f:
+    replay_path = os.path.join(_get_completed_games_dir(), "snake_game_xyz.json")
+    with open(replay_path, 'r') as f:
         replay_data = json.load(f)
 
     game_id = "xyz-game-id"
@@ -54,7 +60,7 @@ def example_2_local_replay():
         output_path="./my_video.mp4"
     )
 
-    print(f"✓ Video saved to: {video_path}")
+    print(f"Video saved to: {video_path}")
     print()
 
 
@@ -72,7 +78,7 @@ def example_3_custom_settings():
     )
 
     result = generator.generate_and_upload("game-id")
-    print(f"✓ High-quality video: {result['public_url']}")
+    print(f"High-quality video: {result['public_url']}")
     print()
 
 
@@ -93,9 +99,9 @@ def example_4_batch_processing():
         try:
             print(f"Processing {game_id}...")
             result = generator.generate_and_upload(game_id)
-            print(f"  ✓ {result['public_url']}")
+            print(f"  {result['public_url']}")
         except Exception as e:
-            print(f"  ✗ Error: {e}")
+            print(f"  Error: {e}")
 
     print()
 
@@ -151,18 +157,18 @@ def example_7_error_handling():
 
     try:
         result = generator.generate_and_upload(game_id)
-        print(f"✓ Success: {result['public_url']}")
+        print(f"Success: {result['public_url']}")
 
     except ValueError as e:
-        print(f"✗ Invalid input: {e}")
+        print(f"Invalid input: {e}")
         # Handle missing replay data
 
     except ConnectionError as e:
-        print(f"✗ Network error: {e}")
+        print(f"Network error: {e}")
         # Handle Supabase connection issues
 
     except Exception as e:
-        print(f"✗ Unexpected error: {e}")
+        print(f"Unexpected error: {e}")
         # Log and alert
 
     print()

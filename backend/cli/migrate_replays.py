@@ -211,9 +211,9 @@ def main():
         out_path, ok, err = migrate_file(f, out_dir, args.in_place)
         if ok:
             successes += 1
-            print(f"✓ Migrated {f} -> {out_path}")
+            print(f"Migrated {f} -> {out_path}")
         else:
-            print(f"✗ Failed {f}: {err}")
+            print(f"Failed {f}: {err}")
 
     print(f"\nDone. Migrated {successes}/{len(files)} file(s).")
 

@@ -19,6 +19,12 @@ from players import Player, RandomPlayer, LLMPlayer
 load_dotenv()
 
 _disable_internal_db = os.getenv('SNAKEBENCH_DISABLE_INTERNAL_DB', '').strip().lower() in {'1', 'true', 'yes'}
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _get_completed_games_dir() -> str:
+    d = os.getenv('SNAKEBENCH_COMPLETED_GAMES_DIR', 'completed_games_local').strip()
+    return d or 'completed_games_local'
 
 # Import data access functions for DB persistence
 try:
@@ -661,13 +667,16 @@ class SnakeGame:
             "metadata": metadata  # Keep for compatibility with existing tools
         }
 
+        completed_games_dir = _get_completed_games_dir()
+
         # Always store replays locally (no cloud upload)
-        self.replay_storage_path = f"completed_games/{filename}"
+        self.replay_storage_path = f"{completed_games_dir}/{filename}"
         self.replay_public_url = None
 
         # Write replay JSON to local completed_games directory
-        os.makedirs('completed_games', exist_ok=True)
-        with open(f'completed_games/{filename}', "w") as f:
+        completed_games_path = os.path.join(_BACKEND_DIR, completed_games_dir)
+        os.makedirs(completed_games_path, exist_ok=True)
+        with open(os.path.join(completed_games_path, filename), "w") as f:
             json.dump(data, f, indent=2)
 
     def persist_to_database(self):
@@ -685,8 +694,8 @@ class SnakeGame:
             # 1. Complete game record (mark as completed and update final stats)
             end_dt = datetime.utcfromtimestamp(time.time())
 
-            # Use Supabase storage path if available, fall back to local path
-            replay_path = getattr(self, 'replay_storage_path', f"completed_games/snake_game_{self.game_id}.json")
+            completed_games_dir = _get_completed_games_dir()
+            replay_path = getattr(self, 'replay_storage_path', f"{completed_games_dir}/snake_game_{self.game_id}.json")
             total_score = sum(self.scores.values())
 
             complete_game(

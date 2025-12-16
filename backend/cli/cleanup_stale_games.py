@@ -80,11 +80,11 @@ def cleanup_stale_games(minutes_threshold: int = 30, dry_run: bool = False):
         conn.commit()
 
         print("-" * 80)
-        print(f"✓ Deleted {games_deleted} stale game(s)")
-        print(f"✓ Deleted {participants_deleted} associated participant record(s)")
+        print(f"Deleted {games_deleted} stale game(s)")
+        print(f"Deleted {participants_deleted} associated participant record(s)")
 
     except Exception as e:
-        print(f"✗ Error cleaning up stale games: {e}")
+        print(f"Error cleaning up stale games: {e}")
         conn.rollback()
         raise
     finally:
