@@ -782,6 +782,7 @@ class SnakeGame:
 
         frame_payload: Dict[str, Any] = {
             "round": round_index,
+            "timestamp": time.time(),  # Per-round timestamp for duration analysis
             "state": {
                 "snakes": state["snakes"],
                 "apples": state["apples"],
