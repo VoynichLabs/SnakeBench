@@ -180,6 +180,11 @@ class OpenRouterProvider(LLMProviderInterface):
         if self.extra_headers:
             request_kwargs['extra_headers'] = self.extra_headers
 
+        # Add middle-out transform for automatic context compression (OpenRouter feature)
+        # This helps prevent context overflow by intelligently compressing the prompt
+        if 'transforms' not in request_kwargs:
+            request_kwargs['transforms'] = ['middle-out']
+
         if self.api_type == 'responses':
             if self.model_name.startswith("openai/") or self.model_name.startswith("x-ai/"):
                 reasoning = request_kwargs.get("reasoning")
@@ -213,6 +218,11 @@ class OpenRouterProvider(LLMProviderInterface):
                 if "reasoning.encrypted_content" not in include:
                     include.append("reasoning.encrypted_content")
                 request_kwargs["include"] = include
+
+            # Add max output tokens to prevent runaway generation
+            # This prevents models from generating 400k+ token rationales
+            if 'max_output_tokens' not in request_kwargs:
+                request_kwargs['max_output_tokens'] = 16000
 
             response = self.client.responses.create(
                 model=self.model_name,

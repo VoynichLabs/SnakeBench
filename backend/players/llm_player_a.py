@@ -50,6 +50,11 @@ class LLMPlayerA(Player):
         """Construct the prompt, call the provider, and parse the response."""
         prompt = self._construct_prompt(game_state)
 
+        # Monitor for extremely large prompts
+        estimated_tokens = len(prompt) // 4  # Rough estimate: 4 chars/token
+        if estimated_tokens > 100000:
+            print(f"WARNING: Player {self.snake_id} prompt is very large: ~{estimated_tokens:,} tokens")
+
         try:
             response_data = self.provider.get_response(prompt)
             response_text = response_data["text"]
@@ -111,6 +116,32 @@ class LLMPlayerA(Player):
         self.move_history.append({self.snake_id: move_data})
         return move_data
 
+    def _truncate_rationale_for_prompt(self, rationale: str, max_chars: int = 10000) -> str:
+        """
+        Truncate rationale for inclusion in next turn's prompt.
+        Preserves full rationale in move_history for replay files.
+
+        Args:
+            rationale: Full rationale text from previous turn
+            max_chars: Maximum characters (~2,500 tokens at 4 chars/token)
+
+        Returns:
+            Truncated rationale with indicator if truncated
+        """
+        if len(rationale) <= max_chars:
+            return rationale
+
+        # Keep first 80% and last 20% (preserves beginning context + final conclusion)
+        first_part = int(max_chars * 0.8)
+        last_part = max_chars - first_part
+
+        truncated = (
+            rationale[:first_part] +
+            f"\n\n[... {len(rationale) - max_chars} characters truncated for brevity ...]\n\n" +
+            rationale[-last_part:]
+        )
+        return truncated
+
     def _construct_prompt(self, game_state: GameState) -> str:
         """Build the prompt to send to the LLM (Variant A: clearer tactical cheat sheet)."""
 
@@ -139,7 +170,10 @@ class LLMPlayerA(Player):
 
         # Last move / rationale (for long-term plan)
         last_move = self.move_history[-1][self.snake_id]["direction"] if self.move_history else "None"
-        last_rationale = self.move_history[-1][self.snake_id]["rationale"] if self.move_history else "None"
+        last_rationale_raw = self.move_history[-1][self.snake_id]["rationale"] if self.move_history else "None"
+
+        # Truncate for prompt (full version preserved in move_history)
+        last_rationale = self._truncate_rationale_for_prompt(last_rationale_raw) if last_rationale_raw != "None" else "None"
 
         turn_line = (
             f"Turn: {game_state.round_number} / {game_state.max_rounds}"
