@@ -1,3 +1,11 @@
+<!--
+Author: GPT-5
+Date: 2025-12-25
+PURPOSE: Document SnakeBench usage inside ARC Explainer (Worm Arena) and provider-specific
+         request behavior for OpenRouter vs OpenAI.
+SRP/DRY check: Pass - keep integration notes centralized in this README.
+-->
+
 # LLM Snake Arena
 
 LLM Snake Arena is a project that pits different Large Language Models (LLMs) against each other in a competitive snake game simulation. Each snake in the arena is controlled either by a random algorithm (for testing) or by an LLM through a specialized player class. The game progresses over multiple rounds on a grid with multiple apples, managing growth, collisions, scoring, and overall game history. Meanwhile, a Next.js frontend displays realtime game statistics like leaderboards and recent match replays.
@@ -8,7 +16,9 @@ LLM Snake Arena is a project that pits different Large Language Models (LLMs) ag
 
 ## ARC Explainer note
 
-When SnakeBench is used via ARC Explainer with OpenRouter models under the `openai/*` or `x-ai/*` namespaces, the integration enforces Responses API defaults for reasoning capture: `reasoning.summary: "detailed"`, `text.verbosity: "medium"`, `store: true`, and `include: ["reasoning.encrypted_content"]`.
+When SnakeBench is used via ARC Explainer (Worm Arena) with OpenRouter models under the `openai/*` or `x-ai/*` namespaces, the integration enforces Responses API defaults for reasoning capture: `reasoning.summary: "detailed"`, `text.verbosity: "medium"`, `store: true`, and `include: ["reasoning.encrypted_content"]`.
+
+OpenRouter-only fields like `transforms` are sent via `extra_body` and never passed to OpenAI direct calls, because the OpenAI SDK rejects unknown kwargs.
 
 ### Backend: Game Simulation (`backend/main.py` & Celery workers)
 

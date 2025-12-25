@@ -1,3 +1,11 @@
+"""
+Author: GPT-5
+Date: 2025-12-25
+PURPOSE: Route SnakeBench LLM calls through OpenAI or OpenRouter with API-safe kwargs and
+         consistent Responses handling, while keeping provider-only fields isolated.
+SRP/DRY check: Pass - provider routing is centralized here and avoids duplication.
+"""
+
 import os
 import json
 from json.decoder import JSONDecodeError
@@ -181,9 +189,20 @@ class OpenRouterProvider(LLMProviderInterface):
             request_kwargs['extra_headers'] = self.extra_headers
 
         # Add middle-out transform for automatic context compression (OpenRouter feature)
-        # This helps prevent context overflow by intelligently compressing the prompt
-        if 'transforms' not in request_kwargs:
-            request_kwargs['transforms'] = ['middle-out']
+        # This helps prevent context overflow by intelligently compressing the prompt.
+        # OpenRouter expects transforms inside extra_body, not as a top-level kwarg.
+        extra_body = request_kwargs.pop("extra_body", {}) or {}
+        transforms = request_kwargs.pop("transforms", None)
+        if not transforms:
+            transforms = ["middle-out"]
+        # Merge/override transforms while preserving any other extra_body fields.
+        if isinstance(extra_body, dict):
+            extra_body = dict(extra_body)
+            extra_body["transforms"] = transforms
+        else:
+            # If caller provided a non-dict extra_body, replace with a dict to avoid SDK errors.
+            extra_body = {"transforms": transforms}
+        request_kwargs["extra_body"] = extra_body
 
         if self.api_type == 'responses':
             if self.model_name.startswith("openai/") or self.model_name.startswith("x-ai/"):
@@ -327,6 +346,19 @@ class OpenAIProvider(LLMProviderInterface):
 
         if self.api_type != "responses":
             raise ValueError("Direct OpenAI provider only supports api_type='responses'")
+
+        # OpenAI direct does not accept transforms (OpenRouter-only). Strip them proactively.
+        request_kwargs.pop("transforms", None)
+        extra_body = request_kwargs.get("extra_body")
+        if isinstance(extra_body, dict) and "transforms" in extra_body:
+            extra_body = dict(extra_body)
+            extra_body.pop("transforms", None)
+            request_kwargs["extra_body"] = extra_body
+        elif isinstance(extra_body, dict):
+            # keep as-is
+            request_kwargs["extra_body"] = extra_body
+        else:
+            request_kwargs.pop("extra_body", None)
 
         reasoning = request_kwargs.get("reasoning")
         if not isinstance(reasoning, dict):

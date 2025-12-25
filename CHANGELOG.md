@@ -1,3 +1,17 @@
+<!--
+Author: GPT-5
+Date: 2025-12-25
+PURPOSE: SnakeBench changelog for ARC Explainer integration updates.
+SRP/DRY check: Pass - entries track external changes only.
+-->
+
+### Version 0.0.3  Dec 25, 2025 (ARC Explainer integration)
+
+- **Fix: OpenRouter transforms routing for Worm Arena** (Author: GPT-5)
+  - OpenRouter-only `transforms` are routed through `extra_body` to avoid OpenAI SDK errors.
+  - OpenAI direct calls strip `transforms` entirely.
+  - **Files Modified**: `backend/llm_providers.py`, `README.md`
+
 ### Version 0.0.2  Dec 11, 2025 (ARC Explainer integration)
 
 - **Changelog alignment with ARC Explainer** (Author: GPT-5.2 Extra High)
