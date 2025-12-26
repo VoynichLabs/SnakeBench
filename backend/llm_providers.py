@@ -1,8 +1,10 @@
 """
-Author: GPT-5
+Author: GPT-5 / Claude Sonnet 4
 Date: 2025-12-25
 PURPOSE: Route SnakeBench LLM calls through OpenAI or OpenRouter with API-safe kwargs and
          consistent Responses handling, while keeping provider-only fields isolated.
+         CRITICAL: GPT-5 and o-series models MUST route directly to OpenAI (Responses API).
+         OpenRouter's Responses API proxy returns empty output for these models.
 SRP/DRY check: Pass - provider routing is centralized here and avoids duplication.
 """
 
@@ -418,6 +420,33 @@ class OpenAIProvider(LLMProviderInterface):
             return True
 
 
+def _requires_responses_api(model_name: str) -> bool:
+    """
+    Check if a model REQUIRES the Responses API (cannot use ChatCompletions).
+
+    GPT-5 series and o-series (o3, o4) models only work with Responses API.
+    OpenRouter's Responses API proxy returns empty output for these models,
+    so they MUST route directly to OpenAI.
+    """
+    if not model_name:
+        return False
+    lower = model_name.lower()
+    # Strip openai/ prefix for pattern matching
+    if lower.startswith("openai/"):
+        lower = lower[7:]
+
+    # GPT-5 series (gpt-5, gpt-5.1, gpt-5-mini, gpt-5.1-codex, etc.)
+    if lower.startswith("gpt-5"):
+        return True
+
+    # o-series reasoning models (o3, o4, o3-mini, o4-mini, etc.)
+    # But NOT "openrouter" or "ollama" which also start with 'o'
+    if lower.startswith("o3") or lower.startswith("o4"):
+        return True
+
+    return False
+
+
 def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
     """
     Factory function for creating an LLM provider instance.
@@ -425,6 +454,9 @@ def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
     Supports:
     - OpenRouter (default): OPENROUTER_API_KEY + base_url=https://openrouter.ai/api/v1
     - OpenAI direct: OPENAI_API_KEY + /v1/responses
+
+    CRITICAL: GPT-5 and o-series models MUST use OpenAI directly because
+    OpenRouter's Responses API proxy returns empty output for these models.
     """
     provider_name = _normalize_provider_name(player_config.get("provider"))
     model_name = str(player_config.get("model_name") or "")
@@ -433,7 +465,23 @@ def create_llm_provider(player_config: Dict[str, Any]) -> LLMProviderInterface:
     openai_api_key = _sanitize_env_value(os.getenv("OPENAI_API_KEY"))
     openrouter_api_key = _sanitize_env_value(os.getenv("OPENROUTER_API_KEY"))
 
-    # Explicit provider selection always wins.
+    # CRITICAL FIX: GPT-5 and o-series models MUST use OpenAI directly.
+    # OpenRouter's Responses API proxy returns empty output for these models.
+    # This check runs BEFORE explicit provider selection to prevent misrouting.
+    if _requires_responses_api(model_name):
+        if openai_api_key:
+            if provider_name == "openrouter":
+                print(f"[llm_providers] WARNING: Model {model_name} requires Responses API. "
+                      f"Overriding 'openrouter' provider to use OpenAI direct.")
+            return OpenAIProvider(api_key=openai_api_key, config=player_config)
+        else:
+            raise ValueError(
+                f"Model {model_name} requires the Responses API and must use OpenAI directly. "
+                f"Set OPENAI_API_KEY in environment variables. "
+                f"OpenRouter's Responses API proxy does not work for this model."
+            )
+
+    # Explicit provider selection (for non-Responses-API models)
     if provider_name in {"openai", "openai direct"}:
         if not openai_api_key:
             raise ValueError("OPENAI_API_KEY is not set in the environment variables.")
