@@ -221,7 +221,9 @@ class OpenRouterProvider(LLMProviderInterface):
                 if not isinstance(text, dict):
                     text = {}
                 if "verbosity" not in text:
-                    text["verbosity"] = "medium"
+                    # Use high verbosity for reasoning models to ensure output appears.
+                    # Codex models may need medium to avoid excessive verbosity.
+                    text["verbosity"] = "medium" if "codex" in self.model_name.lower() else "high"
                 request_kwargs["text"] = text
 
                 # OpenRouter's Responses API schema rejects store=true for proxied OpenAI/xAI models.
