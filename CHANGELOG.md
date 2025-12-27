@@ -5,6 +5,13 @@ PURPOSE: SnakeBench changelog for ARC Explainer integration updates.
 SRP/DRY check: Pass - entries track external changes only.
 -->
 
+### Version 0.0.4  Dec 27, 2025 (ARC Explainer integration)
+
+- **Prompt: Disable web search for LLM players** (Author: Claude Sonnet 4.5)
+  - Added explicit instruction to prevent models from performing web searches during gameplay.
+  - Ensures models only use the provided game state without accessing external information.
+  - **Files Modified**: `backend/players/llm_player.py:187`, `backend/players/llm_player_a.py:198`
+
 ### Version 0.0.3  Dec 25, 2025 (ARC Explainer integration)
 
 - **Fix: OpenRouter transforms routing for Worm Arena** (Author: GPT-5)
