@@ -190,10 +190,18 @@ def main() -> None:
     games_by_apples = sorted(games, key=lambda g: g.max_final_score, reverse=True)
     games_by_duration = sorted(games, key=lambda g: g.duration_seconds, reverse=True)
 
+    # Specific thresholds requested by user
+    pro_games = sorted([g for g in games if g.max_final_score >= 25], key=lambda g: g.max_final_score, reverse=True)
+    worst_games = sorted([g for g in games if g.max_final_score <= 1], key=lambda g: g.max_final_score)
+
     show("Most expensive games", games_by_cost, "total_cost", lambda g: g.total_cost)
     show("Longest games by rounds", games_by_rounds, "rounds_played", lambda g: g.rounds_played)
     show("Highest-scoring games (max apples)", games_by_apples, "max_final_score", lambda g: g.max_final_score)
     show("Longest duration games", games_by_duration, "duration_seconds", lambda g: g.duration_seconds)
+
+    # New sections for specific apple counts
+    show(f"Pro Matches (>25 apples)", pro_games, "max_final_score", lambda g: g.max_final_score)
+    show(f"Worst Matches (<=1 apple)", worst_games, "max_final_score", lambda g: g.max_final_score)
 
 
 if __name__ == "__main__":
