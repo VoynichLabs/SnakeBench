@@ -14,13 +14,14 @@ No Supabase or Postgres access is used; everything is computed from local JSON.
 """
 
 import argparse
+import csv
 import json
 import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ class GameMetrics:
     max_final_score: int
     sum_final_scores: int
     duration_seconds: float
+    models: List[str]
+    winner_name: str
+    player_scores: Dict[str, int]
 
 
 def parse_iso(ts: Optional[str]) -> Optional[datetime]:
@@ -90,17 +94,32 @@ def extract_metrics(path: Path) -> Optional[GameMetrics]:
                 continue
         total_cost = c
 
-    # Scores
+    # Scores and Models
     max_final_score = 0
     sum_final_scores = 0
-    for p in players.values():
+    model_names = []
+    player_scores = {}
+    
+    # Determine winner
+    winner_id = game.get("winner_id")
+    winner_name = "None"
+
+    for pid, p in players.items():
+        name = p.get("name") or f"Player {pid}"
+        model_names.append(name)
+        
         try:
             s = int(p.get("final_score") or 0)
         except (TypeError, ValueError):
             s = 0
+        
+        player_scores[name] = s
         if s > max_final_score:
             max_final_score = s
         sum_final_scores += s
+        
+        if pid == winner_id:
+            winner_name = name
 
     # Duration
     started_at = parse_iso(game.get("started_at"))
@@ -119,6 +138,9 @@ def extract_metrics(path: Path) -> Optional[GameMetrics]:
         max_final_score=max_final_score,
         sum_final_scores=sum_final_scores,
         duration_seconds=duration_seconds,
+        models=model_names,
+        winner_name=winner_name,
+        player_scores=player_scores
     )
 
 
@@ -137,6 +159,18 @@ def main() -> None:
         type=int,
         default=10,
         help="How many top games to show per metric (default: 10)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Path to save the report (e.g., report.csv or report.md)",
+    )
+    parser.add_argument(
+        "--format",
+        type=str,
+        choices=["csv", "md"],
+        default="csv",
+        help="Output format (default: csv)",
     )
 
     args = parser.parse_args()
@@ -169,21 +203,38 @@ def main() -> None:
 
     top_n = max(1, args.top)
 
-    def show(title: str, items: List[GameMetrics], key_desc: str, key_fn):
+    report_lines = []
+    report_lines.append("# SnakeBench Local Game Analysis Report")
+    report_lines.append(f"Analyzed {len(json_paths)} games in `{root}`")
+    report_lines.append(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report_lines.append("")
+
+    def show(title: str, items: List[GameMetrics], key_desc: str):
         logger.info("")
         logger.info("=== %s (top %d by %s) ===", title, top_n, key_desc)
+        
+        report_lines.append(f"## {title}")
+        report_lines.append(f"Top {top_n} by {key_desc}:")
+        report_lines.append("")
+        report_lines.append("| Game ID | File | Models | Winner | Rounds | Max Score | Sum Scores | Cost | Duration |")
+        report_lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        
         for g in items[:top_n]:
+            models_str = "; ".join(g.models)
             logger.info(
-                "%s  file=%s  rounds=%d/%d  score_max=%d sum_scores=%d  cost=$%.4f  duration=%.1fs",
+                "%s  winner=%-15s models=%-30s rounds=%d/%d  score_max=%d  cost=$%.4f",
                 g.game_id,
-                g.filename,
+                g.winner_name,
+                models_str,
                 g.rounds_played,
                 g.max_rounds,
                 g.max_final_score,
-                g.sum_final_scores,
                 g.total_cost,
-                g.duration_seconds,
             )
+            report_lines.append(
+                f"| `{g.game_id}` | `{g.filename}` | {models_str} | {g.winner_name} | {g.rounds_played}/{g.max_rounds} | {g.max_final_score} | {g.sum_final_scores} | ${g.total_cost:.4f} | {g.duration_seconds:.1f}s |"
+            )
+        report_lines.append("")
 
     games_by_cost = sorted(games, key=lambda g: g.total_cost, reverse=True)
     games_by_rounds = sorted(games, key=lambda g: g.rounds_played, reverse=True)
@@ -194,14 +245,47 @@ def main() -> None:
     pro_games = sorted([g for g in games if g.max_final_score >= 25], key=lambda g: g.max_final_score, reverse=True)
     worst_games = sorted([g for g in games if g.max_final_score <= 1], key=lambda g: g.max_final_score)
 
-    show("Most expensive games", games_by_cost, "total_cost", lambda g: g.total_cost)
-    show("Longest games by rounds", games_by_rounds, "rounds_played", lambda g: g.rounds_played)
-    show("Highest-scoring games (max apples)", games_by_apples, "max_final_score", lambda g: g.max_final_score)
-    show("Longest duration games", games_by_duration, "duration_seconds", lambda g: g.duration_seconds)
+    show("Most Expensive Games", games_by_cost, "total_cost")
+    show("Longest Games (Rounds)", games_by_rounds, "rounds_played")
+    show("Highest-Scoring Games (Max Apples)", games_by_apples, "max_final_score")
+    show("Longest Duration Games", games_by_duration, "duration_seconds")
 
     # New sections for specific apple counts
-    show(f"Pro Matches (>25 apples)", pro_games, "max_final_score", lambda g: g.max_final_score)
-    show(f"Worst Matches (<=1 apple)", worst_games, "max_final_score", lambda g: g.max_final_score)
+    show("Pro Matches (>= 25 apples)", pro_games, "max_final_score")
+    show("Worst Matches (<= 1 apple)", worst_games, "max_final_score")
+
+    if args.output:
+        output_path = Path(args.output).resolve()
+        
+        if args.format == "csv":
+            headers = [
+                "game_id", "filename", "models", "winner", "rounds", "max_rounds",
+                "max_score", "sum_scores", "total_cost", "duration_seconds"
+            ]
+            with output_path.open("w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=headers)
+                writer.writeheader()
+                for g in games:
+                    writer.writerow({
+                        "game_id": g.game_id,
+                        "filename": g.filename,
+                        "models": "; ".join(g.models),
+                        "winner": g.winner_name,
+                        "rounds": g.rounds_played,
+                        "max_rounds": g.max_rounds,
+                        "max_score": g.max_final_score,
+                        "sum_scores": g.sum_final_scores,
+                        "total_cost": f"{g.total_cost:.4f}",
+                        "duration_seconds": f"{g.duration_seconds:.1f}"
+                    })
+            logger.info("")
+            logger.info("CSV report saved to %s", output_path)
+            
+        else: # Markdown
+            with output_path.open("w", encoding="utf-8") as f:
+                f.write("\n".join(report_lines))
+            logger.info("")
+            logger.info("Markdown report saved to %s", output_path)
 
 
 if __name__ == "__main__":
