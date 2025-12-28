@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""Analyze local SnakeBench completed game replays to find "most interesting" games.
-
-This is a LOCAL-ONLY tool for the arc-explainer repo. It:
-- Scans external/SnakeBench/backend/completed_games for snake_game_*.json.
-- Extracts per-game metrics:
-  - total_cost
-  - rounds_played / max_rounds
-  - per-player final_score (and their max / sum)
-  - duration_seconds (ended_at - started_at)
-- Prints top N games by each metric.
-
-No Supabase or Postgres access is used; everything is computed from local JSON.
+"""
+Author: Gemini 3 Flash High
+Date: 2025-12-27
+PURPOSE: Analyze local SnakeBench completed game replays to find "most interesting" games.
+         Scans completed_games and completed_games_local for snake_game_*.json.
+         Extracts metrics: cost, rounds, scores, duration, models, and winner.
+         Supports CSV and Markdown reporting with date filtering (--since).
+SRP/DRY check: Pass - encapsulated local analysis logic independent of DB.
 """
 
 import argparse
@@ -45,6 +41,7 @@ class GameMetrics:
     models: List[str]
     winner_name: str
     player_scores: Dict[str, int]
+    started_at: Optional[datetime] = None
 
 
 def parse_iso(ts: Optional[str]) -> Optional[datetime]:
@@ -101,8 +98,15 @@ def extract_metrics(path: Path) -> Optional[GameMetrics]:
     player_scores = {}
     
     # Determine winner
-    winner_id = game.get("winner_id")
+    winner_id = str(game.get("winner_id")) if game.get("winner_id") is not None else None
     winner_name = "None"
+
+    # Some games might have a winner stored in the player object itself
+    winning_player = None
+    for pid, p in players.items():
+        if p.get("result") == "won":
+            winning_player = p.get("name") or f"Player {pid}"
+            break
 
     for pid, p in players.items():
         name = p.get("name") or f"Player {pid}"
@@ -118,8 +122,12 @@ def extract_metrics(path: Path) -> Optional[GameMetrics]:
             max_final_score = s
         sum_final_scores += s
         
-        if pid == winner_id:
+        if str(pid) == winner_id:
             winner_name = name
+
+    # Fallback for winner name if winner_id didn't match or was missing
+    if winner_name == "None" and winning_player:
+        winner_name = winning_player
 
     # Duration
     started_at = parse_iso(game.get("started_at"))
@@ -140,7 +148,8 @@ def extract_metrics(path: Path) -> Optional[GameMetrics]:
         duration_seconds=duration_seconds,
         models=model_names,
         winner_name=winner_name,
-        player_scores=player_scores
+        player_scores=player_scores,
+        started_at=started_at
     )
 
 
@@ -151,8 +160,8 @@ def main() -> None:
     parser.add_argument(
         "--root",
         type=str,
-        default=str(Path(__file__).resolve().parent.parent / _get_completed_games_dir()),
-        help="Directory containing snake_game_*.json (default: ../completed_games)",
+        action="append",
+        help="Directory containing snake_game_*.json. Can be specified multiple times.",
     )
     parser.add_argument(
         "--top",
@@ -172,6 +181,11 @@ def main() -> None:
         default="csv",
         help="Output format (default: csv)",
     )
+    parser.add_argument(
+        "--since",
+        type=str,
+        help="Only include games played on or after this date (YYYY-MM-DD)",
+    )
 
     args = parser.parse_args()
 
@@ -180,32 +194,55 @@ def main() -> None:
         format="%(message)s",
     )
 
-    root = Path(args.root).resolve()
-    if not root.exists() or not root.is_dir():
-        raise SystemExit(f"Root directory does not exist or is not a directory: {root}")
+    since_date = None
+    if args.since:
+        try:
+            since_date = datetime.strptime(args.since, "%Y-%m-%d")
+        except ValueError:
+            raise SystemExit(f"Invalid date format for --since: {args.since}. Use YYYY-MM-DD.")
 
-    json_paths = sorted(root.glob("snake_game_*.json"))
+    roots = args.root
+    if not roots:
+        # Default to both standard folders
+        backend_dir = Path(__file__).resolve().parent.parent
+        roots = [
+            str(backend_dir / "completed_games"),
+            str(backend_dir / "completed_games_local")
+        ]
+
+    json_paths = []
+    for r_str in roots:
+        r_path = Path(r_str).resolve()
+        if r_path.exists() and r_path.is_dir():
+            json_paths.extend(sorted(r_path.glob("snake_game_*.json")))
+        else:
+            logger.warning("Directory does not exist or is not a directory: %s", r_path)
+
     if not json_paths:
-        logger.info("No snake_game_*.json files found under %s", root)
+        logger.info("No snake_game_*.json files found.")
         return
 
-    logger.info("Analyzing %d local games under %s", len(json_paths), root)
+    logger.info("Analyzing %d local games across %d directories", len(json_paths), len(roots))
 
     games: List[GameMetrics] = []
     for p in json_paths:
         m = extract_metrics(p)
         if m is not None:
+            if since_date and (not m.started_at or m.started_at < since_date):
+                continue
             games.append(m)
 
     if not games:
-        logger.info("No valid games parsed")
+        logger.info("No valid games found matching filters.")
         return
+
+    logger.info("Analyzing %d local games", len(games))
 
     top_n = max(1, args.top)
 
     report_lines = []
     report_lines.append("# SnakeBench Local Game Analysis Report")
-    report_lines.append(f"Analyzed {len(json_paths)} games in `{root}`")
+    report_lines.append(f"Analyzed {len(json_paths)} games")
     report_lines.append(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     report_lines.append("")
 
@@ -260,7 +297,7 @@ def main() -> None:
         if args.format == "csv":
             headers = [
                 "game_id", "filename", "models", "winner", "rounds", "max_rounds",
-                "max_score", "sum_scores", "total_cost", "duration_seconds"
+                "max_score", "sum_scores", "total_cost", "duration_seconds", "started_at"
             ]
             with output_path.open("w", encoding="utf-8", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=headers)
@@ -276,7 +313,8 @@ def main() -> None:
                         "max_score": g.max_final_score,
                         "sum_scores": g.sum_final_scores,
                         "total_cost": f"{g.total_cost:.4f}",
-                        "duration_seconds": f"{g.duration_seconds:.1f}"
+                        "duration_seconds": f"{g.duration_seconds:.1f}",
+                        "started_at": g.started_at.isoformat() if g.started_at else ""
                     })
             logger.info("")
             logger.info("CSV report saved to %s", output_path)
