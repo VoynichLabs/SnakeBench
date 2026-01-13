@@ -29,12 +29,18 @@ def _get_player_b() -> Type[Player]:
     return LLMPlayerB
 
 
+def _get_player_c() -> Type[Player]:
+    from .llm_player_c import LLMPlayerC
+    return LLMPlayerC
+
+
 # Registry: maps variant key -> callable that returns the player class
 # Using callables for lazy loading
 PLAYER_VARIANT_LOADERS: Dict[str, callable] = {
     "default": _get_default_player,
     "A": _get_player_a,
     "B": _get_player_b,
+    "C": _get_player_c,
 }
 
 # Canonical list of available variant keys (for API exposure)
@@ -79,4 +85,5 @@ def list_variants() -> list:
         {"key": "default", "description": "Baseline LLM player (original SnakeBench prompt)"},
         {"key": "A", "description": "Variant A: Tactical cheat-sheet prompt with structured decision checklist"},
         {"key": "B", "description": "Variant B: Open-ended prompt - rules only, be ruthless and stay alive"},
+        {"key": "C", "description": "Variant C: Minimal prompt - rules only, single-word response only"},
     ]

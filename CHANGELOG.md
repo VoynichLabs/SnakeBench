@@ -5,6 +5,14 @@ PURPOSE: SnakeBench changelog for ARC Explainer integration updates.
 SRP/DRY check: Pass - entries track external changes only.
 -->
 
+### Version 0.0.6  Jan 12, 2026 (ARC Explainer integration)
+
+- **Feat: Add Player C variant with minimal prompt** (Author: Cascade)
+  - Created LLMPlayerC with minimal prompt containing only rules and requiring single-word response.
+  - Registered Player C in variant registry.
+  - **Files Modified**: `backend/players/variant_registry.py`
+  - **Files Added**: `backend/players/llm_player_c.py`
+
 ### Version 0.0.5  Jan 12, 2026 (ARC Explainer integration)
 
 - **Feat: Add player persona variant support** (Author: Cascade (ChatGPT 5.1))
