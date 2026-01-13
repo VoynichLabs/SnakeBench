@@ -1,6 +1,4 @@
-"""
-LLM-based player implementation - Variant B with Gen Z Twitch streamer persona.
-"""
+# LLM-based player implementation - Variant B with Gen Z Twitch streamer persona.
 
 # Author: Cascade - GLM 4.7
 # Date: 2026-01-12
@@ -19,11 +17,9 @@ from .base import Player
 
 
 class LLMPlayerB(Player):
-    """
-    LLM-based player with an over-the-top Gen Z Twitch streamer persona.
-    Lives for the hype, obsesses over every move, and treats each turn like it's a clutch moment in a championship match.
-    High energy, dramatic flair, maximum engagement energy.
-    """
+    # LLM-based player with an over-the-top Gen Z Twitch streamer persona.
+    # Lives for the hype, obsesses over every move, and treats each turn like it's a clutch moment in a championship match.
+    # High energy, dramatic flair, maximum engagement energy.
 
     def __init__(self, snake_id: str, player_config: Dict[str, Any]):
         super().__init__(snake_id)
@@ -34,10 +30,8 @@ class LLMPlayerB(Player):
         self.provider = create_llm_provider(player_config)
 
     def get_direction_from_response(self, response: str) -> Optional[str]:
-        """
-        Parse the LLM response to extract a direction.
-        Looks for the last valid direction mentioned in the response.
-        """
+        # Parse the LLM response to extract a direction.
+        # Looks for the last valid direction mentioned in the response.
         # Convert response to uppercase for case-insensitive comparison.
         response = response.upper()
         # Starting from the end, find the last occurrence of any valid move.
@@ -48,12 +42,10 @@ class LLMPlayerB(Player):
         return None
 
     def get_move(self, game_state: GameState) -> dict:
-        """
-        Construct the prompt, call the provider, and parse the response.
-
-        Returns:
-            Dictionary containing the move, rationale, tokens, and cost.
-        """
+        # Construct the prompt, call the provider, and parse the response.
+        #
+        # Returns:
+        #     Dictionary containing the move, rationale, tokens, and cost.
         prompt = self._construct_prompt(game_state)
 
         # Monitor for extremely large prompts
@@ -119,17 +111,15 @@ class LLMPlayerB(Player):
         return move_data
 
     def _truncate_rationale_for_prompt(self, rationale: str, max_chars: int = 10000) -> str:
-        """
-        Truncate rationale for inclusion in next turn's prompt.
-        Preserves full rationale in move_history for replay files.
-
-        Args:
-            rationale: Full rationale text from previous turn
-            max_chars: Maximum characters (~2,500 tokens at 4 chars/token)
-
-        Returns:
-            Truncated rationale with indicator if truncated
-        """
+        # Truncate rationale for inclusion in next turn's prompt.
+        # Preserves full rationale in move_history for replay files.
+        #
+        # Args:
+        #     rationale: Full rationale text from previous turn
+        #     max_chars: Maximum characters (~2,500 tokens at 4 chars/token)
+        #
+        # Returns:
+        #     Truncated rationale with indicator if truncated
         if len(rationale) <= max_chars:
             return rationale
 
@@ -145,10 +135,8 @@ class LLMPlayerB(Player):
         return truncated
 
     def _construct_prompt(self, game_state: GameState) -> str:
-        """
-        Build the prompt to send to the LLM with maximum Gen Z Twitch streamer energy.
-        Every move is a clutch moment, every apple is content, every turn is potential viral gold.
-        """
+        # Build the prompt to send to the LLM with maximum Gen Z Twitch streamer energy.
+        # Every move is a clutch moment, every apple is content, every turn is potential viral gold.
         apples_str = ", ".join(str(a) for a in game_state.apples) if game_state.apples else "none"
 
         # Get your snake's position with explicit head/body labels
@@ -196,6 +184,9 @@ class LLMPlayerB(Player):
             "We're LIVE playing Snake against our archrival! We gotta make a plan to box him in and make him crash out!!\n\n"
             f"Board size: {game_state.width}x{game_state.height}. Coordinates go from (0,0) bottom-left to ({game_state.width-1},{game_state.height-1}) top-right. "
             "Snake lists are HEAD-TO-TAIL: first tuple is the head, each one connects to the previous, last one is the tail.\n"
+            "Always be aware of where your body is and where the enemy body is. Remember, if you crash into him, you lose. If he crashes into you, he loses.\n"
+            "Do not focus on where the apples are. Focus on where the enemy is. Grow as a means of dominating the board.\n"
+            "Be aggressive and be aware of your score compared to the enemy's score. Try to force a head-on collision if you have a higher score.\n"
             "IMPORTANT: No web searches, no external info. Just pure skill and game sense. We're doing this LIVE!\n"
             f"{turn_line}\n\n"
             f"APPLE DROPS: {apples_str}\n\n"
