@@ -1,4 +1,4 @@
-# Author: Cascade (ChatGPT)
+# Author: Cascade (ChatGPT 5.1)
 # Date: 2026-01-12
 # PURPOSE: Centralize LLMSnake movement and victory constants so engine, prompts, and analytics share a single source of truth for rule enforcement.
 # SRP/DRY check: Pass — verified existing consumers (SnakeGame, LLM prompts) already reference these constants without duplicating logic.
