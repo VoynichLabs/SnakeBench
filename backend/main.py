@@ -15,8 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Import domain entities and players from their modules
 from domain import Snake, GameState, UP, DOWN, LEFT, RIGHT, VALID_MOVES, APPLE_TARGET
 from players import Player, RandomPlayer, LLMPlayer
-
-# NOTE: ARC Explainer keeps prompt-variant support dormant for now.
+from players.variant_registry import get_player_class
 
 load_dotenv()
 
@@ -872,13 +871,16 @@ def run_simulation(model_config_1: Dict, model_config_2: Dict, game_params: argp
         game_type=getattr(game_params, 'game_type', 'ladder')
     )
 
-    # Add two snakes with baseline LLM players using the provided model configurations
-    # NOTE: ARC Explainer keeps prompt-variant support dormant for now.
+    # Add two snakes with LLM players using the provided model configurations
+    # Use the player persona variant if specified in game_params
+    player_persona = getattr(game_params, 'player_persona', 'default')
+    PlayerClass = get_player_class(player_persona)
+    
     player_configs = [model_config_1, model_config_2]
     for i, player_config in enumerate(player_configs):
         game.add_snake(
             snake_id=str(i),
-            player=LLMPlayer(str(i), player_config=player_config)
+            player=PlayerClass(str(i), player_config=player_config)
         )
 
     # Insert initial participants for live tracking/pending detection

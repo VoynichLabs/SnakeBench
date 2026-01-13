@@ -5,6 +5,15 @@ PURPOSE: SnakeBench changelog for ARC Explainer integration updates.
 SRP/DRY check: Pass - entries track external changes only.
 -->
 
+### Version 0.0.5  Jan 12, 2026 (ARC Explainer integration)
+
+- **Feat: Add player persona variant support** (Author: Cascade (ChatGPT 5.1))
+  - Added variant registry to support multiple LLM player prompt strategies (default, A, B).
+  - Created LLMPlayerB with open-ended prompt focusing on rules and survival.
+  - Updated main.py to use get_player_class() to instantiate correct player variant based on player_persona parameter.
+  - **Files Modified**: `backend/main.py`, `backend/players/variant_registry.py`
+  - **Files Added**: `backend/players/llm_player_b.py`
+
 ### Version 0.0.4  Dec 27, 2025 (ARC Explainer integration)
 
 - **Prompt: Disable web search for LLM players** (Author: Claude Sonnet 4.5)
