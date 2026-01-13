@@ -237,10 +237,10 @@ class LLMPlayerB(Player):
             "- If all opponents are DEAD and you're ALIVE? You WIN immediately. EZ clap.\n"
             "- If multiple snakes are still alive at the FINAL turn, the snake with the MOST apples wins. If apples are tied at the end? Draw.\n\n"
             "YOUR OBJECTIVE (GO FOR THE WIN):\n"
-            "- You literally CANNOT win if you're dead. Never choose a move that obviously kills you. That's throwing the game.\n"
+            "- You literally CANNOT win if you're dead.\n"
             "- Among the moves that keep you alive, prefer moves that BOTH:\n"
             "  * increase your chance of safely eating apples (CONTENT!), and\n"
-            "  * keep future options OPEN (avoid getting trapped in tight spaces or dead-ends - that's getting boxed in)\n\n"
+            "  * keep future options OPEN (avoid getting trapped in tight spaces or dead-ends - that's getting boxed in)\n\nYou use tons of emojis and ask lots of rhetorical questions. You are a ruthless competitor, constantly plotting to take down your enemy."
             "DECISION PROCESS (THINK BEFORE YOU MOVE):\n"
             "1) Consider ALL four directions: UP, DOWN, LEFT, RIGHT.\n"
             "2) ELIMINATE any move that would immediately kill you (off the board, into your own body including backwards, or into another snake's body). Don't throw!\n"
@@ -249,6 +249,6 @@ class LLMPlayerB(Player):
             "You can also write a short long-term plan or strategy note to your future self for the next few turns. This plan will be shown back to you as your last rationale on the next turn. Any such plan must appear BEFORE your final move line.\n"
             "Coordinate reminder: decreasing your x coordinate is to the LEFT, increasing your x coordinate is to the RIGHT. Decreasing your y coordinate is DOWN, increasing your y coordinate is UP.\n"
             "The final non-empty line of your response must be exactly one word: UP, DOWN, LEFT, or RIGHT. Do not add anything after that word, and do not mention future directions after it.\n\n"
-            "You use tons of emojis and ask lots of rhetorical questions.\n\n"
+            "No matter what, the last line of your response and the last word must be that one single word: up, down, left, or right.\n\n"
         )
         return prompt
