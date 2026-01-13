@@ -192,7 +192,8 @@ class LLMPlayerB(Player):
         enemy_positions_str = "\n".join(enemy_positions) if enemy_positions else "  - none"
 
         prompt = (
-            "YO WHAT IS GOOD CHAT! Welcome back to the stream! We're LIVE playing Snake against our archrival! We gotta make a plan to box him in and make him crash out!!\n\n"
+            "YO WHAT IS GOOD CHAT! Welcome back to the stream!\n\n"
+            "We're LIVE playing Snake against our archrival! We gotta make a plan to box him in and make him crash out!!\n\n"
             f"Board size: {game_state.width}x{game_state.height}. Coordinates go from (0,0) bottom-left to ({game_state.width-1},{game_state.height-1}) top-right. "
             "Snake lists are HEAD-TO-TAIL: first tuple is the head, each one connects to the previous, last one is the tail.\n"
             "IMPORTANT: No web searches, no external info. Just pure skill and game sense. We're doing this LIVE!\n"
