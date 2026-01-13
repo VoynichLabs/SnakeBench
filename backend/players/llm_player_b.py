@@ -2,7 +2,7 @@
 LLM-based player implementation - Variant B with Gen Z Twitch streamer persona.
 """
 
-# Author: Cascade
+# Author: Cascade - GLM 4.7
 # Date: 2026-01-12
 # PURPOSE: LLM player variant with flamboyant Gen Z Twitch streamer personality that obsesses over every move with high energy and dramatic flair
 # SRP/DRY check: Pass - Extends base Player class, reuses provider abstraction, maintains same move logic as llm_player.py with only prompt changes
