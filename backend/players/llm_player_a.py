@@ -1,18 +1,16 @@
-"""
-Author: Cascade
-Date: 2025-12-20
-PURPOSE: Player variant A for SnakeBench "LLM snake".
-         This file exists as a clearer, more tactical instruction set (a "cheat sheet")
-         for the LLM controlling a snake.
-
-         Goals for this variant:
-         - Keep *all* game rules and the output contract identical to the baseline player.
-         - Improve decision quality by providing a structured, turn-by-turn checklist.
-         - Emphasize the realities of this environment: simultaneous moves, hidden opponent intent,
-           ASCII board dump, and the importance of avoiding forced death/traps.
-
-SRP/DRY check: Pass - duplicates baseline LLM player mechanics intentionally to isolate prompt changes.
-"""
+# Author: Cascade
+# Date: 2025-12-20
+# PURPOSE: Player variant A for SnakeBench "LLM snake".
+#          This file exists as a clearer, more tactical instruction set (a "cheat sheet")
+#          for the LLM controlling a snake.
+#
+#          Goals for this variant:
+#          - Keep *all* game rules and the output contract identical to the baseline player.
+#          - Improve decision quality by providing a structured, turn-by-turn checklist.
+#          - Emphasize the realities of this environment: simultaneous moves, hidden opponent intent,
+#            ASCII board dump, and the importance of avoiding forced death/traps.
+#
+# SRP/DRY check: Pass - duplicates baseline LLM player mechanics intentionally to isolate prompt changes.
 
 import random
 from typing import Dict, Any, Optional
@@ -24,7 +22,7 @@ from .base import Player
 
 
 class LLMPlayerA(Player):
-    """LLM-based player variant A (better instructions, same rules and IO contract)."""
+    # LLM-based player variant A (better instructions, same rules and IO contract).
 
     def __init__(self, snake_id: str, player_config: Dict[str, Any]):
         super().__init__(snake_id)
@@ -35,10 +33,8 @@ class LLMPlayerA(Player):
         self.provider = create_llm_provider(player_config)
 
     def get_direction_from_response(self, response: str) -> Optional[str]:
-        """Parse the LLM response to extract a direction.
-
-        Baseline behavior: scan from the end to find the last valid move token.
-        """
+        # Parse the LLM response to extract a direction.
+        # Baseline behavior: scan from the end to find the last valid move token.
         response = response.upper()
         for i in range(len(response) - 1, -1, -1):
             for move in VALID_MOVES:
@@ -47,7 +43,7 @@ class LLMPlayerA(Player):
         return None
 
     def get_move(self, game_state: GameState) -> dict:
-        """Construct the prompt, call the provider, and parse the response."""
+        # Construct the prompt, call the provider, and parse the response.
         prompt = self._construct_prompt(game_state)
 
         # Monitor for extremely large prompts
@@ -116,34 +112,8 @@ class LLMPlayerA(Player):
         self.move_history.append({self.snake_id: move_data})
         return move_data
 
-    def _truncate_rationale_for_prompt(self, rationale: str, max_chars: int = 10000) -> str:
-        """
-        Truncate rationale for inclusion in next turn's prompt.
-        Preserves full rationale in move_history for replay files.
-
-        Args:
-            rationale: Full rationale text from previous turn
-            max_chars: Maximum characters (~2,500 tokens at 4 chars/token)
-
-        Returns:
-            Truncated rationale with indicator if truncated
-        """
-        if len(rationale) <= max_chars:
-            return rationale
-
-        # Keep first 80% and last 20% (preserves beginning context + final conclusion)
-        first_part = int(max_chars * 0.8)
-        last_part = max_chars - first_part
-
-        truncated = (
-            rationale[:first_part] +
-            f"\n\n[... {len(rationale) - max_chars} characters truncated for brevity ...]\n\n" +
-            rationale[-last_part:]
-        )
-        return truncated
-
     def _construct_prompt(self, game_state: GameState) -> str:
-        """Build the prompt to send to the LLM (Variant A: clearer tactical cheat sheet)."""
+        # Build the prompt to send to the LLM (Variant A: clearer tactical cheat sheet).
 
         apples_str = ", ".join(str(a) for a in game_state.apples) if game_state.apples else "none"
 
@@ -170,10 +140,7 @@ class LLMPlayerA(Player):
 
         # Last move / rationale (for long-term plan)
         last_move = self.move_history[-1][self.snake_id]["direction"] if self.move_history else "None"
-        last_rationale_raw = self.move_history[-1][self.snake_id]["rationale"] if self.move_history else "None"
-
-        # Truncate for prompt (full version preserved in move_history)
-        last_rationale = self._truncate_rationale_for_prompt(last_rationale_raw) if last_rationale_raw != "None" else "None"
+        last_rationale = self.move_history[-1][self.snake_id]["rationale"] if self.move_history else "None"
 
         turn_line = (
             f"Turn: {game_state.round_number} / {game_state.max_rounds}"
