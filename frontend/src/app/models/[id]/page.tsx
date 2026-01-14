@@ -210,11 +210,16 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
                       
                       // Calculate duration
                       const start = new Date(game.start_time);
-                      const end = new Date(game.end_time);
-                      const diffMs = end.getTime() - start.getTime();
-                      const minutes = Math.floor(diffMs / 60000);
-                      const seconds = Math.floor((diffMs % 60000) / 1000);
-                      const duration = `${minutes}min ${seconds}sec`;
+                      const end = game.end_time ? new Date(game.end_time) : null;
+                      let duration: string;
+                      if (!end || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+                        duration = "In Progress";
+                      } else {
+                        const diffMs = end.getTime() - start.getTime();
+                        const minutes = Math.floor(diffMs / 60000);
+                        const seconds = Math.floor((diffMs % 60000) / 1000);
+                        duration = `${minutes}min ${seconds}sec`;
+                      }
                       
                       // Determine outcome styling
                       let outcomeClass = "";
