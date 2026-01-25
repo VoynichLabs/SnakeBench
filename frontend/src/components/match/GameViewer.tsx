@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Copy, ChevronDown } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Copy, ChevronDown, Skull } from "lucide-react"
 import GameCanvas from "./GameCanvas"
 import PlayerThoughts from "./PlayerThoughts"
 import GameControls from "./GameControls"
 import VideoDownloadButton from "./VideoDownloadButton"
+import Link from "next/link"
 
 // Define color configuration types
 interface PlayerColorScheme {
@@ -91,7 +91,7 @@ export default function GameViewer({
   const [isPlaying, setIsPlaying] = useState(true);
   const [wasAutoStopped, setWasAutoStopped] = useState(false);
   const [thoughtTiming, setThoughtTiming] = useState<"current" | "next">("next");
-  const playbackSpeed = 1;
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const prevTotalRoundsRef = useRef(frames.length);
   
   const totalRounds = frames.length;
@@ -191,65 +191,138 @@ export default function GameViewer({
   const scores = currentRoundData.state.scores || {};
   const boardWidth = board.width || 10;
   const boardHeight = board.height || 10;
-  const renderAppleRow = (score: number) => {
-    const tens = Math.floor(score / 10);
-    const ones = score % 10;
-    const maxIcons = 8;
-    const icons: string[] = [];
-
-    for (let i = 0; i < tens && icons.length < maxIcons; i++) icons.push("🍏");
-    for (let i = 0; i < ones && icons.length < maxIcons; i++) icons.push("🍎");
-
-    return (
-      <div className="flex items-center gap-1 text-[11px] sm:text-xs font-mono text-gray-700">
-        <span className="text-gray-500">{score}</span>
-        <div className="flex flex-wrap gap-0.5 leading-none">
-          {icons.map((icon, idx) => (
-            <span key={idx} className="text-sm leading-none">
-              {icon}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   const renderThoughtAccordion = (playerIndex: number, orderClass: string) => {
     const modelId = modelIds[playerIndex];
     const score = scores[modelId] || 0;
-    const isAlive = alive[modelId] || false;
+    const isAlive = alive[modelId] !== false;
     const playerScheme = playerIndex === 0 ? colorConfig.player1 : colorConfig.player2;
 
     return (
       <details className={`group border border-gray-200 rounded-lg bg-white shadow-sm ${orderClass} min-w-0`}>
-        <summary className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer list-none select-none">
-          <div className="flex flex-col gap-1 min-w-0">
-            {renderAppleRow(score)}
-            <span
-              className="font-press-start text-[8px] sm:text-[9px] leading-tight break-words px-2 py-1 rounded text-white bg-[var(--player-color)] sm:bg-transparent sm:text-gray-800 sm:px-0 sm:py-0 sm:rounded-none"
-              style={{ ["--player-color" as string]: playerScheme.main }}
-            >
-              {modelNames[playerIndex]}
+        <summary className="flex items-center justify-between gap-2 px-3 py-2 cursor-pointer list-none select-none">
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+              style={{ backgroundColor: playerScheme.main }}
+            />
+            <span className="font-mono text-xs text-gray-700 truncate">
+              {truncateName(modelNames[playerIndex], 15)}
             </span>
+            {!isAlive && <Skull className="w-3 h-3 text-red-500 flex-shrink-0" />}
           </div>
-          <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180" />
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-gray-500">{score}</span>
+            <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180 flex-shrink-0" />
+          </div>
         </summary>
-        <div className="px-3 pb-3">
-          <PlayerThoughts 
-            modelName={modelNames[playerIndex]} 
-            thoughts={getThoughtsForModel(modelId)}
-            score={score}
-            isAlive={isAlive}
-            color={playerIndex === 0 ? "player1" : "player2"}
-            colorScheme={playerIndex === 0 ? colorConfig.player1 : colorConfig.player2}
-          />
+        <div className="px-3 pb-3 pt-1">
+          <div className="font-mono text-[10px] text-gray-600 max-h-32 overflow-auto">
+            {getThoughtsForModel(modelId).slice(-3).map((thought, i) => (
+              <p key={i} className="mb-1">{thought}</p>
+            ))}
+          </div>
         </div>
       </details>
     );
   };
 
+  // Score comparison helper
+  const score1 = scores[modelIds[0]] || 0;
+  const score2 = scores[modelIds[1]] || 0;
+  const maxScore = Math.max(score1, score2, 1);
+  const score1Percent = (score1 / maxScore) * 100;
+  const score2Percent = (score2 / maxScore) * 100;
+  const isAlive1 = alive[modelIds[0]] !== false;
+  const isAlive2 = alive[modelIds[1]] !== false;
+
+  // Truncate long model names
+  const truncateName = (name: string, maxLen: number = 28) => {
+    if (name.length <= maxLen) return name;
+    return name.substring(0, maxLen - 1) + "…";
+  };
+
   return (
     <>
+      {/* Score Overlay - Always visible */}
+      <div className="mb-4 bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+        {/* Player names and scores */}
+        <div className="flex items-center justify-between gap-4">
+          {/* Player 1 */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-sm flex-shrink-0"
+                style={{ backgroundColor: colorConfig.player1.main }}
+              />
+              <Link
+                href={`/models/${encodeURIComponent(modelNames[0])}`}
+                className="font-mono text-xs text-gray-600 hover:text-gray-900 truncate"
+                title={modelNames[0]}
+              >
+                {truncateName(modelNames[0])}
+              </Link>
+              {!isAlive1 && <Skull className="w-3 h-3 text-red-500 flex-shrink-0" />}
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="font-mono text-2xl font-bold text-gray-900">{score1}</span>
+              <span className="font-mono text-[10px] text-gray-400">apples</span>
+            </div>
+          </div>
+
+          {/* VS / Score bars growing from center */}
+          <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+            <span className="font-mono text-[10px] text-gray-400 uppercase tracking-wider">vs</span>
+            <div className="flex items-center gap-0.5">
+              {/* Player 1 bar - grows right to left */}
+              <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden flex justify-end">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${score1Percent}%`,
+                    backgroundColor: colorConfig.player1.main
+                  }}
+                />
+              </div>
+              {/* Center divider */}
+              <div className="w-px h-3 bg-gray-300" />
+              {/* Player 2 bar - grows left to right */}
+              <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${score2Percent}%`,
+                    backgroundColor: colorConfig.player2.main
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Player 2 */}
+          <div className="flex-1 min-w-0 text-right">
+            <div className="flex items-center justify-end gap-2">
+              {!isAlive2 && <Skull className="w-3 h-3 text-red-500 flex-shrink-0" />}
+              <Link
+                href={`/models/${encodeURIComponent(modelNames[1])}`}
+                className="font-mono text-xs text-gray-600 hover:text-gray-900 truncate"
+                title={modelNames[1]}
+              >
+                {truncateName(modelNames[1])}
+              </Link>
+              <div
+                className="w-3 h-3 rounded-sm flex-shrink-0"
+                style={{ backgroundColor: colorConfig.player2.main }}
+              />
+            </div>
+            <div className="flex items-baseline justify-end gap-2 mt-1">
+              <span className="font-mono text-[10px] text-gray-400">apples</span>
+              <span className="font-mono text-2xl font-bold text-gray-900">{score2}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Mobile / tablet: compact accordions above the board */}
       <div className="space-y-4 lg:hidden">
         {/* Compact thoughts accordions */}
@@ -260,7 +333,7 @@ export default function GameViewer({
 
         {/* Game Canvas */}
         <div className="w-full max-w-3xl mx-auto">
-          <GameCanvas 
+          <GameCanvas
             snakePositions={snakePositions}
             apples={apples}
             width={boardWidth}
@@ -270,14 +343,15 @@ export default function GameViewer({
               [modelIds[0]]: colorConfig.player1.main,
               [modelIds[1]]: colorConfig.player2.main
             }}
+            alive={alive}
           />
         </div>
       </div>
 
       {/* Desktop: full-width side panels with centered board */}
       <div className="hidden lg:grid grid-cols-[1fr_minmax(360px,_1fr)_1fr] gap-6 items-start">
-        <PlayerThoughts 
-          modelName={modelNames[0]} 
+        <PlayerThoughts
+          modelName={modelNames[0]}
           thoughts={getThoughtsForModel(modelIds[0])}
           score={scores[modelIds[0]] || 0}
           isAlive={alive[modelIds[0]] || false}
@@ -285,7 +359,7 @@ export default function GameViewer({
           colorScheme={colorConfig.player1}
         />
 
-        <GameCanvas 
+        <GameCanvas
           snakePositions={snakePositions}
           apples={apples}
           width={boardWidth}
@@ -295,10 +369,11 @@ export default function GameViewer({
             [modelIds[0]]: colorConfig.player1.main,
             [modelIds[1]]: colorConfig.player2.main
           }}
+          alive={alive}
         />
 
-        <PlayerThoughts 
-          modelName={modelNames[1]} 
+        <PlayerThoughts
+          modelName={modelNames[1]}
           thoughts={getThoughtsForModel(modelIds[1])}
           score={scores[modelIds[1]] || 0}
           isAlive={alive[modelIds[1]] || false}
@@ -307,9 +382,9 @@ export default function GameViewer({
         />
       </div>
 
-      {/* Game controls */}
-      <div className="mt-4 flex flex-col items-center gap-3">
-        <GameControls 
+      {/* Game controls - integrated */}
+      <div className="mt-4 bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+        <GameControls
           currentRound={currentRound}
           totalRounds={totalRounds}
           isPlaying={isPlaying}
@@ -319,51 +394,78 @@ export default function GameViewer({
           onStart={handleStart}
           onEnd={handleEnd}
         />
-      </div>
 
-      {/* Thought timing toggle */}
-      <div className="mt-2 flex flex-col items-center">
-        <div className="flex items-center gap-2 text-[11px] font-mono text-gray-600">
-          <span>Thoughts show:</span>
-          <div className="inline-flex rounded-md border border-gray-200 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setThoughtTiming("current")}
-              className={`px-3 py-1 text-xs ${
-                thoughtTiming === "current"
-                  ? "bg-gray-900 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              Current move
-            </button>
-            <button
-              type="button"
-              onClick={() => setThoughtTiming("next")}
-              className={`px-3 py-1 text-xs ${
-                thoughtTiming === "next"
-                  ? "bg-gray-900 text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              Upcoming move
-            </button>
+        {/* Speed and thought timing controls */}
+        <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap items-center justify-center gap-4 text-[10px] font-mono text-gray-500">
+          {/* Speed selector */}
+          <div className="flex items-center gap-2">
+            <span>Speed:</span>
+            <div className="inline-flex rounded border border-gray-200 overflow-hidden">
+              {[0.5, 1, 2].map((speed) => (
+                <button
+                  key={speed}
+                  type="button"
+                  onClick={() => setPlaybackSpeed(speed)}
+                  className={`px-2 py-1 ${
+                    playbackSpeed === speed
+                      ? "bg-gray-900 text-white"
+                      : "bg-white text-gray-500 hover:bg-gray-50"
+                  }`}
+                >
+                  {speed}x
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <span className="text-gray-300">|</span>
+
+          {/* Thought timing toggle */}
+          <div className="flex items-center gap-2">
+            <span>Thoughts:</span>
+            <div className="inline-flex rounded border border-gray-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setThoughtTiming("current")}
+                className={`px-2 py-1 ${
+                  thoughtTiming === "current"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                Current
+              </button>
+              <button
+                type="button"
+                onClick={() => setThoughtTiming("next")}
+                className={`px-2 py-1 ${
+                  thoughtTiming === "next"
+                    ? "bg-gray-900 text-white"
+                    : "bg-white text-gray-500 hover:bg-gray-50"
+                }`}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Game ID + download */}
-      <div className="mt-6 flex flex-col items-center gap-3 w-full px-2 sm:px-0">
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full sm:w-auto max-w-xl text-xs sm:text-sm text-gray-500 flex items-center justify-center gap-2 font-mono whitespace-normal break-all leading-snug"
+      {/* Game ID + download - compact footer */}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-[10px] font-mono text-gray-400">
+        <button
           onClick={copyGameId}
+          className="flex items-center gap-1.5 hover:text-gray-600 transition-colors"
         >
-          <span className="text-center">Match ID: {gameId}</span>
-          <Copy className="h-4 w-4" />
-        </Button>
-        {!liveMode && <VideoDownloadButton matchId={gameId} />}
+          <span>ID: {gameId.substring(0, 8)}...</span>
+          <Copy className="h-3 w-3" />
+        </button>
+        {!liveMode && (
+          <>
+            <span className="text-gray-300">|</span>
+            <VideoDownloadButton matchId={gameId} />
+          </>
+        )}
       </div>
     </>
   )
