@@ -1,4 +1,5 @@
 import { createEloLikeScaler } from "@/lib/ratingScale";
+import Link from "next/link";
 
 type LeaderboardItem = {
   rank: number;
@@ -37,34 +38,36 @@ type StatsData = {
   };
 };
 
+type CombinedData = {
+  leaderboard: LeaderboardItem[];
+  stats: {
+    totalGames: number;
+    modelCount: number;
+    topScore: number;
+    totalCost: number;
+  };
+};
+
 // Function to fetch and transform leaderboard data
-async function getLeaderboardData(): Promise<LeaderboardItem[]> {
+async function getCombinedData(): Promise<CombinedData> {
   try {
     const url = `${process.env.FLASK_URL}/api/stats?simple=true`;
-    console.log('[LeaderboardSection] Fetching from:', url);
 
     const response = await fetch(url);
-    console.log('[LeaderboardSection] Response status:', response.status);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[LeaderboardSection] Error response:', errorText);
       throw new Error('Failed to fetch leaderboard data');
     }
 
     const data: StatsData = await response.json();
-    console.log('[LeaderboardSection] Received data:', {
-      totalGames: data.totalGames,
-      modelCount: Object.keys(data.aggregatedData || {}).length
-    });
 
     const aggregatedEntries = Object.entries(data.aggregatedData || {});
     const ratingScaler = createEloLikeScaler(
       aggregatedEntries.map(([, stats]) => stats.trueskill_exposed ?? stats.rating ?? 0)
     );
-    
+
     // Transform the API data into our leaderboard format
-    const transformedData = aggregatedEntries
+    const leaderboard = aggregatedEntries
       .map(([model, stats]) => ({
         model,
         wins: stats.wins,
@@ -82,172 +85,144 @@ async function getLeaderboardData(): Promise<LeaderboardItem[]> {
         trueskillExposed: stats.trueskill_exposed ?? stats.rating ?? 0,
         scaledRating: ratingScaler.scale(stats.trueskill_exposed ?? stats.rating ?? 0),
       }))
-      .filter(item => item.wins + item.losses + item.ties >= 1) // Show all models
-      .sort((a, b) => b.rating - a.rating) // Sort by rating
+      .filter(item => item.wins + item.losses + item.ties >= 1)
+      .sort((a, b) => b.rating - a.rating)
       .map((item, index) => ({
         ...item,
         rank: index + 1,
       }))
-      .slice(0, 1000); // Take top 10
+      .slice(0, 1000);
 
-    console.log('[LeaderboardSection] Transformed data:', {
-      itemCount: transformedData.length,
-      firstItem: transformedData[0]
-    });
-    return transformedData;
+    // Calculate stats
+    const totalGames = data.totalGames || 0;
+    const modelCount = aggregatedEntries.length;
+    const topScore = Math.max(...aggregatedEntries.map(([, s]) => s.top_score || 0), 0);
+    const totalCost = aggregatedEntries.reduce((sum, [, s]) => sum + (s.total_cost || 0), 0);
+
+    return {
+      leaderboard,
+      stats: { totalGames, modelCount, topScore, totalCost }
+    };
   } catch (err) {
-    console.error('[LeaderboardSection] Error fetching leaderboard data:', err);
-    throw err; // Re-throw to see error in UI
+    console.error('[LeaderboardSection] Error fetching data:', err);
+    throw err;
   }
 }
 
 export default async function LeaderboardSection() {
-  const leaderboardData = await getLeaderboardData();
-  
-  if (leaderboardData.length === 0) {
+  const { leaderboard, stats } = await getCombinedData();
+
+  if (leaderboard.length === 0) {
     return (
-      <div className="bg-white shadow rounded-lg overflow-hidden p-6">
-        <h2 className="text-lg font-press-start text-gray-900">Global Leaderboard</h2>
-        <p className="mt-1 text-sm font-mono text-red-500">Failed to load leaderboard data</p>
+      <div className="bg-white border border-gray-200 p-4">
+        <p className="text-sm font-mono text-red-500">Failed to load leaderboard data</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="px-4 py-5 border-b border-gray-200 sm:px-6">
-        <div className="flex items-center">
-          <h2 className="text-lg font-press-start text-gray-900">Global Leaderboard</h2>
-          <div className="flex items-center ml-3">
-            <div className="relative mr-1">
-              <div className="h-2 w-2 rounded-full bg-red-500 absolute animate-ping"></div>
-              <div className="h-2 w-2 rounded-full bg-red-500 relative"></div>
+    <div className="bg-white border border-gray-200">
+      {/* Compact header row with description, live indicator, and stats */}
+      <div className="px-3 py-2 border-b border-gray-200 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <div className="flex items-center gap-4 text-xs font-mono text-gray-500">
+          <span>Two LLM snakes enter</span>
+          <span className="text-gray-300">→</span>
+          <span>One survives longest</span>
+          <span className="text-gray-300">→</span>
+          <span>Repeat</span>
+          <div className="flex items-center gap-1 ml-1">
+            <div className="relative">
+              <div className="h-1.5 w-1.5 rounded-full bg-red-500 absolute animate-ping"></div>
+              <div className="h-1.5 w-1.5 rounded-full bg-red-500 relative"></div>
             </div>
-            <span className="text-xs font-mono uppercase tracking-wider text-red-500">LIVE</span>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-red-500">LIVE</span>
           </div>
         </div>
-        <p className="mt-1 text-sm font-mono text-gray-500">Updated in real-time based on match results</p>
+
+        {/* Inline stats */}
+        <div className="flex items-center gap-4 text-xs font-mono text-gray-500">
+          <span><span className="text-gray-900 font-medium">{stats.totalGames.toLocaleString()}</span> games</span>
+          <span><span className="text-gray-900 font-medium">{stats.modelCount}</span> models</span>
+          <span>top: <span className="text-gray-900 font-medium">{stats.topScore}</span></span>
+          <span>cost: <span className="text-gray-900 font-medium">${stats.totalCost.toFixed(2)}</span></span>
+          <Link href="/live-games" className="text-blue-600 hover:text-blue-800 hover:underline">
+            watch live
+          </Link>
+        </div>
       </div>
-      <div className="px-4 sm:px-6 py-4">
-        <div className="flex flex-col">
-          <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-            <div className="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
-              <div className="overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        Rank
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        Model
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        <div className="relative inline-flex items-center gap-1 group">
-                          <span>TS Rating</span>
-                          <span className="text-gray-400 text-[10px]">?</span>
-                          <div className="pointer-events-none absolute left-0 top-full mt-1 w-64 rounded-md bg-gray-900 text-white text-[11px] font-mono p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10">
-                            TrueSkill exposed = conservative skill.{" "}
-                          </div>
-                        </div>
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        <div className="relative inline-flex items-center gap-1 group">
-                          <span>TS Uncertainty</span>
-                          <span className="text-gray-400 text-[10px]">?</span>
-                          <div className="pointer-events-none absolute left-0 top-full mt-1 w-64 rounded-md bg-gray-900 text-white text-[11px] font-mono p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10">
-                            Uncertainty around skill. <br /> <br /> Lower is more confident; <br /> <br /> &lt;3 is fairly confident.
-                          </div>
-                        </div>
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        W/L
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        Apples
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        Top Score
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        Win Rate
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-4 py-3 text-left text-xs font-mono text-gray-500 uppercase tracking-wider"
-                      >
-                        Cost
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {leaderboardData.map((item) => (
-                      <tr key={item.model} className="hover:bg-gray-50">
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                          #{item.rank}
-                        </td>
-                        <td className="px-4 py-4 whitespace-normal break-words max-w-[160px] sm:max-w-[220px]">
-                          <a href={`/models/${item.model}`} className="font-mono text-sm text-blue-600 hover:text-blue-800 hover:underline break-words">
-                            {item.model}
-                          </a>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900" title={`μ=${item.trueskillMu.toFixed(3)}, σ=${item.trueskillSigma.toFixed(3)}`}>
-                          {item.trueskillExposed.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                          σ {item.trueskillSigma.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="font-mono text-sm text-gray-900">
-                            {item.wins}/{item.losses}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="font-mono text-sm text-gray-900">{item.apples_eaten}</div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="font-mono text-sm text-gray-900">{item.top_score}</div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="font-mono text-sm text-gray-900">{item.winRate}%</div>
-                        </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="font-mono text-sm text-gray-900">
-                            ${(item.total_cost || 0).toFixed(4)}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
+
+      {/* Compact table */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">#</th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Model</th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">
+                <span className="group relative cursor-help">
+                  Rating
+                  <span className="pointer-events-none absolute left-0 top-full mt-1 w-48 rounded bg-gray-900 text-white text-[10px] p-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    TrueSkill exposed rating
+                  </span>
+                </span>
+              </th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">
+                <span className="group relative cursor-help">
+                  ±σ
+                  <span className="pointer-events-none absolute left-0 top-full mt-1 w-40 rounded bg-gray-900 text-white text-[10px] p-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    Uncertainty (&lt;3 = confident)
+                  </span>
+                </span>
+              </th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">W/L</th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Win%</th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Apples</th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Best</th>
+              <th className="px-2 py-1.5 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Cost</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {leaderboard.map((item, i) => (
+              <tr
+                key={item.model}
+                className={`hover:bg-blue-50 transition-colors ${i < 3 ? 'bg-amber-50/40' : ''}`}
+              >
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-400">
+                  {item.rank}
+                </td>
+                <td className="px-2 py-1 whitespace-normal max-w-[180px]">
+                  <Link
+                    href={`/models/${item.model}`}
+                    className="font-mono text-xs text-gray-900 hover:text-blue-600 hover:underline break-words"
+                  >
+                    {item.model}
+                  </Link>
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-900 font-medium" title={`μ=${item.trueskillMu.toFixed(3)}`}>
+                  {item.trueskillExposed.toFixed(1)}
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-400">
+                  {item.trueskillSigma.toFixed(1)}
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-600">
+                  {item.wins}/{item.losses}
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-600">
+                  {item.winRate}%
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-600">
+                  {item.apples_eaten}
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-600">
+                  {item.top_score}
+                </td>
+                <td className="px-2 py-1 whitespace-nowrap text-xs font-mono text-gray-400">
+                  ${(item.total_cost || 0).toFixed(2)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
