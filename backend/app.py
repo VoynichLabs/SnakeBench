@@ -212,7 +212,8 @@ def get_games_endpoint():
                 'board_width': game_data.get('board_width'),
                 'board_height': game_data.get('board_height'),
                 'total_score': game_data.get('total_score'),
-                'total_cost': game_data.get('total_cost')
+                'total_cost': game_data.get('total_cost'),
+                'participants': game_data.get('participants', [])
             }
             games_list.append(game_metadata)
 
