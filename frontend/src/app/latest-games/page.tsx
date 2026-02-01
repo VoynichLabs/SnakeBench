@@ -1,5 +1,8 @@
 import Link from 'next/link';
 
+// Force dynamic rendering - data changes frequently
+export const dynamic = 'force-dynamic';
+
 interface Participant {
   model_name: string;
   provider: string | null;
