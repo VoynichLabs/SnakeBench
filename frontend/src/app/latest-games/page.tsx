@@ -64,7 +64,7 @@ function formatRelativeTime(timestamp: string): string {
 async function getLatestGames(): Promise<Game[]> {
   try {
     const response = await fetch(
-      `${process.env.FLASK_URL}/api/games?limit=100&sort_by=start_time`,
+      `${process.env.NEXT_PUBLIC_FLASK_URL}/api/games?limit=100&sort_by=start_time`,
       { next: { revalidate: 60 } }
     );
 

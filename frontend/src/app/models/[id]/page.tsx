@@ -40,7 +40,7 @@ export default async function ModelDetailsPage({ params }: { params: Promise<{ i
   const modelId = decodeURIComponent(encodedModelId);
 
   // Fetch the full stats (encode it again for the URL)
-  const response = await fetch(`${process.env.FLASK_URL}/api/stats?model=${encodeURIComponent(modelId)}`, { next: { revalidate: 300 } });
+  const response = await fetch(`${process.env.NEXT_PUBLIC_FLASK_URL}/api/stats?model=${encodeURIComponent(modelId)}`, { next: { revalidate: 300 } });
   const stats = await response.json();
 
   // Use the decoded modelId to look up in the response

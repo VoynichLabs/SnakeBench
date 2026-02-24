@@ -51,7 +51,7 @@ type CombinedData = {
 // Function to fetch and transform leaderboard data
 async function getCombinedData(): Promise<CombinedData> {
   try {
-    const url = `${process.env.FLASK_URL}/api/stats?simple=true`;
+    const url = `${process.env.NEXT_PUBLIC_FLASK_URL}/api/stats?simple=true`;
 
     const response = await fetch(url);
 
