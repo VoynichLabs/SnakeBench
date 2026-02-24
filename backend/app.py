@@ -2,10 +2,13 @@ import os
 import json
 import random
 import time
+import uuid
 import logging
+from functools import wraps
 from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
 from dotenv import load_dotenv
+import jwt
 
 # Import database query functions
 from data_access.api_queries import (
@@ -595,6 +598,127 @@ def get_game_state_endpoint(game_id):
     except Exception as error:
         logging.error(f"Error fetching game state for {game_id}: {error}")
         return jsonify({"error": "Failed to load game state"}), 500
+
+
+# --- Admin auth ---
+
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
+ADMIN_GITHUB_USERNAMES = [
+    u.strip().lower()
+    for u in os.getenv("ADMIN_GITHUB_USERNAMES", "gkamradt").split(",")
+    if u.strip()
+]
+
+
+def require_admin(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Missing or invalid Authorization header"}), 401
+
+        token = auth_header.split(" ", 1)[1]
+
+        try:
+            payload = jwt.decode(
+                token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token expired"}), 401
+        except jwt.InvalidTokenError as e:
+            logging.warning(f"JWT validation failed: {e}")
+            return jsonify({"error": "Invalid token"}), 401
+
+        user_metadata = payload.get("user_metadata", {})
+        github_username = (
+            user_metadata.get("user_name")
+            or user_metadata.get("preferred_username")
+            or ""
+        )
+
+        if github_username.lower() not in ADMIN_GITHUB_USERNAMES:
+            return jsonify({"error": "Forbidden"}), 403
+
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+@app.route("/api/admin/dispatch", methods=["POST"])
+@require_admin
+def admin_dispatch():
+    """
+    Dispatch game(s) between two models to the Celery queue.
+
+    Expects JSON body:
+    {
+        "model_a": "model-name-1",
+        "model_b": "model-name-2",
+        "num_games": 1,
+        "game_params": {"width": 10, "height": 10, "max_rounds": 100, "num_apples": 5}
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body is required"}), 400
+
+        model_a_name = data.get("model_a")
+        model_b_name = data.get("model_b")
+        num_games = data.get("num_games", 1)
+        game_params = data.get("game_params", {
+            "width": 10,
+            "height": 10,
+            "max_rounds": 100,
+            "num_apples": 5,
+        })
+
+        if not model_a_name or not model_b_name:
+            return jsonify({"error": "model_a and model_b are required"}), 400
+
+        if not isinstance(num_games, int) or num_games < 1 or num_games > 50:
+            return jsonify({"error": "num_games must be an integer between 1 and 50"}), 400
+
+        # Load model configs from database
+        config_a = get_model_by_name(model_a_name)
+        config_b = get_model_by_name(model_b_name)
+
+        if config_a is None:
+            return jsonify({"error": f"Model '{model_a_name}' not found"}), 404
+        if config_b is None:
+            return jsonify({"error": f"Model '{model_b_name}' not found"}), 404
+
+        # Import Celery task
+        from tasks import run_game_task
+
+        batch_id = str(uuid.uuid4())
+        task_ids = []
+
+        for i in range(num_games):
+            result = run_game_task.apply_async(
+                args=[config_a, config_b, game_params],
+                task_id=f"{batch_id}-game-{i}",
+            )
+            task_ids.append(result.id)
+
+        logging.info(
+            f"Admin dispatched {num_games} games: {model_a_name} vs {model_b_name} (batch {batch_id})"
+        )
+
+        return jsonify({
+            "batch_id": batch_id,
+            "tasks_queued": num_games,
+            "task_ids": task_ids,
+            "model_a": model_a_name,
+            "model_b": model_b_name,
+        })
+
+    except Exception as e:
+        logging.error(f"Admin dispatch error: {e}")
+        return jsonify({"error": "Failed to dispatch games"}), 500
 
 
 if __name__ == "__main__":

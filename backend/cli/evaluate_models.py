@@ -45,12 +45,13 @@ def fetch_candidates(conn, limit: int) -> List[Dict]:
     """
     Fetch up to `limit` models that need evaluation.
     Prioritize models already in testing, then pick fresh untested ones.
+    Includes pricing data for pricing-based opponent targeting.
     """
     cursor = conn.cursor()
 
     cursor.execute(
         """
-        SELECT id, name, test_status
+        SELECT id, name, test_status, pricing_input, pricing_output
         FROM models
         WHERE is_active = TRUE
           AND test_status IN ('untested', 'testing')
@@ -159,7 +160,7 @@ def finalize_model(conn, model_id: int, model_name: str, state: PlacementState) 
     """Finalize model and print summary."""
     mark_status(conn, model_id, "ranked")
     print(f"Finalized: {model_name}")
-    print(f"  Final skill estimate: {state.skill.mu:.0f}+/-{state.skill.sigma:.0f}")
+    print(f"  Final rating: mu={state.mu:.1f} sigma={state.sigma:.1f} exposed={state.exposed:.1f}")
     print(f"  Win-loss-tie from {state.games_played} games")
 
 
@@ -281,9 +282,16 @@ def run_evaluation_batch(
                 stats["finalized"].append(model_name)
                 continue
 
+            # Build pricing tuple for pricing-based targeting
+            pricing_in = candidate.get("pricing_input")
+            pricing_out = candidate.get("pricing_output")
+            model_pricing = None
+            if pricing_in is not None and pricing_out is not None:
+                model_pricing = (float(pricing_in), float(pricing_out))
+
             # Select next opponent using information gain
             opponent, debug = select_next_opponent_with_reason(
-                state, ranked_models=ranked_models
+                state, ranked_models=ranked_models, model_pricing=model_pricing
             )
             if not opponent:
                 printer("  No suitable opponent found; finalizing.")
@@ -291,7 +299,10 @@ def run_evaluation_batch(
                 stats["finalized"].append(model_name)
                 continue
 
-            opponent_id, opponent_name, opponent_rating, opponent_rank = opponent
+            opponent_id = opponent['id']
+            opponent_name = opponent['name']
+            opponent_rating = opponent['rating']
+            opponent_rank = opponent['rank_index']
 
             # Check if this is a rematch
             is_rematch = state.pending_rematch == opponent_id
