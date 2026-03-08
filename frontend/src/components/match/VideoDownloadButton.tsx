@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from "react"
 import { Download, Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
 interface VideoDownloadButtonProps {
   matchId: string;
@@ -44,27 +43,22 @@ export default function VideoDownloadButton({ matchId }: VideoDownloadButtonProp
   }, [matchId])
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <Button
-        onClick={handleDownload}
-        className="gap-2 bg-green-600 hover:bg-green-700"
-        disabled={isDownloading}
-      >
-        {isDownloading ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Preparing download...
-          </>
-        ) : (
-          <>
-            <Download className="h-4 w-4" />
-            Get Video
-          </>
-        )}
-      </Button>
-      {errorMessage && (
-        <p className="text-sm text-red-500">{errorMessage}</p>
+    <button
+      onClick={handleDownload}
+      disabled={isDownloading}
+      className="flex items-center gap-1.5 text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+    >
+      {isDownloading ? (
+        <>
+          <Loader2 className="h-3 w-3 animate-spin" />
+          <span>Downloading...</span>
+        </>
+      ) : (
+        <>
+          <Download className="h-3 w-3" />
+          <span>Download MP4</span>
+        </>
       )}
-    </div>
+    </button>
   )
 }

@@ -1,22 +1,16 @@
 """
-Confidence-Weighted Placement System
+Simplified Placement System
 
-An improved placement system that:
-1. Uses a skill estimate with uncertainty (Glicko-like) instead of hard binary bounds
-2. Weights game results by how decisive they were (score differential, death type)
-3. Selects opponents to maximize information gain
-4. Allows rematches for inconclusive results
-5. Is more forgiving of fluky losses during placement
-
-Key insight from data analysis:
-- Wall deaths with low score = definitive skill gap
-- Body collisions with close scores = tactical error, could be fluke
-- Head collisions = essentially random
-- Top models: 8-10 apples/game, bottom models: 0.1-0.4 apples/game
+Uses TrueSkill ratings from the database (updated by trueskill_engine after
+every game) instead of maintaining parallel custom rating math.  The placement
+system only handles:
+  - Bookkeeping: tracking opponents played, game history, rematch logic
+  - Opponent selection: targeting models near the evaluated model's own rating,
+    breaking ties by information gain
 """
 
 from typing import Optional, Tuple, Set, List, Dict, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import math
 import sys
 import os
@@ -26,7 +20,6 @@ from database_postgres import get_connection
 from services.trueskill_engine import (
     DEFAULT_MU as TS_DEFAULT_MU,
     DEFAULT_SIGMA as TS_DEFAULT_SIGMA,
-    DEFAULT_BETA as TS_DEFAULT_BETA,
 )
 
 
@@ -34,244 +27,20 @@ from services.trueskill_engine import (
 # Configuration
 # =============================================================================
 
-# Initial uncertainty for new models (TrueSkill sigma)
-INITIAL_SIGMA = TS_DEFAULT_SIGMA
-
-# Minimum uncertainty (never go below this even after many games)
-MIN_SIGMA = 2.0
-
-# Sigma reduction per game (scaled by confidence)
-SIGMA_REDUCTION_PER_GAME = 0.8
-
-# Base K-factor for skill updates (scaled for TrueSkill units)
-BASE_K = 3.0
-
-# Threshold below which a loss is considered "fluky" and may warrant rematch
-FLUKY_LOSS_THRESHOLD = 0.25
-
 # Maximum rematches allowed per opponent
 MAX_REMATCHES = 1
 
-# Require a high-confidence win before doing an upward probe
-HIGH_CONF_WIN_PROBE_THRESHOLD = 0.6
-# Length of consecutive high-confidence wins to trigger a more aggressive probe
-AGGRESSIVE_PROBE_WIN_STREAK = 3
-# Target fraction of interval when aggressive probe kicks in
-AGGRESSIVE_PROBE_TARGET_FRACTION = 0.8
-# Maximum allowed upward jump in opponent rating (conservative TrueSkill) per pick
-MAX_RATING_JUMP = 5.0
 # Minimum rating delta upward after a win (avoid replaying same/lower while on a climb)
 MIN_ASCEND_RATING_DELTA = 0.01
 
-# Interval/search configuration (TrueSkill exposed scale is roughly -20..40)
-INTERVAL_BUFFER = 5.0
-DEFAULT_RATING_LOW = -20.0
-DEFAULT_RATING_HIGH = 40.0
-TYPICAL_MAX_MARGIN = 15.0  # Used to normalize score differentials
+# Frontier providers whose models should preferentially play each other
+FRONTIER_PROVIDERS = frozenset({'openai', 'anthropic', 'google', 'xai', 'meta'})
 
+# Info-gain multiplier when opponent is a frontier provider
+FRONTIER_BONUS = 1.5
 
-def clamp(value: float, min_value: float, max_value: float) -> float:
-    """Clamp a numeric value into [min_value, max_value]."""
-    return max(min_value, min(max_value, value))
-
-
-def normalize_margin(raw_margin: float) -> float:
-    """Map a raw score differential into [0, 1] for multiplier calculations."""
-    if TYPICAL_MAX_MARGIN <= 0:
-        return 0.0
-    return clamp(raw_margin / TYPICAL_MAX_MARGIN, 0.0, 1.0)
-
-# =============================================================================
-# Game Result and Confidence Scoring
-# =============================================================================
-
-@dataclass
-class GameResultDetail:
-    """Detailed result of a single evaluation game."""
-    game_id: str
-    opponent_id: int
-    opponent_name: str
-    opponent_rating: float
-    opponent_rank: int
-    result: str  # 'won', 'lost', 'tied'
-    my_score: int
-    opponent_score: int
-    my_death_reason: Optional[str]  # 'wall', 'body_collision', 'head_collision', None
-    my_death_round: Optional[int]
-    total_rounds: int
-
-
-def calculate_result_confidence(
-    result: str,
-    my_score: int,
-    opponent_score: int,
-    my_death_reason: Optional[str],
-    total_rounds: int
-) -> Tuple[float, float]:
-    """
-    Calculate confidence scores for win and loss interpretations.
-
-    Returns:
-        Tuple of (win_confidence, loss_confidence)
-        - win_confidence: How much to trust this if it's a win (0.0 to 1.0)
-        - loss_confidence: How much to trust this if it's a loss (0.0 to 1.0)
-
-    Key principle: During placement, be MORE forgiving of losses than
-    skeptical of wins. A fluky loss shouldn't tank placement.
-    """
-    score_diff = abs(my_score - opponent_score)
-
-    # Base confidence from score differential
-    if score_diff == 0:
-        base_confidence = 0.4  # Tie score - very close
-    elif score_diff <= 2:
-        base_confidence = 0.6  # Close game
-    elif score_diff <= 5:
-        base_confidence = 0.75  # Moderate gap
-    elif score_diff <= 10:
-        base_confidence = 0.85  # Clear gap
-    else:
-        base_confidence = 0.95  # Dominant performance
-
-    win_confidence = base_confidence
-    loss_confidence = base_confidence
-
-    # Adjust loss confidence based on death reason
-    if result == 'lost' and my_death_reason:
-        if my_death_reason == 'wall':
-            # Wall death interpretation depends on score
-            if my_score <= 1:
-                # Early wall death with low score = bad play, definitive loss
-                loss_confidence = min(loss_confidence + 0.15, 1.0)
-            else:
-                # Wall death but decent score = mistake under pressure
-                loss_confidence = loss_confidence * 0.9
-
-        elif my_death_reason == 'body_collision':
-            # Body collision usually happens in longer, competitive games
-            # Could be tactical error, not skill gap - DISCOUNT THIS LOSS
-            loss_confidence = loss_confidence * 0.5
-
-        elif my_death_reason == 'head_collision':
-            # Head collision = both died = essentially random
-            loss_confidence = 0.25
-
-    # Adjust for game length
-    if total_rounds < 10:
-        # Very short game - wins less impressive, losses more forgivable
-        win_confidence *= 0.8
-        loss_confidence *= 0.6
-    elif total_rounds > 50:
-        # Long game - more signal, both results more meaningful
-        win_confidence = min(win_confidence * 1.1, 1.0)
-        loss_confidence = min(loss_confidence * 1.1, 1.0)
-
-    # Special case: Tie score but one player lost (e.g., 3-3 but died)
-    # This is almost a tie - should barely count as a loss
-    if score_diff == 0 and result == 'lost':
-        loss_confidence *= 0.4
-
-    return win_confidence, loss_confidence
-
-
-def get_confidence_for_result(
-    result: str,
-    my_score: int,
-    opponent_score: int,
-    my_death_reason: Optional[str],
-    total_rounds: int
-) -> float:
-    """Get the appropriate confidence for the actual game result."""
-    win_conf, loss_conf = calculate_result_confidence(
-        result, my_score, opponent_score, my_death_reason, total_rounds
-    )
-
-    if result == 'won':
-        return win_conf
-    elif result == 'lost':
-        return loss_conf
-    else:  # tied
-        return (win_conf + loss_conf) / 2
-
-
-# =============================================================================
-# Skill Estimate (Glicko-like)
-# =============================================================================
-
-@dataclass
-class SkillEstimate:
-    """
-    Represents our belief about a model's skill level.
-
-    Uses a Gaussian-like distribution:
-    - mu: Mean skill estimate (TrueSkill scale, starts at TS_DEFAULT_MU)
-    - sigma: Uncertainty/standard deviation (starts high, decreases with games)
-    """
-    mu: float = TS_DEFAULT_MU
-    sigma: float = INITIAL_SIGMA
-
-    @property
-    def low_estimate(self) -> float:
-        """Conservative estimate (2 sigma below mean)."""
-        return self.mu - 2 * self.sigma
-
-    @property
-    def high_estimate(self) -> float:
-        """Optimistic estimate (2 sigma above mean)."""
-        return self.mu + 2 * self.sigma
-
-    def update(
-        self,
-        opponent_rating: float,
-        result: str,
-        confidence: float,
-        margin_factor: float = 1.0,
-        norm_margin: float = 0.0,
-    ) -> None:
-        """
-        Update skill estimate based on game result.
-
-        Args:
-        opponent_rating: rating of the opponent (TrueSkill exposed)
-            result: 'won', 'lost', or 'tied'
-            confidence: How much to trust this result (0.0 to 1.0)
-            margin_factor: Multiplier based on score differential and surprise
-            norm_margin: Normalized margin (0..1) used for sigma reduction
-        """
-        # Expected score based on current estimate using TrueSkill beta as scale.
-        scale = math.sqrt(2) * TS_DEFAULT_BETA
-        expected = 1 / (1 + math.exp(-(self.mu - opponent_rating) / scale))
-
-        # Actual score
-        if result == 'won':
-            actual = 1.0
-        elif result == 'lost':
-            actual = 0.0
-        else:  # tied
-            actual = 0.5
-
-        # K-factor scaled by uncertainty and confidence
-        k = BASE_K * (self.sigma / TS_DEFAULT_SIGMA) * confidence
-
-        # Update mean skill estimate
-        delta = k * margin_factor * (actual - expected)
-        # Cap extreme jumps to avoid volatility on noisy results
-        delta = clamp(delta, -1.2 * k, 1.2 * k)
-        self.mu += delta
-
-        # Reduce uncertainty (but not below minimum)
-        # Confidence affects how much we reduce uncertainty
-        sigma_reduction = SIGMA_REDUCTION_PER_GAME * confidence * (0.5 + 0.5 * norm_margin)
-        self.sigma = max(MIN_SIGMA, self.sigma - sigma_reduction)
-
-    def to_dict(self) -> Dict[str, float]:
-        """Serialize to dictionary."""
-        return {'mu': self.mu, 'sigma': self.sigma}
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, float]) -> 'SkillEstimate':
-        """Deserialize from dictionary."""
-        return cls(mu=data.get('mu', 1500.0), sigma=data.get('sigma', INITIAL_SIGMA))
+# Hard cap: never play the same opponent more than this many times during placement
+MAX_PLACEMENT_REPEATS = 2
 
 
 # =============================================================================
@@ -281,20 +50,25 @@ class SkillEstimate:
 @dataclass
 class PlacementState:
     """
-    State tracking for confidence-weighted placement.
+    State tracking for placement.
 
-    Uses probabilistic skill estimate instead of hard binary bounds.
+    mu/sigma come from the DB (written by trueskill_engine after each game).
+    This class only does bookkeeping for opponent selection.
     """
     model_id: int
-    skill: SkillEstimate
+    mu: float
+    sigma: float
     games_played: int
     max_games: int
-    opponents_played: Set[int]  # opponent_id -> times played
-    opponent_play_counts: Dict[int, int]  # Track how many times each opponent played
-    game_history: List[Dict[str, Any]]  # Detailed history for reconstruction
-    pending_rematch: Optional[int] = None  # opponent_id if rematch is pending
-    rating_low: float = DEFAULT_RATING_LOW  # Lower bound of current search interval
-    rating_high: float = DEFAULT_RATING_HIGH  # Upper bound of current search interval
+    opponents_played: Set[int]
+    opponent_play_counts: Dict[int, int]
+    game_history: List[Dict[str, Any]]
+    pending_rematch: Optional[int] = None
+
+    @property
+    def exposed(self) -> float:
+        """Conservative TrueSkill rating (mu - 3*sigma)."""
+        return self.mu - 3.0 * self.sigma
 
     def __post_init__(self):
         if self.opponent_play_counts is None:
@@ -304,44 +78,69 @@ class PlacementState:
         """Serialize to dictionary."""
         return {
             'model_id': self.model_id,
-            'skill': self.skill.to_dict(),
+            'mu': self.mu,
+            'sigma': self.sigma,
             'games_played': self.games_played,
             'max_games': self.max_games,
             'opponents_played': list(self.opponents_played),
             'opponent_play_counts': self.opponent_play_counts,
             'game_history': self.game_history,
             'pending_rematch': self.pending_rematch,
-            'rating_low': self.rating_low,
-            'rating_high': self.rating_high,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'PlacementState':
         """Deserialize from dictionary."""
+        # Support legacy format that stored skill as a sub-dict
+        skill = data.get('skill', {})
         return cls(
             model_id=data['model_id'],
-            skill=SkillEstimate.from_dict(data.get('skill', {})),
+            mu=data.get('mu', skill.get('mu', TS_DEFAULT_MU)),
+            sigma=data.get('sigma', skill.get('sigma', TS_DEFAULT_SIGMA)),
             games_played=data.get('games_played', 0),
             max_games=data.get('max_games', 9),
             opponents_played=set(data.get('opponents_played', [])),
             opponent_play_counts=data.get('opponent_play_counts', {}),
             game_history=data.get('game_history', []),
             pending_rematch=data.get('pending_rematch'),
-            rating_low=data.get('rating_low', data.get('elo_low', DEFAULT_RATING_LOW)),
-            rating_high=data.get('rating_high', data.get('elo_high', DEFAULT_RATING_HIGH)),
         )
+
+
+# =============================================================================
+# DB helpers
+# =============================================================================
+
+def _read_model_trueskill(model_id: int) -> Tuple[float, float]:
+    """Read current trueskill_mu and trueskill_sigma from the DB."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT trueskill_mu, trueskill_sigma FROM models WHERE id = %s",
+            (model_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return TS_DEFAULT_MU, TS_DEFAULT_SIGMA
+        return (
+            row.get('trueskill_mu') or TS_DEFAULT_MU,
+            row.get('trueskill_sigma') or TS_DEFAULT_SIGMA,
+        )
+    finally:
+        conn.close()
 
 
 # =============================================================================
 # Core Functions
 # =============================================================================
 
-def get_ranked_models_by_index() -> List[Tuple[int, str, float, int]]:
+def get_ranked_models_by_index() -> List[Dict[str, Any]]:
     """
     Get all ranked models sorted by conservative TrueSkill (exposed).
 
     Returns:
-        List of tuples (model_id, name, rating_exposed, rank_index)
+        List of dicts with keys:
+            id, name, rating, rank_index, pricing_input, pricing_output, provider
         where rank_index 0 = best, N-1 = worst
     """
     conn = get_connection()
@@ -349,15 +148,25 @@ def get_ranked_models_by_index() -> List[Tuple[int, str, float, int]]:
 
     try:
         cursor.execute("""
-            SELECT id, name, trueskill_exposed
+            SELECT id, name, trueskill_exposed, pricing_input, pricing_output, provider
             FROM models
             WHERE test_status = 'ranked' AND is_active = TRUE
             ORDER BY trueskill_exposed DESC NULLS LAST
         """)
 
         models = cursor.fetchall()
-        return [(m['id'], m['name'], m.get('trueskill_exposed') or 0.0, idx)
-                for idx, m in enumerate(models)]
+        return [
+            {
+                'id': m['id'],
+                'name': m['name'],
+                'rating': m.get('trueskill_exposed') or 0.0,
+                'rank_index': idx,
+                'pricing_input': m.get('pricing_input'),
+                'pricing_output': m.get('pricing_output'),
+                'provider': m.get('provider'),
+            }
+            for idx, m in enumerate(models)
+        ]
 
     finally:
         conn.close()
@@ -365,31 +174,25 @@ def get_ranked_models_by_index() -> List[Tuple[int, str, float, int]]:
 
 def init_placement_state(model_id: int, max_games: int = 9) -> PlacementState:
     """
-    Initialize placement state for a new model.
-
-    Args:
-        model_id: ID of the model to place
-        max_games: Maximum games to play (default: 9)
-
-    Returns:
-        Initialized PlacementState
+    Initialize placement state for a model, reading current mu/sigma from DB.
     """
+    mu, sigma = _read_model_trueskill(model_id)
     return PlacementState(
         model_id=model_id,
-        skill=SkillEstimate(mu=TS_DEFAULT_MU, sigma=INITIAL_SIGMA),
+        mu=mu,
+        sigma=sigma,
         games_played=0,
         max_games=max_games,
         opponents_played=set(),
         opponent_play_counts={},
         game_history=[],
         pending_rematch=None,
-        rating_low=DEFAULT_RATING_LOW,
-        rating_high=DEFAULT_RATING_HIGH,
     )
 
 
 def calculate_information_gain(
-    skill: SkillEstimate,
+    mu: float,
+    sigma: float,
     opponent_rating: float,
     opponent_id: int,
     play_count: int
@@ -403,161 +206,123 @@ def calculate_information_gain(
     - Our uncertainty is still high
 
     Args:
-        skill: Current skill estimate
-    opponent_rating: rating of potential opponent (TrueSkill exposed)
+        mu: Current model's TrueSkill mu
+        sigma: Current model's TrueSkill sigma
+        opponent_rating: Rating of potential opponent (TrueSkill exposed)
         opponent_id: ID of potential opponent
         play_count: How many times we've played this opponent
 
     Returns:
         Information gain score (higher = more informative)
     """
-    # Penalty for playing same opponent multiple times
-    repeat_penalty = 1.0 / (1 + play_count)
+    repeat_penalty = 0.1 ** play_count  # 1.0, 0.1, 0.01, ...
 
-    # How informative is this opponent given our current uncertainty?
-    # Best opponents are near our current estimate (challenging but beatable)
-    distance_from_estimate = abs(opponent_rating - skill.mu)
+    distance_from_estimate = abs(opponent_rating - mu)
+    optimal_distance = sigma * 0.5
 
-    # Optimal opponent is about 0.5 sigma away
-    # (not too easy, not too hard)
-    optimal_distance = skill.sigma * 0.5
-
-    # Score based on distance from optimal
-    if skill.sigma > 0:
-        distance_factor = math.exp(-((distance_from_estimate - optimal_distance) ** 2) / (2 * skill.sigma ** 2))
+    if sigma > 0:
+        distance_factor = math.exp(-((distance_from_estimate - optimal_distance) ** 2) / (2 * sigma ** 2))
     else:
         distance_factor = 1.0 if distance_from_estimate < 50 else 0.0
 
-    # Higher uncertainty = more to gain from any game
-    uncertainty_factor = skill.sigma / INITIAL_SIGMA
+    uncertainty_factor = sigma / TS_DEFAULT_SIGMA
 
-    # Combine factors
     return repeat_penalty * distance_factor * (0.5 + 0.5 * uncertainty_factor)
-
-
-def ensure_interval_bounds(
-    state: PlacementState,
-    ranked_models: Optional[List[Tuple[int, str, float, int]]] = None
-) -> Tuple[float, float]:
-    """
-    Ensure the placement state has rating interval bounds seeded.
-
-    If missing, derive from the leaderboard with a small buffer; otherwise
-    fall back to sensible defaults.
-    """
-    if getattr(state, "rating_low", None) is None or getattr(state, "rating_high", None) is None:
-        if ranked_models:
-            ratings = [m[2] for m in ranked_models]
-            state.rating_low = min(ratings) - INTERVAL_BUFFER
-            state.rating_high = max(ratings) + INTERVAL_BUFFER
-        else:
-            state.rating_low = DEFAULT_RATING_LOW
-            state.rating_high = DEFAULT_RATING_HIGH
-    return state.rating_low, state.rating_high
-
-
-def window_from_sigma(sigma: float, norm_margin: float) -> float:
-    """
-    Convert uncertainty + margin into a tightening window for the interval.
-
-    Higher sigma -> wider steps; bigger margins widen slightly.
-    """
-    base = sigma * 1.5 + 2.0
-    base = clamp(base, 4.0, 20.0)
-    return base + norm_margin * 2.0
-
-
-def tighten_interval(
-    state: PlacementState,
-    opponent_rating: float,
-    result: str,
-    norm_margin: float,
-    expected: float,
-) -> None:
-    """
-    Update the [rating_low, rating_high] interval based on the result.
-
-    Wins lift the floor, losses lower the ceiling, draws only raise the floor
-    when the opponent is well below current belief.
-    """
-    step = window_from_sigma(state.skill.sigma, norm_margin)
-
-    if result == 'won':
-        state.rating_low = max(state.rating_low, opponent_rating - step)
-    elif result == 'lost':
-        state.rating_high = min(state.rating_high, opponent_rating + step)
-    else:  # tied
-        # Only lift the floor on draws vs clearly weaker opponents
-        if opponent_rating < state.skill.mu - 0.5 * state.skill.sigma:
-            state.rating_low = max(state.rating_low, opponent_rating - step / 2)
-
-    # Guard against inverted bounds
-    if state.rating_low > state.rating_high:
-        mid = (state.rating_low + state.rating_high) / 2
-        state.rating_low = mid
-        state.rating_high = mid
 
 
 def should_rematch(
     result: str,
-    confidence: float,
+    my_score: int,
+    opponent_score: int,
     opponent_id: int,
     play_count: int
 ) -> bool:
     """
     Determine if we should rematch this opponent.
 
-    Rematch if:
-    - Lost with very low confidence (fluky loss)
-    - Haven't exceeded max rematches for this opponent
-
-    Args:
-        result: Game result ('won', 'lost', 'tied')
-        confidence: Confidence in the result
-        opponent_id: ID of the opponent
-        play_count: Times played this opponent
-
-    Returns:
-        True if rematch is warranted
+    Rematch when loss is by <= 1 apple and we haven't exceeded max rematches.
     """
     if result != 'lost':
         return False
 
-    if play_count >= MAX_REMATCHES + 1:  # +1 because we already played once
+    if play_count >= MAX_REMATCHES + 1:
         return False
 
-    return confidence < FLUKY_LOSS_THRESHOLD
+    score_diff = abs(my_score - opponent_score)
+    return score_diff <= 1
+
+
+def _pricing_target(
+    model_pricing: Optional[Tuple[float, float]],
+    ranked_models: List[Dict[str, Any]],
+) -> float:
+    """
+    Compute a target rating based on pricing similarity.
+
+    Finds ranked models within ~0.5 log10 of the evaluated model's cost
+    (same order of magnitude) and returns the median rating of that cohort.
+    Falls back to the overall median rating if no pricing data or no matches.
+    """
+    all_ratings = [m['rating'] for m in ranked_models]
+    if not all_ratings:
+        return 0.0
+    overall_median = sorted(all_ratings)[len(all_ratings) // 2]
+
+    if model_pricing is None:
+        return overall_median
+
+    p_in, p_out = model_pricing
+    model_cost = (p_in or 0) + (p_out or 0)
+    if model_cost <= 0:
+        return overall_median
+
+    log_model = math.log10(model_cost)
+
+    cohort_ratings = []
+    for m in ranked_models:
+        mp_in = m.get('pricing_input') or 0
+        mp_out = m.get('pricing_output') or 0
+        m_cost = float(mp_in) + float(mp_out)
+        if m_cost <= 0:
+            continue
+        if abs(math.log10(m_cost) - log_model) <= 0.5:
+            cohort_ratings.append(m['rating'])
+
+    if not cohort_ratings:
+        return overall_median
+
+    cohort_ratings.sort()
+    return cohort_ratings[len(cohort_ratings) // 2]
 
 
 def select_next_opponent(
     state: PlacementState,
-    ranked_models: Optional[List[Tuple[int, str, float, int]]] = None
-) -> Optional[Tuple[int, str, float, int]]:
+    ranked_models: Optional[List[Dict[str, Any]]] = None
+) -> Optional[Dict[str, Any]]:
     opponent, _ = select_next_opponent_with_reason(state, ranked_models=ranked_models)
     return opponent
 
 
 def select_next_opponent_with_reason(
     state: PlacementState,
-    ranked_models: Optional[List[Tuple[int, str, float, int]]] = None
-) -> Tuple[Optional[Tuple[int, str, float, int]], Dict[str, Any]]:
+    ranked_models: Optional[List[Dict[str, Any]]] = None,
+    model_pricing: Optional[Tuple[float, float]] = None,
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
     """
-    Select the next opponent using information gain strategy.
+    Select the next opponent.
 
     Strategy:
     1. If there's a pending rematch, do that first
-    2. Otherwise, pick opponent that maximizes information gain
-    3. Prefer opponents we haven't played
-    4. Target opponents near our skill estimate
+    2. Blend pricing-based target (early) with TrueSkill-based target (later)
+    3. Score candidates by distance to target, tie-break by info gain
+    4. Hard cap: skip opponents played >= MAX_PLACEMENT_REPEATS times
+    5. Frontier bonus: multiply info gain for frontier provider opponents
+    6. After a win, prefer strictly higher-rated opponents
 
     Args:
         state: Current placement state
-        ranked_models: Optional pre-fetched ranked models list
-
-    Returns:
-        (opponent tuple, debug dict)
-        opponent tuple: (opponent_id, opponent_name, opponent_rating, opponent_rank) or None
-        debug dict: selection metadata for logging
+        ranked_models: List of ranked model dicts
+        model_pricing: Optional (pricing_input, pricing_output) for the evaluated model
     """
     debug: Dict[str, Any] = {}
 
@@ -571,29 +336,31 @@ def select_next_opponent_with_reason(
         print("  No ranked models available for placement")
         return None, debug
 
-    # Filter out the model being tested
-    candidates = [m for m in ranked_models if m[0] != state.model_id]
+    candidates = [m for m in ranked_models if m['id'] != state.model_id]
 
     if not candidates:
         return None, debug
 
-    # Ensure interval bounds are seeded
-    rating_low, rating_high = ensure_interval_bounds(state, ranked_models)
-    debug["interval"] = (rating_low, rating_high)
-
     # Check for pending rematch
     if state.pending_rematch is not None:
-        for model_id, name, rating, rank in candidates:
-            if model_id == state.pending_rematch:
+        for m in candidates:
+            if m['id'] == state.pending_rematch:
                 debug.update({
                     "reason": "pending_rematch",
-                    "opponent_id": model_id,
+                    "opponent_id": m['id'],
                 })
-                return (model_id, name, rating, rank), debug
-        # Rematch opponent not found (maybe deactivated), clear it
+                return m, debug
         state.pending_rematch = None
 
-    # If we just won, prefer strictly higher-rated opponents to keep climbing.
+    # Hard cap: remove opponents already played MAX_PLACEMENT_REPEATS times
+    candidates = [
+        m for m in candidates
+        if state.opponent_play_counts.get(m['id'], 0) < MAX_PLACEMENT_REPEATS
+    ]
+    if not candidates:
+        return None, debug
+
+    # If we just won, prefer strictly higher-rated opponents to keep climbing
     last_game = state.game_history[-1] if state.game_history else None
     last_win_rating = None
     if last_game and last_game.get("result") == "won":
@@ -601,7 +368,7 @@ def select_next_opponent_with_reason(
 
     filtered_candidates = candidates
     if last_win_rating is not None:
-        upward = [c for c in candidates if c[2] > last_win_rating + MIN_ASCEND_RATING_DELTA]
+        upward = [c for c in candidates if c['rating'] > last_win_rating + MIN_ASCEND_RATING_DELTA]
         if upward:
             filtered_candidates = upward
             debug["ascend_filter_from"] = last_win_rating
@@ -609,58 +376,34 @@ def select_next_opponent_with_reason(
 
     candidates = filtered_candidates
 
-    # Choose a target rating: midpoint by default; escalate on confidence streaks.
-    interval_span = max(0.0, rating_high - rating_low)
-    target_fraction = 0.5
-    probe_reason = "midpoint"
-
-    # Compute confident win streak (most recent backwards)
-    streak = 0
-    for g in reversed(state.game_history):
-        if g.get("result") == "won" and g.get("confidence", 0) >= HIGH_CONF_WIN_PROBE_THRESHOLD:
-            streak += 1
-        else:
-            break
-
-    last_game = state.game_history[-1] if state.game_history else None
-    last_confidence = None
-    if last_game and last_game.get("result") == "won":
-        last_confidence = last_game.get("confidence")
-
-    if streak >= AGGRESSIVE_PROBE_WIN_STREAK:
-        target_fraction = AGGRESSIVE_PROBE_TARGET_FRACTION
-        probe_reason = "upward_probe_streak"
-    else:
-        if state.games_played % 2 == 1:
-            if last_confidence is not None and last_confidence >= HIGH_CONF_WIN_PROBE_THRESHOLD:
-                target_fraction = 0.6
-                probe_reason = "upward_probe"
-            else:
-                probe_reason = "midpoint_hold"
-
-    target_rating = rating_low + target_fraction * interval_span
-
-    # Cap how far above the last opponent we can jump in one pick to avoid
-    # skipping large swaths of the ladder in a single move.
-    if state.game_history:
-        last_opponent_rating = state.game_history[-1].get("opponent_rating")
-        if last_opponent_rating is not None:
-            target_rating = min(target_rating, last_opponent_rating + MAX_RATING_JUMP)
-
+    # Blended target: pricing-based early, TrueSkill-based later
+    pricing_target = _pricing_target(model_pricing, ranked_models)
+    alpha = min(state.games_played / 4.0, 1.0)  # 0→pricing, 1→rating
+    target_rating = alpha * state.exposed + (1 - alpha) * pricing_target
     debug["target_rating"] = target_rating
-    debug["probe"] = probe_reason
+    debug["pricing_target"] = pricing_target
+    debug["alpha"] = alpha
 
     # Score each candidate by distance to target, breaking ties with information gain
     best = None
     best_key = None
-    for model_id, name, rating, rank in candidates:
+    for m in candidates:
+        model_id = m['id']
+        name = m['name']
+        rating = m['rating']
+        rank = m['rank_index']
         play_count = state.opponent_play_counts.get(model_id, 0)
-        info_gain = calculate_information_gain(state.skill, rating, model_id, play_count)
+        info_gain = calculate_information_gain(state.mu, state.sigma, rating, model_id, play_count)
+
+        # Frontier bonus
+        provider = (m.get('provider') or '').lower()
+        if provider in FRONTIER_PROVIDERS:
+            info_gain *= FRONTIER_BONUS
+
         distance = abs(rating - target_rating)
-        # Prefer closer to target; if equal distance, pick higher info_gain
         key = (distance, -info_gain)
         if best is None or key < best_key:
-            best = (model_id, name, rating, rank)
+            best = m
             best_key = key
             debug.update({
                 "selected_id": model_id,
@@ -681,61 +424,18 @@ def update_placement_state(
     opponent_rating: float
 ) -> None:
     """
-    Update placement state based on a completed game.
+    Update placement state after a completed game.
 
-    Args:
-        state: Placement state to update (modified in place)
-        game_result: Dictionary with game details:
-            - opponent_id: int
-            - result: 'won', 'lost', 'tied'
-            - my_score: int
-            - opponent_score: int
-            - my_death_reason: Optional[str]
-            - total_rounds: int
-    opponent_rating: rating of the opponent at match time (TrueSkill exposed)
+    Only does bookkeeping — TrueSkill mu/sigma are already updated in the DB
+    by trueskill_engine.rate_game().  We re-read them here.
     """
     opponent_id = game_result['opponent_id']
     result = game_result['result']
     my_score = game_result.get('my_score', 0)
     opponent_score = game_result.get('opponent_score', 0)
-    my_death_reason = game_result.get('my_death_reason')
-    total_rounds = game_result.get('total_rounds', 50)
 
-    # Calculate confidence in this result
-    confidence = get_confidence_for_result(
-        result, my_score, opponent_score, my_death_reason, total_rounds
-    )
-
-    # Ensure interval bounds exist before updates
-    ensure_interval_bounds(state)
-
-    # Expected vs actual for rating update
-    scale = math.sqrt(2) * TS_DEFAULT_BETA
-    expected = 1 / (1 + math.exp(-(state.skill.mu - opponent_rating) / scale))
-    if result == 'won':
-        actual = 1.0
-    elif result == 'lost':
-        actual = 0.0
-    else:
-        actual = 0.5
-
-    # Margin-aware multiplier
-    norm_margin = normalize_margin(abs(my_score - opponent_score))
-    surprise = actual - expected
-    margin_factor = 1 + surprise * norm_margin
-    margin_factor = clamp(margin_factor, 0.5, 1.5)
-
-    # Update skill estimate
-    state.skill.update(
-        opponent_rating,
-        result,
-        confidence,
-        margin_factor=margin_factor,
-        norm_margin=norm_margin,
-    )
-
-    # Tighten interval based on result
-    tighten_interval(state, opponent_rating, result, norm_margin, expected)
+    # Re-read mu/sigma from DB (already updated by trueskill_engine)
+    state.mu, state.sigma = _read_model_trueskill(state.model_id)
 
     # Track opponent
     state.opponents_played.add(opponent_id)
@@ -745,7 +445,6 @@ def update_placement_state(
     state.game_history.append({
         **game_result,
         'opponent_rating': opponent_rating,
-        'confidence': confidence,
     })
 
     # Increment games played
@@ -755,29 +454,21 @@ def update_placement_state(
     if state.pending_rematch == opponent_id:
         state.pending_rematch = None
 
-    # Check if we should request a rematch
+    # Check if we should request a rematch (loss by <= 1 apple)
     play_count = state.opponent_play_counts[opponent_id]
-    if should_rematch(result, confidence, opponent_id, play_count):
+    if should_rematch(result, my_score, opponent_score, opponent_id, play_count):
         state.pending_rematch = opponent_id
-        print(f"  Low confidence loss ({confidence:.2f}) - scheduling rematch")
+        print(f"  Close loss (score diff <= 1) - scheduling rematch")
 
 
 def get_final_rank(
     state: PlacementState,
-    ranked_models: Optional[List[Tuple[int, str, float, int]]] = None
+    ranked_models: Optional[List[Dict[str, Any]]] = None
 ) -> int:
     """
-    Determine final rank based on skill estimate.
+    Determine final rank based on exposed rating.
 
-    Compares the model's estimated skill (mu) against the TrueSkill exposed ratings
-    of all ranked models to find where it belongs.
-
-    Args:
-        state: Final placement state
-        ranked_models: Optional pre-fetched ranked models
-
-    Returns:
-        Final rank index (0 = best)
+    Compares the model's exposed rating against all ranked models.
     """
     if ranked_models is None:
         ranked_models = get_ranked_models_by_index()
@@ -785,10 +476,9 @@ def get_final_rank(
     if not ranked_models:
         return 0
 
-    # Find where our skill estimate fits in the leaderboard
     final_rank = 0
-    for idx, (_, _, rating, _) in enumerate(ranked_models):
-        if state.skill.mu < rating:
+    for idx, m in enumerate(ranked_models):
+        if state.exposed < m['rating']:
             final_rank = idx + 1
 
     return final_rank
@@ -798,29 +488,30 @@ def rebuild_state_from_history(
     model_id: int,
     max_games: int,
     history: List[Dict[str, Any]],
-    ranked_models: List[Tuple[int, str, float, int]]
+    ranked_models: List[Dict[str, Any]]
 ) -> Tuple[PlacementState, int]:
     """
     Reconstruct placement state from completed evaluation games.
 
-    This is called when resuming evaluation for a model that has
-    already played some games.
-
-    Args:
-        model_id: ID of the model being evaluated
-        max_games: Maximum games for this evaluation
-        history: List of completed game records from database
-        ranked_models: Current ranked models list
-
-    Returns:
-        Tuple of (reconstructed state, number of completed games)
+    Only replays bookkeeping (opponents played, history, game count).
+    Reads current mu/sigma from DB instead of replaying custom math.
     """
-    # Create a lookup for opponent ratings
-    rating_lookup = {m[0]: m[2] for m in ranked_models}
+    rating_lookup = {m['id']: m['rating'] for m in ranked_models}
 
-    # Initialize fresh state
-    state = init_placement_state(model_id, max_games)
-    ensure_interval_bounds(state, ranked_models)
+    # Read current mu/sigma from DB
+    mu, sigma = _read_model_trueskill(model_id)
+
+    state = PlacementState(
+        model_id=model_id,
+        mu=mu,
+        sigma=sigma,
+        games_played=0,
+        max_games=max_games,
+        opponents_played=set(),
+        opponent_play_counts={},
+        game_history=[],
+        pending_rematch=None,
+    )
 
     for record in history:
         opponent_id = record.get('opponent_id')
@@ -829,23 +520,36 @@ def rebuild_state_from_history(
         if opponent_id is None or result is None:
             continue
 
-        # Get opponent rating (use stored value or look up current)
         opponent_rating = record.get('opponent_rating') or record.get('opponent_elo')
         if opponent_rating is None:
             opponent_rating = rating_lookup.get(opponent_id, TS_DEFAULT_MU)
 
-        # Build game result dict
-        game_result = {
+        my_score = record.get('my_score', 0)
+        opponent_score = record.get('opponent_score', 0)
+
+        # Track opponent
+        state.opponents_played.add(opponent_id)
+        state.opponent_play_counts[opponent_id] = state.opponent_play_counts.get(opponent_id, 0) + 1
+
+        # Add to history
+        state.game_history.append({
             'opponent_id': opponent_id,
             'result': result,
-            'my_score': record.get('my_score', 0),
-            'opponent_score': record.get('opponent_score', 0),
+            'my_score': my_score,
+            'opponent_score': opponent_score,
             'my_death_reason': record.get('my_death_reason'),
             'total_rounds': record.get('total_rounds', 50),
-        }
+            'opponent_rating': opponent_rating,
+        })
 
-        # Update state with this game
-        update_placement_state(state, game_result, opponent_rating)
+        state.games_played += 1
+
+        # Replay rematch logic for the last game
+        play_count = state.opponent_play_counts[opponent_id]
+        if should_rematch(result, my_score, opponent_score, opponent_id, play_count):
+            state.pending_rematch = opponent_id
+        elif state.pending_rematch == opponent_id:
+            state.pending_rematch = None
 
     return state, len(history)
 
@@ -856,24 +560,15 @@ def rebuild_state_from_history(
 
 def get_opponent_rank_index(
     opponent_id: int,
-    ranked_models: Optional[List[Tuple[int, str, float, int]]] = None
+    ranked_models: Optional[List[Dict[str, Any]]] = None
 ) -> Optional[int]:
-    """
-    Get the current rank index of an opponent.
-
-    Args:
-        opponent_id: ID of the opponent model
-        ranked_models: Optional pre-fetched ranked models
-
-    Returns:
-        Rank index (0 = best) or None if not found
-    """
+    """Get the current rank index of an opponent."""
     if ranked_models is None:
         ranked_models = get_ranked_models_by_index()
 
-    for model_id, _, _, rank_index in ranked_models:
-        if model_id == opponent_id:
-            return rank_index
+    for m in ranked_models:
+        if m['id'] == opponent_id:
+            return m['rank_index']
 
     return None
 
@@ -881,7 +576,6 @@ def get_opponent_rank_index(
 def format_state_summary(state: PlacementState) -> str:
     """Format a human-readable summary of placement state."""
     return (
-        f"Skill: {state.skill.mu:.0f}±{state.skill.sigma:.0f} | "
-        f"Games: {state.games_played}/{state.max_games} | "
-        f"Range: [{state.skill.low_estimate:.0f}, {state.skill.high_estimate:.0f}]"
+        f"Skill: mu={state.mu:.1f} sigma={state.sigma:.1f} exposed={state.exposed:.1f} | "
+        f"Games: {state.games_played}/{state.max_games}"
     )

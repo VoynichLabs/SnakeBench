@@ -24,7 +24,7 @@ export default async function Image({ params }: { params: { id: string } }) {
   const { id } = params
 
   try {
-    const gamesResponse = await fetch(`${process.env.FLASK_URL}/api/matches/${id}`, {
+    const gamesResponse = await fetch(`${process.env.NEXT_PUBLIC_FLASK_URL}/api/matches/${id}`, {
       next: { revalidate: 300 },
     })
 

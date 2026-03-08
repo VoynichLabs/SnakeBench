@@ -19,9 +19,6 @@ from placement_system import (
     select_next_opponent,
     update_placement_state,
     rebuild_state_from_history,
-    get_confidence_for_result,
-    calculate_result_confidence as calc_result_confidence_prod,
-    SkillEstimate as SkillEstimateProd,
     PlacementState,
     get_final_rank,
     format_state_summary,
@@ -619,7 +616,10 @@ def test_production_system():
     ranked_models = []
     for i in range(150):
         elo = 1700 - i * 2
-        ranked_models.append((i, f"Model_{i}", elo, i))
+        ranked_models.append({
+            'id': i, 'name': f"Model_{i}", 'rating': elo, 'rank_index': i,
+            'pricing_input': None, 'pricing_output': None, 'provider': None,
+        })
 
     # Same game history as before
     game_results = [
@@ -716,24 +716,15 @@ def test_production_system():
         opponent_id = game['opponent_id']
         opponent_rating = 1700 - opponent_id * 2
 
-        # Get confidence for this result
-        conf = get_confidence_for_result(
-            game['result'],
-            game['my_score'],
-            game['opponent_score'],
-            game['my_death_reason'],
-            game['total_rounds']
-        )
-
-        old_mu = state.skill.mu
-        old_sigma = state.skill.sigma
+        old_mu = state.mu
+        old_sigma = state.sigma
 
         # Update state
         update_placement_state(state, game, opponent_rating)
 
         print(f"Game {i+1}: vs {game['opponent_name'][:25]:<25} (ELO {opponent_rating})")
-        print(f"  Result: {game['result'].upper():<4} | Score: {game['my_score']}-{game['opponent_score']} | Conf: {conf:.2f}")
-        print(f"  Skill: {old_mu:.0f}±{old_sigma:.0f} -> {state.skill.mu:.0f}±{state.skill.sigma:.0f}")
+        print(f"  Result: {game['result'].upper():<4} | Score: {game['my_score']}-{game['opponent_score']}")
+        print(f"  Skill: {old_mu:.1f}±{old_sigma:.1f} -> {state.mu:.1f}±{state.sigma:.1f}")
 
         # Check for rematch
         if state.pending_rematch:
@@ -746,8 +737,7 @@ def test_production_system():
     print("=" * 70)
     print("FINAL RESULTS (Production)")
     print("=" * 70)
-    print(f"Skill estimate: {state.skill.mu:.0f}±{state.skill.sigma:.0f}")
-    print(f"95% confidence range: [{state.skill.low_estimate:.0f}, {state.skill.high_estimate:.0f}]")
+    print(f"Skill estimate: mu={state.mu:.1f} sigma={state.sigma:.1f} exposed={state.exposed:.1f}")
     print(f"Final rank: #{final_rank + 1}")
     print(f"Games played: {state.games_played}")
 
@@ -761,36 +751,40 @@ def test_information_gain_opponent_selection():
     print("=" * 80)
 
     # Create ranked models
-    ranked_models = [(i, f"Model_{i}", 1700 - i * 10, i) for i in range(50)]
+    ranked_models = [
+        {'id': i, 'name': f"Model_{i}", 'rating': 1700 - i * 10, 'rank_index': i,
+         'pricing_input': None, 'pricing_output': None, 'provider': None}
+        for i in range(50)
+    ]
 
     # Initialize a fresh state
     state = init_placement_state(model_id=9999, max_games=9)
 
     print("\nInitial state:")
-    print(f"  Skill: {state.skill.mu:.0f}±{state.skill.sigma:.0f}")
+    print(f"  Skill: mu={state.mu:.1f} sigma={state.sigma:.1f}")
 
     # Select first opponent
     opponent = select_next_opponent(state, ranked_models)
-    print(f"\nFirst opponent selected: {opponent[1]} (ELO {opponent[2]:.0f}, rank #{opponent[3]})")
+    print(f"\nFirst opponent selected: {opponent['name']} (ELO {opponent['rating']:.0f}, rank #{opponent['rank_index']})")
     print("  Expected: Should be near ELO 1500 (our estimate)")
 
     # Simulate a win
     game = {
-        'opponent_id': opponent[0],
+        'opponent_id': opponent['id'],
         'result': 'won',
         'my_score': 5,
         'opponent_score': 3,
         'my_death_reason': None,
         'total_rounds': 30
     }
-    update_placement_state(state, game, opponent[2])
+    update_placement_state(state, game, opponent['rating'])
 
-    print(f"\nAfter winning against {opponent[1]}:")
-    print(f"  Skill: {state.skill.mu:.0f}±{state.skill.sigma:.0f}")
+    print(f"\nAfter winning against {opponent['name']}:")
+    print(f"  Skill: mu={state.mu:.1f} sigma={state.sigma:.1f}")
 
     # Select second opponent
     opponent2 = select_next_opponent(state, ranked_models)
-    print(f"\nSecond opponent selected: {opponent2[1]} (ELO {opponent2[2]:.0f}, rank #{opponent2[3]})")
+    print(f"\nSecond opponent selected: {opponent2['name']} (ELO {opponent2['rating']:.0f}, rank #{opponent2['rank_index']})")
     print("  Expected: Should target higher ELO now (since we won)")
 
 
@@ -802,40 +796,35 @@ def test_rematch_logic():
     print("TEST: Rematch Logic")
     print("=" * 80)
 
-    ranked_models = [(i, f"Model_{i}", 1700 - i * 10, i) for i in range(50)]
+    ranked_models = [
+        {'id': i, 'name': f"Model_{i}", 'rating': 1700 - i * 10, 'rank_index': i,
+         'pricing_input': None, 'pricing_output': None, 'provider': None}
+        for i in range(50)
+    ]
 
     state = init_placement_state(model_id=9999, max_games=9)
 
-    # Simulate a fluky loss (tie score, body collision)
-    fluky_loss = {
+    # Simulate a close loss (score diff <= 1, should trigger rematch)
+    close_loss = {
         'opponent_id': 20,
         'result': 'lost',
         'my_score': 5,
-        'opponent_score': 5,  # Tie score!
+        'opponent_score': 5,  # Tie score but lost
         'my_death_reason': 'body_collision',
         'total_rounds': 25
     }
 
-    conf = get_confidence_for_result(
-        fluky_loss['result'],
-        fluky_loss['my_score'],
-        fluky_loss['opponent_score'],
-        fluky_loss['my_death_reason'],
-        fluky_loss['total_rounds']
-    )
+    print(f"Close loss: Score 5-5, body_collision (diff=0)")
 
-    print(f"Fluky loss: Score 5-5, body_collision")
-    print(f"Confidence: {conf:.2f}")
-
-    update_placement_state(state, fluky_loss, 1500)
+    update_placement_state(state, close_loss, 1500)
 
     if state.pending_rematch:
         print(f"REMATCH REQUESTED: opponent {state.pending_rematch}")
-        print("  -> Correct! Low confidence loss triggered rematch")
+        print("  -> Correct! Close loss (diff<=1) triggered rematch")
     else:
         print("No rematch requested")
 
-    # Now simulate a decisive loss
+    # Now simulate a decisive loss (score diff > 1, no rematch)
     state2 = init_placement_state(model_id=9998, max_games=9)
 
     decisive_loss = {
@@ -847,16 +836,7 @@ def test_rematch_logic():
         'total_rounds': 15
     }
 
-    conf2 = get_confidence_for_result(
-        decisive_loss['result'],
-        decisive_loss['my_score'],
-        decisive_loss['opponent_score'],
-        decisive_loss['my_death_reason'],
-        decisive_loss['total_rounds']
-    )
-
-    print(f"\nDecisive loss: Score 1-10, wall death")
-    print(f"Confidence: {conf2:.2f}")
+    print(f"\nDecisive loss: Score 1-10, wall death (diff=9)")
 
     update_placement_state(state2, decisive_loss, 1500)
 
@@ -873,51 +853,48 @@ def test_rematch_logic():
 
 
 class TestIntervalAwarePlacement:
-    """Tests for the interval/probe-based placement refinements."""
+    """Tests for simplified placement system opponent selection."""
 
-    def _ranked_models(self) -> List[Tuple[int, str, float, int]]:
+    def _ranked_models(self) -> list:
         """
         Deterministic small leaderboard:
         rank 0: 1700, rank 1: 1600, rank 2: 1500, rank 3: 1400
         """
         return [
-            (1, "Top", 1700.0, 0),
-            (2, "MidHigh", 1600.0, 1),
-            (3, "Mid", 1500.0, 2),
-            (4, "Low", 1400.0, 3),
+            {'id': 1, 'name': 'Top', 'rating': 1700.0, 'rank_index': 0,
+             'pricing_input': 10.0, 'pricing_output': 30.0, 'provider': 'openai'},
+            {'id': 2, 'name': 'MidHigh', 'rating': 1600.0, 'rank_index': 1,
+             'pricing_input': 5.0, 'pricing_output': 15.0, 'provider': 'anthropic'},
+            {'id': 3, 'name': 'Mid', 'rating': 1500.0, 'rank_index': 2,
+             'pricing_input': 1.0, 'pricing_output': 3.0, 'provider': 'google'},
+            {'id': 4, 'name': 'Low', 'rating': 1400.0, 'rank_index': 3,
+             'pricing_input': 0.1, 'pricing_output': 0.3, 'provider': 'allenai'},
         ]
 
-    def test_upward_probe_targets_upper_interval(self):
+    def test_targets_nearest_to_exposed(self):
         """
-        After one game (odd index), selection should probe high in the interval,
-        preferring the upper quartile rather than hovering near current mu,
-        even when sigma is small.
+        With exposed near 1500, selection should pick the candidate closest to
+        the model's own exposed rating.
         """
         state = init_placement_state(model_id=999, max_games=9)
-        state.games_played = 1  # Next pick should be an upward probe
-        # Seed an interval that spans the board; mu sits near the middle
-        state.skill.mu = 1500.0
-        state.skill.sigma = 50.0  # Tight sigma would normally keep us near mu
-        state.rating_low = 1650.0
-        state.rating_high = 1750.0
+        # Set mu/sigma so exposed = mu - 3*sigma = 1500 - 150 = 1350
+        state.mu = 1500.0
+        state.sigma = 50.0  # exposed = 1350
 
         ranked_models = self._ranked_models()
         opponent = select_next_opponent(state, ranked_models=ranked_models)
 
-        # Expect it to honor the interval probe and pick the top candidate (1700)
+        # Expect closest to exposed=1350 => Low (1400)
         assert opponent is not None
-        assert opponent[0] == 1  # Top
+        assert opponent['id'] == 4  # Low
 
-    def test_draw_vs_low_does_not_cap_ceiling(self):
+    def test_draw_bookkeeping_only(self):
         """
-        A draw against a much lower-rated opponent should not collapse the upper bound,
-        to avoid getting stuck with weak opponents early.
+        A draw should update bookkeeping but not crash (no interval logic).
         """
         state = init_placement_state(model_id=999, max_games=9)
-        state.rating_low = 1200.0
-        state.rating_high = 1800.0
-        state.skill.mu = 1500.0
-        state.skill.sigma = 200.0
+        state.mu = 1500.0
+        state.sigma = 200.0
 
         game_result = {
             "opponent_id": 123,
@@ -930,9 +907,8 @@ class TestIntervalAwarePlacement:
 
         update_placement_state(state, game_result, opponent_rating=1300.0)
 
-        # Upper bound should remain high, and floor should rise from its initial value
-        assert state.rating_high >= 1700.0
-        assert state.rating_low > 1200.0
+        assert state.games_played == 1
+        assert 123 in state.opponents_played
 
 
 if __name__ == "__main__":

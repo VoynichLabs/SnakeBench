@@ -188,14 +188,16 @@ class ModelRepository(BaseRepository):
 
     def get_ranked_models(self) -> List[Dict[str, Any]]:
         """
-        Get all ranked and active models sorted by ELO.
+        Get all ranked and active models sorted by TrueSkill exposed rating.
 
         Returns:
-            List of (id, name, elo_rating, rank_index) tuples
+            List of dicts with keys: id, name, elo_rating, trueskill_exposed,
+            trueskill_sigma, pricing_input, pricing_output, provider, rank_index
         """
         with self.read_connection() as (conn, cursor):
             cursor.execute("""
-                SELECT id, name, trueskill_exposed, elo_rating
+                SELECT id, name, trueskill_exposed, trueskill_sigma, elo_rating,
+                       pricing_input, pricing_output, provider
                 FROM models
                 WHERE test_status = 'ranked' AND is_active = TRUE
                 ORDER BY COALESCE(trueskill_exposed, elo_rating / 50.0) DESC
@@ -208,6 +210,10 @@ class ModelRepository(BaseRepository):
                     'name': row['name'],
                     'elo_rating': row['elo_rating'],
                     'trueskill_exposed': row.get('trueskill_exposed'),
+                    'trueskill_sigma': row.get('trueskill_sigma'),
+                    'pricing_input': row.get('pricing_input'),
+                    'pricing_output': row.get('pricing_output'),
+                    'provider': row.get('provider'),
                     'rank_index': idx
                 })
 
@@ -431,6 +437,53 @@ class ModelRepository(BaseRepository):
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = %s
             """, (status, model_id))
+
+    # -------------------------------------------------------------------------
+    # Ladder matchmaking queries
+    # -------------------------------------------------------------------------
+
+    def count_in_flight_ladder_games(self) -> int:
+        """Count ladder games that are queued or in progress."""
+        with self.read_connection() as (conn, cursor):
+            cursor.execute("""
+                SELECT COUNT(*) AS cnt
+                FROM games
+                WHERE game_type = 'ladder'
+                  AND status IN ('queued', 'in_progress')
+            """)
+            row = cursor.fetchone()
+            return int(row['cnt']) if row else 0
+
+    def get_recent_ladder_pairs(self, hours: int = 24) -> List[Dict[str, Any]]:
+        """
+        Return recent ladder matchup pairs with their game counts.
+
+        Returns list of dicts with keys: model_id_a, model_id_b, game_count
+        (model_id_a < model_id_b for canonical ordering).
+        """
+        with self.read_connection() as (conn, cursor):
+            cursor.execute("""
+                SELECT
+                    LEAST(gp1.model_id, gp2.model_id) AS model_id_a,
+                    GREATEST(gp1.model_id, gp2.model_id) AS model_id_b,
+                    COUNT(*) AS game_count
+                FROM games g
+                JOIN game_participants gp1 ON gp1.game_id = g.id
+                JOIN game_participants gp2 ON gp2.game_id = g.id
+                    AND gp2.model_id > gp1.model_id
+                WHERE g.game_type = 'ladder'
+                  AND g.created_at >= NOW() - INTERVAL '%s hours'
+                GROUP BY 1, 2
+            """, (hours,))
+
+            return [
+                {
+                    'model_id_a': row['model_id_a'],
+                    'model_id_b': row['model_id_b'],
+                    'game_count': row['game_count'],
+                }
+                for row in cursor.fetchall()
+            ]
 
     # -------------------------------------------------------------------------
     # Helper methods

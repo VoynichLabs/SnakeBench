@@ -25,7 +25,7 @@ echo "Starting $SESSION_NAME tmux session..."
 tmux new-session -d -s $SESSION_NAME -n dev
 
 # Start backend in first pane (activate venv first)
-tmux send-keys -t $SESSION_NAME:dev "cd backend && source venv/bin/activate && python app.py" C-m
+tmux send-keys -t $SESSION_NAME:dev "cd backend && source venv/bin/activate && python3 app.py" C-m
 
 # Split window vertically and start frontend in the right pane
 tmux split-window -h -t $SESSION_NAME:dev

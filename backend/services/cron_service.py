@@ -28,6 +28,7 @@ from database_postgres import get_connection  # noqa: E402
 from cli.sync_openrouter_models import sync_models as sync_openrouter_models  # noqa: E402
 from cli import evaluate_models as eval_cli  # noqa: E402
 from services.webhook_service import send_evaluation_batch_webhook  # noqa: E402
+from services.ladder_matchmaking import dispatch_ladder_games  # noqa: E402
 
 
 LOG_LEVEL = "INFO"  # Flip these constants in code if you want different schedules.
@@ -41,6 +42,8 @@ EVALUATE_MODELS_ENABLED = True
 EVALUATE_MODELS_INTERVAL_MINUTES = 30
 EVALUATE_MODELS_MAX_MODELS = 5
 EVALUATE_MODELS_MAX_GAMES = 9
+LADDER_MATCHMAKING_ENABLED = False
+LADDER_MATCHMAKING_INTERVAL_MINUTES = 60
 
 logging.basicConfig(
     level=LOG_LEVEL,
@@ -240,6 +243,28 @@ def run_scheduled_evaluation() -> None:
     )
 
 
+def run_ladder_matchmaking() -> None:
+    """Dispatch ladder games between ranked models."""
+    if not LADDER_MATCHMAKING_ENABLED:
+        return
+
+    logger.info("Starting ladder matchmaking cycle.")
+    try:
+        result = dispatch_ladder_games()
+        dispatched = result.get("dispatched", [])
+        skipped = result.get("skipped_reason")
+        if skipped:
+            logger.info("Ladder matchmaking skipped: %s", skipped)
+        else:
+            logger.info(
+                "Ladder matchmaking complete: dispatched=%s in_flight=%s",
+                len(dispatched),
+                result.get("in_flight", 0),
+            )
+    except Exception:
+        logger.exception("Ladder matchmaking failed")
+
+
 def run_scheduler() -> None:
     """Start the scheduler loop."""
     logger.info(
@@ -280,6 +305,16 @@ def run_scheduler() -> None:
         )
     else:
         logger.info("Scheduled evaluate_models disabled; set EVALUATE_MODELS_ENABLED=true to enable.")
+
+    if LADDER_MATCHMAKING_ENABLED:
+        ladder_interval = LADDER_MATCHMAKING_INTERVAL_MINUTES
+        schedule.every(ladder_interval).minutes.do(run_ladder_matchmaking)
+        logger.info(
+            "Scheduled ladder matchmaking every %s minutes.",
+            ladder_interval,
+        )
+    else:
+        logger.info("Ladder matchmaking disabled; set LADDER_MATCHMAKING_ENABLED=true to enable.")
 
     while True:
         schedule.run_pending()

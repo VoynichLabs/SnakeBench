@@ -19,7 +19,7 @@ type StatsData = {
 
 async function getStats() {
   // Fetch the stats from the backend
-  const response = await fetch(`${process.env.FLASK_URL}/api/stats?simple=true`, {
+  const response = await fetch(`${process.env.NEXT_PUBLIC_FLASK_URL}/api/stats?simple=true`, {
     cache: 'no-store' // Ensures fresh data on each request
   });
   

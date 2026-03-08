@@ -9,7 +9,7 @@ the skill estimate evolves.
 
 import sys
 import argparse
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 
 from dotenv import load_dotenv
 
@@ -20,7 +20,6 @@ try:
         init_placement_state,
         select_next_opponent_with_reason,
         update_placement_state,
-        ensure_interval_bounds,
     )
     from database_postgres import get_connection
 except Exception as exc:
@@ -29,7 +28,7 @@ except Exception as exc:
     sys.exit(1)
 
 
-def fetch_ranked_models() -> List[Tuple[int, str, float, int]]:
+def fetch_ranked_models() -> list:
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
@@ -37,6 +36,9 @@ def fetch_ranked_models() -> List[Tuple[int, str, float, int]]:
         SELECT id,
                name,
                trueskill_exposed,
+               pricing_input,
+               pricing_output,
+               provider,
                ROW_NUMBER() OVER (ORDER BY trueskill_exposed DESC NULLS LAST) - 1 AS rank_index
         FROM models
         WHERE is_active = TRUE
@@ -47,12 +49,15 @@ def fetch_ranked_models() -> List[Tuple[int, str, float, int]]:
     rows = cur.fetchall()
     conn.close()
     return [
-        (
-            r["id"],
-            r["name"],
-            r.get("trueskill_exposed") or 0.0,
-            r["rank_index"],
-        )
+        {
+            'id': r["id"],
+            'name': r["name"],
+            'rating': r.get("trueskill_exposed") or 0.0,
+            'rank_index': r["rank_index"],
+            'pricing_input': r.get("pricing_input"),
+            'pricing_output': r.get("pricing_output"),
+            'provider': r.get("provider"),
+        }
         for r in rows
     ]
 
@@ -105,7 +110,6 @@ def main() -> None:
         return
 
     state = init_placement_state(model_id=9999, max_games=9)
-    ensure_interval_bounds(state, ranked)
 
     sequence = build_sequence(args.sequence)
 
@@ -115,7 +119,10 @@ def main() -> None:
             print(f"Game {idx}: no opponent available")
             break
 
-        opp_id, opp_name, opp_rating, opp_rank = opponent
+        opp_id = opponent['id']
+        opp_name = opponent['name']
+        opp_rating = opponent['rating']
+        opp_rank = opponent['rank_index']
         game = {
             "opponent_id": opp_id,
             "result": result,
@@ -126,11 +133,16 @@ def main() -> None:
         }
         update_placement_state(state, game, opponent_rating=opp_rating)
 
+        target = debug.get('target_rating')
+        target_str = f"{target:.2f}" if target is not None else "N/A"
+        pricing_target = debug.get('pricing_target')
+        pricing_str = f"{pricing_target:.2f}" if pricing_target is not None else "N/A"
+        alpha = debug.get('alpha')
+        alpha_str = f"{alpha:.2f}" if alpha is not None else "N/A"
         print(
             f"Game {idx}: vs {opp_name} (rank #{opp_rank}, rating {opp_rating:.2f}) -> {result} | "
-            f"mu={state.skill.mu:.2f}, sigma={state.skill.sigma:.2f} | "
-            f"interval=[{state.rating_low:.2f},{state.rating_high:.2f}] | probe={debug.get('probe')} "
-            f"target={debug.get('target_rating'):.2f}"
+            f"mu={state.mu:.2f}, sigma={state.sigma:.2f}, exposed={state.exposed:.2f} | "
+            f"target={target_str} pricing={pricing_str} alpha={alpha_str}"
         )
 
 
