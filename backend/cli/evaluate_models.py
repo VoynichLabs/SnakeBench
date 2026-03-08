@@ -255,13 +255,6 @@ def run_evaluation_batch(
 
             printer(f"\n=== Evaluating {model_name} (status: {status}) ===")
 
-            # Check for pending games
-            pending = has_pending_eval_game(conn, model_id)
-            if pending:
-                printer("  Pending evaluation game in progress; skipping enqueue.")
-                stats["pending_skipped"].append(model_name)
-                continue
-
             # Fetch detailed history for confidence scoring
             history = fetch_eval_history(conn, model_id)
 
@@ -276,10 +269,17 @@ def run_evaluation_batch(
             # Print state summary
             printer(f"  {format_state_summary(state)}")
 
-            # Check if evaluation is complete
+            # Check if evaluation is complete (always check, even with pending games)
             if completed >= max_games:
                 finalize_model(conn, model_id, model_name, state)
                 stats["finalized"].append(model_name)
+                continue
+
+            # Check for pending games before enqueuing more
+            pending = has_pending_eval_game(conn, model_id)
+            if pending:
+                printer("  Pending evaluation game in progress; skipping enqueue.")
+                stats["pending_skipped"].append(model_name)
                 continue
 
             # Build pricing tuple for pricing-based targeting
